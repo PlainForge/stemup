@@ -1,0 +1,85 @@
+#root {
+  text-align: center;
+}
+
+.app {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100vh;
+}
+
+.app-login {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100vh;
+}
+
+.app-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: auto;
+  transition: all 0.2s;
+}
+
+.app .content-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  transition: all 0.2s;
+  box-shadow: 0 0 10px rgba(24,24,24,0.5);
+  z-index: 1;
+}
+
+.app .content-container-open {
+  display: none;
+  transition: all 0.2s;
+}
+
+@media (max-width: 769px) {
+  .app {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .app-login {
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .app-container {
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+  }
+
+  .app .content-container {
+    height: 100%;
+    padding: 1rem 0;
+  }
+
+  .app .content-container-open {
+    display: none;
+  }
+}
+
+@media (max-height: 769px) {
+  .app {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .app-login {
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+  }
+}

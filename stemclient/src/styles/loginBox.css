@@ -1,0 +1,77 @@
+.login-container {
+    position: relative;
+    width: 50%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1rem 0px;
+    align-items: center;
+    transition: all 0.3s;
+}
+
+.login-container h1, .login-container p {
+    color: black;
+}
+
+.form-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.form-container .input {
+    width: 90%;
+    text-align: center;
+    border-radius: 5px;
+    padding: 3px;
+}
+
+.form-container .button {
+    width: 50%;
+}
+
+.form-container .photo-container {
+    display: flex;
+    flex-direction: column;
+    background-color: #eeeeee;
+    border-radius: 5px;
+    padding: 5px;
+    border: 1px solid black;
+}
+
+.button {
+    padding: 5px 10px;
+    border-radius: 5px;
+    color: black;
+    transition: all 0.5s;
+}
+
+.button:hover {
+    background-color: lightgray;
+    cursor: pointer;
+}
+
+@media (max-width: 769px) {
+    .login-container {
+        width: 100%;
+        height: 200px;
+        margin: auto;
+    }
+    .login-container h1 {
+        font-size: 1rem;
+    }
+}
+
+@media (max-height: 769px) {
+    .login-container {
+        width: 100%;
+        height: 200px;
+        margin: auto;
+    }
+    .login-container h1 {
+        font-size: 1rem;
+    }
+}

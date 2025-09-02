@@ -1,0 +1,36 @@
+.roles-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.role-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.role-form input {
+    text-align: center;
+}
+
+.available-roles {
+    display: flex;
+    flex-direction: column;
+    gap: 5px
+}
+
+.role-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+    padding: 0px 10px;
+    box-shadow: 0px 0px 10px rgba(24,24,24,0.3);
+    border-radius: 1rem;
+    border: 1px solid rgba(24,24,24,0.3)
+}
+
+.role-container button {
+    border: 0;
+    background: none;
+}
