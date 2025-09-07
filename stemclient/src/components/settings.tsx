@@ -1,35 +1,39 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import "../styles/settings.css"
 import '../styles/global.css'
 import { deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
-import { deleteUser, onAuthStateChanged, type User } from "firebase/auth";
-import { auth, db } from "../firebase";
+import { deleteUser, onAuthStateChanged } from "firebase/auth";
+import { auth, db, storage } from "../firebase";
 import type { UserData } from "../myDataTypes";
 import { motion } from "motion/react";
+import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import useUser from "../hooks/user";
+
+const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
 
 function Settings() {
     const [name, setName] = useState("")
-    const [user, setUser] = useState<User | null>(null);
+    const [user, loading] = useUser();
     const [userData, setUserData] = useState<UserData | null>(null);
+    const [file, setFile] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, async (currentUser) => {
-        setUser(currentUser);
+            if (currentUser) {
+                const ref = doc(db, "users", currentUser.uid);
 
-        if (currentUser) {
-            const ref = doc(db, "users", currentUser.uid);
+                const unsubscribeSnapshot = onSnapshot(ref, (snap) => {
+                    if (snap.exists()) {
+                        setUserData(snap.data() as UserData);
+                    }
+                });
 
-            const unsubscribeSnapshot = onSnapshot(ref, (snap) => {
-                if (snap.exists()) {
-                    setUserData(snap.data() as UserData);
-                }
-            });
-
-            return () => unsubscribeSnapshot();
-        } else {
-            setUserData(null);
-        }
-    });
+                return () => unsubscribeSnapshot();
+            } else {
+                setUserData(null);
+            }
+        });
         return () => unsub();
     }, []);
 
@@ -51,18 +55,54 @@ function Settings() {
         }
     };
 
-    if (!user || !userData) {
+    if (!user || !userData || loading) {
         return <h1>Loading...</h1>;
     }
 
-    const changeName = async () => {
+    const changeName = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+
         try {
-            setName("")
             await setDoc(doc(db, "users",  user.uid), {
                 name: name,
             }, { merge: true });
+            setName("")
         } catch (err) {
             console.error(err);
+        }
+    }
+
+    const chanePfp = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+
+        let photoURL = DEFAULT_AVATAR;
+        
+        try {
+            if (userData?.photoURL && userData.photoURL !== DEFAULT_AVATAR) {
+                try {
+                    // Extract the storage path from the URL
+                    const oldRef = ref(storage, `profilePictures/${user.uid}`);
+                    await deleteObject(oldRef);
+                } catch (err) {
+                    console.warn("No old profile picture to delete or already removed:", err);
+                }
+            }
+            if (file) {
+                const storageRef = ref(storage, `profilePictures/${user.uid}`);
+                await uploadBytes(storageRef, file);
+                photoURL = await getDownloadURL(storageRef);
+            }
+
+            await setDoc(doc(db, "users", user.uid), {
+                photoURL: photoURL
+            }, { merge: true });
+
+            setFile(null);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+        } catch (err) {
+            console.log(err);
         }
     }
     
@@ -78,18 +118,31 @@ function Settings() {
                 </div>
                 <div className="settings-current">
                     <div className="settings-account">
-                        <div className="settings-name-container">
-                                <h3>Change Display Name</h3>
-                                <input 
-                                    type="name" 
-                                    placeholder="Display Name"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    className="input"
-                                    maxLength={16}
-                                />
-                                <button onClick={changeName}>Submit</button>
-                        </div>
+                        <form className="settings-name-container" onSubmit={changeName}>
+                            <h3>Change Display Name</h3>
+                            <input 
+                                type="name" 
+                                placeholder="Display Name"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                className="input"
+                                maxLength={16}
+                            />
+                            <button type="submit">Submit</button>
+                        </form>
+                        <form className="settings-pfp-container" onSubmit={chanePfp}>
+                            <h3>Change Profile Picture</h3>
+                            <input 
+                                ref={fileInputRef}
+                                itemID="newPfp"
+                                name="newPfp"
+                                type="file" 
+                                accept="image/*" 
+                                onChange={(e) => setFile(e.target.files?.[0] || null)} 
+                                className="photo-button"
+                            />
+                            <button type="submit">Submit</button>
+                        </form>
                         <button onClick={handleDeleteAccount} className="del-acc">Delete Account</button>
                     </div>
                 </div>

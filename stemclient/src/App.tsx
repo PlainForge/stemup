@@ -1,28 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import './App.css'
 import LoginBox from './components/loginBox'
 import LeftNav from './components/leftNav'
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth } from './firebase';
 import Settings from './components/settings';
 import Dash from './components/dash';
 import Roles from './components/roles';
 import RolePage from './components/rolePage';
+import type { Role } from './myDataTypes';
+import useUser from './hooks/user';
 
 function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true)
+  const [user, loading] = useUser();
   const [page, setPage] = useState("home");
-  const [role, setRole] = useState({name: "", id: ""})
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false)
-    });
-
-    return () => unsub();
-  }, []);
+  const [role, setRole] = useState<Role | null>(null);
 
   if (loading) {
     return <h1>Loading...</h1>
@@ -30,7 +20,7 @@ function App() {
   
   return (
     <div className={user ? 'app' : 'app-login'}>
-      <LeftNav toPage={setPage} />
+      <LeftNav toPage={setPage} setRole={setRole} page={page} />
       
       {!user ? <LoginBox /> : 
         <div className='app-container'>

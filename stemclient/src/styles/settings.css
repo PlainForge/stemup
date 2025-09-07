@@ -68,5 +68,28 @@
 
 .settings-name-container button:hover {
     cursor: pointer;
-    border-color: white;
+    background-color: lightgrey;
+    border-color: rgb(24,24,24);
+}
+
+.settings-pfp-container button {
+    border-radius: 5px;
+    transition: all 0.2s;
+}
+
+.settings-pfp-container button:hover {
+    cursor: pointer;
+    background-color: lightgrey;
+    border-color: rgb(24,24,24);
+}
+
+.settings-account .del-acc {
+    border-radius: 5px;
+    transition: all 0.2s;
+}
+
+.settings-account .del-acc:hover {
+    cursor: pointer;
+    background-color: lightgrey;
+    border-color: rgb(24,24,24);
 }

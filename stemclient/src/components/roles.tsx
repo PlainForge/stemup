@@ -25,19 +25,17 @@ function Roles({ toPage, setRole } : JoinProps) {
         const unsub = onSnapshot(
             rolesCol,
             (rolesSnap) => {
-            const rolesList: Role[] = rolesSnap.docs.map((doc) => ({
-                id: doc.id,
-                ...(doc.data() as { name: string }),
-            }));
+                const rolesList: Role[] = rolesSnap.docs.map((doc) => ({
+                    id: doc.id,
+                    ...(doc.data() as { name: string }),
+                }));
 
-            setRoles(rolesList);
-            },
-            (err) => {
-            console.error("Error fetching roles:", err);
+                setRoles(rolesList);
+            }, (err) => {
+                console.error("Error fetching roles:", err);
             }
         );
 
-        // cleanup listener on unmount
         return () => unsub();
     }, []);
 
@@ -64,7 +62,7 @@ function Roles({ toPage, setRole } : JoinProps) {
 
                 if (snap.exists()) {
                     await updateDoc(doc(db, "roles", docRef.id), {
-                        members: arrayUnion({id: admin, name: snap.data().name, points: 0, taskCompleted: 0})
+                        members: arrayUnion({id: admin, name: snap.data().name, points: 0, taskCompleted: 0, photoURL: snap.data().photoURL})
                     })
                 }
             })

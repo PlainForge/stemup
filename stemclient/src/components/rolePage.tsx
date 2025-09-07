@@ -1,37 +1,33 @@
-import { onAuthStateChanged, type User } from "firebase/auth";
 import { useEffect, useState } from "react";
-import { auth, db } from "../firebase";
+import { db } from "../firebase";
 import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
-import { type Task, type RoleUserData } from "../myDataTypes";
+import { type Task, type RoleUserData, type Role } from "../myDataTypes";
 import '../styles/rolesPage.css'
 import '../styles/global.css'
 import { motion } from "motion/react";
 import { admins } from "../admins.json"
 import RoleAdmin from "./roleAdmin";
+import DoneButton from "./doneButton";
+import useUser from "../hooks/user";
 
 interface RolePageProps {
-    role: {name: string, id: string}
+    role: Role | null
 }
 
 function RolePage({ role } : RolePageProps) {
-    const [user, setUser] = useState<User | null>(null);
+    const [user, loading] = useUser()
     const [members, setMembers] = useState<RoleUserData[]>([]);
     const [leaders, setLeaders] = useState<RoleUserData[]>([]);
     const [roleTasks, setRoleTasks] = useState<Task[]>([]);
     const [pageState, setPageState] = useState("home");
+    const [upRole, setUpRole] = useState<Role>();
+
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
     const pages = ["home", "tasks", "admin"];
 
-    // Check User Status
-    useEffect(() => {
-        const unsub = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
-        });
-        return () => unsub();
-    }, [user]);
-
     // Get Members
     useEffect(() => {
+        if (!role) return;
         const roleRef = doc(db, "roles", role.id);
         const unsub = onSnapshot(roleRef, (snap) => {
             if (snap.exists()) {
@@ -44,6 +40,7 @@ function RolePage({ role } : RolePageProps) {
 
     // Update Leaderboard
     useEffect(() => {
+        if (!role) return;
         const roleRef = doc(db, "roles", role.id);
         const unsub = onSnapshot(roleRef, (snap) => {
             if (snap.exists()) {
@@ -60,6 +57,7 @@ function RolePage({ role } : RolePageProps) {
 
     // Get User Tasks
     useEffect(() => {
+        if (!role) return;
         const q = query(
             collection(db, "tasks"),
             where("roleId", "==", role.id)
@@ -74,9 +72,30 @@ function RolePage({ role } : RolePageProps) {
             )
         })
         return () => unsub();
-    })
+    } , [role])
 
-    if (!user) return;
+    useEffect(() => {
+        if (!role) return;
+
+        const roleRef = doc(db, "roles", role.id);
+        const unsub = onSnapshot(roleRef, (snap) => {
+            if (snap.exists()) {
+                // Merge role id with updated fields
+                const updatedRole: Role = {
+                    id: snap.id,
+                    ...(snap.data() as Omit<Role, "id">),
+                };
+                setUpRole(updatedRole);
+            }
+        });
+
+        return () => unsub();
+    }, [role]);
+
+    if (!user || !role || !upRole) return;
+    if (loading) {
+        return <h1>Loading...</h1>
+    }
 
     const userTasks = roleTasks.filter(task => task.assignedTo === user.uid);
     const taskCount = userTasks.length;
@@ -85,7 +104,7 @@ function RolePage({ role } : RolePageProps) {
     return (
         <div className="roles-page">
             <div className="header">
-                <h1>{role.name}</h1>
+                <h1>{upRole.name}</h1>
                 <div className="user-info">
                         {members.map((m) => {
                             if (m.id.match(user.uid)) {
@@ -101,28 +120,29 @@ function RolePage({ role } : RolePageProps) {
             </div>
             <div className="nav-buttons div">
                 {pages.map((page) => {
-                    if (!admins.includes(user.uid)) return
+                    if (!admins.includes(user.uid) && page.match("admin")) return
                     if (page.match("tasks")) {
+                        if (admins.includes(user.uid)) return null
                         return (
-                            <div className="tasks-container">
+                            <div className="tasks-container" key={page}>
                                 <motion.button 
                                     onClick={() => setPageState(page)}
                                     whileHover={{scale: 1.1, cursor: 'pointer'}}
-                                    key={page}
                                 >
                                     {page.toLocaleUpperCase()}
                                 </motion.button>
-                                <p>{taskCount}</p>
+                                {taskCount > 0 ? <p>{taskCount}</p> : ""}
                             </div>
                         )
+                    } else {
+                        return <motion.button 
+                            onClick={() => setPageState(page)}
+                            whileHover={{scale: 1.1, cursor: 'pointer'}}
+                            key={page}
+                        >
+                            {page.toLocaleUpperCase()}
+                        </motion.button>
                     }
-                    return <motion.button 
-                        onClick={() => setPageState(page)}
-                        whileHover={{scale: 1.1, cursor: 'pointer'}}
-                        key={page}
-                    >
-                        {page.toLocaleUpperCase()}
-                    </motion.button>
                 })}
             </div>
             { pageState.match("home") ?
@@ -134,13 +154,11 @@ function RolePage({ role } : RolePageProps) {
                     <div className="leaderboard div">
                         <h1>Leaderboard</h1>
                         <div className="label">
-                            <p></p>
-                            <p>Name</p>
-                            <p>Points</p>
                         </div>
                         
                         <div className="board">
                             {leaders.map((u) => {
+                                if (admins.includes(u.id)) return
                                 i++
                                 return (
                                     <div className="user-board" key={u.id}>
@@ -173,11 +191,13 @@ function RolePage({ role } : RolePageProps) {
                                 return (
                                     <div
                                         className="task"
-                                        key={task.description}
+                                        key={task.id}
                                     >
-                                        <h1>{task.description}</h1>
+                                        <h1>{task.title}</h1>
+                                        <h3>Description</h3>
+                                        <p>{task.description}</p>
                                         <p>{task.points} points</p>
-                                        <button>Done</button>
+                                        <DoneButton task={task} />
                                     </div>
                                 )
                             }

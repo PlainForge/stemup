@@ -43,9 +43,11 @@
     display: flex;
     flex-direction: row;
     justify-content: center;
+    align-items: center;
     width: 100%;
     height: 80%;
     gap: 1rem;
+    overflow: auto;
 }
 
 .content .div {
@@ -53,6 +55,8 @@
     background-color: rgba(255,255,255,0.3);
     border: 1px solid rgba(24,24,24,0);
     border-radius: 10px;
+    width: 40%;
+    height: 90%;
     position: relative;
     transition: all 0.2s;
     padding: 1rem;
@@ -123,9 +127,19 @@
     }
     .content {
         flex-direction: column;
-        gap: 2rem
+        gap: 2rem;
     }
     .content .div {
-        flex: 1 1 100%
+        width: 90%;
+    }
+}
+
+@media (max-height: 769px) {
+    .roles-page {
+        margin: 0;
+    }
+
+    .content {
+        height: 70%;
     }
 }

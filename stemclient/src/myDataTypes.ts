@@ -24,15 +24,22 @@ export type Role = {
 
 export type Task = {
   assignedTo: string,
+  assignedName: string,
   description: string,
   points: number,
-  roleId: string
+  roleId: string,
+  id: string,
+  title: string,
+  createdOn: Timestamp
 }
 
 export type SubmittedTask = {
   assignedTo: string,
+  assignedName: string,
   description: string,
   points: number,
   roleId: string,
-  timestamp: Timestamp
+  submission: Timestamp,
+  id: string,
+  title: string
 }
