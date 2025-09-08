@@ -1,0 +1,8 @@
+.set-reward-container { 
+    display: flex;
+    flex-direction: column;
+}
+
+.set-reward-container input {
+    text-align: center;
+}

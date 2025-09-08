@@ -58,7 +58,7 @@ function LeftNav({ toPage, setRole, page } : NavProps) {
         toPage("home")
     };
 
-    if (!user || loading) {
+    if (loading) {
         return <h1>Loading...</h1>
     }
 

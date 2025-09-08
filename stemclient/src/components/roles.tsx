@@ -1,4 +1,4 @@
-import { addDoc, arrayUnion, collection, doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, getDoc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import '../styles/roles.css'
 import '../styles/global.css'
 import { auth, db } from '../firebase';
@@ -54,6 +54,11 @@ function Roles({ toPage, setRole } : JoinProps) {
                 members: [],
                 pendingRequests: [],
                 createdAt: new Date()
+            })
+            await setDoc(doc(db, "rewards", docRef.id), {
+                first: "not set",
+                second: "not set",
+                third: "not set"
             })
 
             admins.map(async (admin) => {

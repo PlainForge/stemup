@@ -21,9 +21,11 @@ function RolePage({ role } : RolePageProps) {
     const [roleTasks, setRoleTasks] = useState<Task[]>([]);
     const [pageState, setPageState] = useState("home");
     const [upRole, setUpRole] = useState<Role>();
+    const [rewards, setRewards] = useState<string[]>([]);
 
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
     const pages = ["home", "tasks", "admin"];
+    let rewardIndex = 0;
 
     // Get Members
     useEffect(() => {
@@ -37,6 +39,23 @@ function RolePage({ role } : RolePageProps) {
 
         return () => unsub();
     }, [user, role]);
+
+    useEffect(() => {
+        if (!role) return;
+        const rewardRef = doc(db, "rewards", role.id);
+        const unsub = onSnapshot(rewardRef, (snap) => {
+            const temp : string[] = []
+            if (snap.exists()) {
+                const data = snap.data();
+                temp.push(data.first);
+                temp.push(data.second);
+                temp.push(data.third);
+                setRewards(temp)
+            }
+        })
+
+        return () => unsub();
+    }, [user, role])
 
     // Update Leaderboard
     useEffect(() => {
@@ -107,7 +126,7 @@ function RolePage({ role } : RolePageProps) {
                 <h1>{upRole.name}</h1>
                 <div className="user-info">
                         {members.map((m) => {
-                            if (m.id.match(user.uid)) {
+                            if (m.id.match(user.uid) && !admins.includes(user.uid)) {
                                 return (
                                     <div key={m.id} className="user">
                                         <h3>{m.points} points</h3>
@@ -174,6 +193,10 @@ function RolePage({ role } : RolePageProps) {
                     </div>
                     <div className="rewards div">
                         <h1>{currentMonth} Rewards</h1>
+                        {rewards.map((reward) => {
+                            rewardIndex++;
+                            return <h1 key={rewards.indexOf(reward)}>{rewardIndex} {reward}</h1>
+                        })}
                     </div>
                     
                 </motion.div>

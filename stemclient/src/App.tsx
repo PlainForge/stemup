@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 import LoginBox from './components/loginBox'
 import LeftNav from './components/leftNav'
@@ -8,11 +8,31 @@ import Roles from './components/roles';
 import RolePage from './components/rolePage';
 import type { Role } from './myDataTypes';
 import useUser from './hooks/user';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from './firebase';
 
 function App() {
   const [user, loading] = useUser();
   const [page, setPage] = useState("home");
   const [role, setRole] = useState<Role | null>(null);
+
+  useEffect(() => {
+    if (!role?.id) return;
+
+    const roleRef = doc(db, "roles", role.id);
+    const unsub = onSnapshot(roleRef, (snap) => {
+      if (snap.exists()) {
+        // ✅ Role still exists → keep it updated
+        setRole({ id: snap.id, ...(snap.data() as Omit<Role, "id">) });
+      } else {
+        // ❌ Role deleted → reset
+        setRole(null);
+        setPage("roles"); // e.g. redirect back to roles list
+      }
+    });
+
+    return () => unsub();
+  }, [role?.id]);
 
   if (loading) {
     return <h1>Loading...</h1>
