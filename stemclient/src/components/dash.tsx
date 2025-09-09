@@ -64,7 +64,7 @@ function Dash({ currentPage } : dashProps) {
             </div>
             <div className="completed-container div">
                 <h3>Task Completed</h3>
-                <p>{userData?.taskCompleted ? userData.points : 0}</p>
+                <p>{userData?.taskCompleted ? userData.taskCompleted : 0}</p>
             </div>
         </motion.div>
     )

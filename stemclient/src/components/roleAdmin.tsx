@@ -4,8 +4,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { db } from "../firebase";
 import { type Role, type RoleUserData, type SubmittedTask, type UserData } from "../myDataTypes";
 import "../styles/rolesAdmin.css"
-import {admins} from '../admins.json';
 import useUser from "../hooks/user";
+import useAdmins from "../hooks/admins";
 
 interface prop {
     role: {name: string, id: string}
@@ -18,6 +18,7 @@ function RoleAdmin({ role, members } : prop) {
     const [requested, setRequested] = useState<string[]>([]);
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
     const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
+    const admins = useAdmins();
 
     // Get Members
     useEffect(() => {
@@ -204,7 +205,8 @@ function RoleAdmin({ role, members } : prop) {
                 members: updatedMembers
             })
             await updateDoc(doc(db, "users", thisUser), {
-                points: increment(addedPts)
+                points: increment(addedPts),
+                taskCompleted: increment(1)
             })
         } catch (err) {
             console.log(err);
@@ -294,7 +296,7 @@ function RoleAdmin({ role, members } : prop) {
                 initial={{x:-10}}
                 animate={{x:0}}
             >
-                <button onClick={() => setPage("requests")}>Requests {requested.length}</button>
+                <button onClick={() => setPage("requests")} >Requests {requested.length}</button>
                 <button onClick={() => setPage("creation")}>Task Creation</button>
                 <button onClick={() => setPage("submitted")}>Submitted Tasks {submittedTasks.length}</button>
                 <button onClick={() => setPage("config")}>Role Config</button>

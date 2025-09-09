@@ -27,6 +27,12 @@
     border-radius: 5px;
 }
 
+.header .user-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .nav-buttons .tasks-container{
     display: flex;
 }

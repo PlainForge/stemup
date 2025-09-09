@@ -76,6 +76,7 @@ function JoinButton({ role, toPage, setRole } : JoinProps) {
         <motion.button 
             whileHover={{cursor: 'pointer', scale: 1.1}} 
             onClick={() => requestRole(role.id)}
+            onTap={() => requestRole(role.id)}
         >Request to join</motion.button>
     )
 }

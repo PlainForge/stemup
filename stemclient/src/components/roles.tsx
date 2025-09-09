@@ -3,11 +3,11 @@ import '../styles/roles.css'
 import '../styles/global.css'
 import { auth, db } from '../firebase';
 import { useEffect, useState, type ComponentState } from 'react';
-import { admins } from '../admins.json'
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { motion } from 'motion/react';
 import { type Role } from '../myDataTypes';
 import JoinButton from './joinButton';
+import useAdmins from '../hooks/admins';
 
 interface JoinProps {
     toPage: ComponentState,
@@ -18,6 +18,7 @@ function Roles({ toPage, setRole } : JoinProps) {
     const [roleName, setRoleName] = useState("");
     const [user, setUser] = useState<User | null>(null);
     const [roles, setRoles] = useState<Role[]>([]);
+    const admins = useAdmins();
 
     useEffect(() => {
         const rolesCol = collection(db, "roles");

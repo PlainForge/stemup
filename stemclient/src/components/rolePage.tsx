@@ -5,10 +5,10 @@ import { type Task, type RoleUserData, type Role } from "../myDataTypes";
 import '../styles/rolesPage.css'
 import '../styles/global.css'
 import { motion } from "motion/react";
-import { admins } from "../admins.json"
 import RoleAdmin from "./roleAdmin";
 import DoneButton from "./doneButton";
 import useUser from "../hooks/user";
+import useAdmins from "../hooks/admins";
 
 interface RolePageProps {
     role: Role | null
@@ -22,6 +22,7 @@ function RolePage({ role } : RolePageProps) {
     const [pageState, setPageState] = useState("home");
     const [upRole, setUpRole] = useState<Role>();
     const [rewards, setRewards] = useState<string[]>([]);
+    const admins = useAdmins();
 
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
     const pages = ["home", "tasks", "admin"];
@@ -135,6 +136,7 @@ function RolePage({ role } : RolePageProps) {
                                 )
                             }
                         })}
+                        {admins.includes(user.uid) ? <p>Admin View</p> : null}
                 </div>
             </div>
             <div className="nav-buttons div">
@@ -146,7 +148,9 @@ function RolePage({ role } : RolePageProps) {
                             <div className="tasks-container" key={page}>
                                 <motion.button 
                                     onClick={() => setPageState(page)}
+                                    onTap={() => setPageState(page)}
                                     whileHover={{scale: 1.1, cursor: 'pointer'}}
+                                    style={pageState === "tasks" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                                 >
                                     {page.toLocaleUpperCase()}
                                 </motion.button>
@@ -156,8 +160,10 @@ function RolePage({ role } : RolePageProps) {
                     } else {
                         return <motion.button 
                             onClick={() => setPageState(page)}
+                            onTap={() => setPageState(page)}
                             whileHover={{scale: 1.1, cursor: 'pointer'}}
                             key={page}
+                            style={pageState === page ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                         >
                             {page.toLocaleUpperCase()}
                         </motion.button>

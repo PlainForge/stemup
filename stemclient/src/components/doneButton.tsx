@@ -51,7 +51,11 @@ function DoneButton({ task } : DoneButtonProps) {
         return <p>Waiting for approval</p>
     } else {
         return (
-            <motion.button onClick={submitTask} disabled={submitting}>
+            <motion.button 
+                onClick={submitTask} 
+                onTap={submitTask}
+                disabled={submitting}
+            >
                 {submitting ? "Submitting..." : "Done"}
             </motion.button>
         );
