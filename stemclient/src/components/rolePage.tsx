@@ -26,7 +26,6 @@ function RolePage({ role } : RolePageProps) {
 
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
     const pages = ["home", "tasks", "admin"];
-    let rewardIndex = 0;
 
     // Get Members
     useEffect(() => {
@@ -41,6 +40,7 @@ function RolePage({ role } : RolePageProps) {
         return () => unsub();
     }, [user, role]);
 
+    // Get role rewards
     useEffect(() => {
         if (!role) return;
         const rewardRef = doc(db, "rewards", role.id);
@@ -100,7 +100,6 @@ function RolePage({ role } : RolePageProps) {
         const roleRef = doc(db, "roles", role.id);
         const unsub = onSnapshot(roleRef, (snap) => {
             if (snap.exists()) {
-                // Merge role id with updated fields
                 const updatedRole: Role = {
                     id: snap.id,
                     ...(snap.data() as Omit<Role, "id">),
@@ -199,10 +198,18 @@ function RolePage({ role } : RolePageProps) {
                     </div>
                     <div className="rewards div">
                         <h1>{currentMonth} Rewards</h1>
-                        {rewards.map((reward) => {
-                            rewardIndex++;
-                            return <h1 key={rewards.indexOf(reward)}>{rewardIndex} {reward}</h1>
-                        })}
+                        <div className="reward">
+                            <h1>First</h1>
+                            <p>{rewards[0]}</p>
+                        </div>
+                        <div className="reward">
+                            <h1>Second</h1>
+                            <p>{rewards[1]}</p>
+                        </div>
+                        <div className="reward">
+                            <h1>Third</h1>
+                            <p>{rewards[2]}</p>
+                        </div>
                     </div>
                     
                 </motion.div>

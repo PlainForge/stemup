@@ -1,7 +1,6 @@
 .roles-page {
     width: 100%;
     height: 100%;
-    margin-bottom: 2rem;
 }
 
 .header {
@@ -117,6 +116,24 @@
     background: none;
     padding: 2px 10px;
     border-radius: 5px;
+}
+
+.content .rewards {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: auto;
+}
+
+.content .rewards .reward {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+}
+
+.content .rewards .reward p {
+    font-size: 1.5rem;
 }
 
 .tasks {

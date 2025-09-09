@@ -1,8 +1,243 @@
+.role-admin-page {
+    position: relative;
+}
+
+.control-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.control-buttons button {
+    background: none;
+    border: none;
+}
+
+.control-buttons button span {
+    font-weight: bolder;
+    color: red;
+}
+
+.role-admin-page .content {
+    position: relative;
+    overflow: hidden;
+}
+
+.request-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.request-container .requested-users {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: auto;
+    padding: 1rem;
+}
+
+.request-container .requested-users .requested-user {
+    display: flex;
+    width: 25%;
+    flex-direction: column;
+    box-shadow: 0px 0px 10px rgba(24,24,24,0.3);
+    padding: 1rem;
+    border-radius: 20px;
+}
+
+.request-container .requested-users .requested-user .req-user-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+}
+
+.request-container .requested-users .requested-user .req-user-buttons .req-accept {
+    background: lightgreen;
+    border: 1px solid rgba(24,24,24,0.3);
+    border-radius: 10px;
+}
+
+.request-container .requested-users .requested-user .req-user-buttons .req-decline {
+    background: red;
+    color: white;
+    border: 1px solid rgba(24,24,24,0.3);
+    border-radius: 10px;
+}
+
+.creation {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    width: 100%;
+}
+
+.creation .creation-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.creation .creation-form select {
+    text-align: center;
+    border-radius: 5px;
+}
+
+.creation .creation-form input {
+    text-align: center;
+    border-radius: 5px;
+}
+
+#pts::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+     margin: 0;
+}
+
+.creation .creation-form .submit {
+    background: lightgreen;
+    border: 1px solid rgba(24,24,24,0.3);
+    border-radius: 5px;
+    transition: all 0.2s;
+}
+
+.creation .creation-form .submit:hover {
+    background: green;
+}
+
+.submitted-container {
+    position: relative;
+    width: 100%;
+}
+
+.submitted-tasks {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    overflow: auto;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem 0;
+}
+
+.submitted-tasks .submitted-task {
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0px 0px 10px rgba(24,24,24,0.3);
+    padding: 2rem;
+    border-radius: 20px;
+}
+
+.submitted-tasks .submitted-task h1, .submitted-tasks .submitted-task h4, .submitted-tasks .submitted-task p {
+    margin: 0;
+}
+
+.submitted-tasks .submitted-task .task-date {
+    font-size: 12px;
+    margin: 0;
+}
+
+.submitted-tasks .submitted-task .task-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+}
+
+.submitted-tasks .submitted-task .task-buttons button {
+    padding: 10px 20px;
+}
+
+.submitted-tasks .submitted-task .task-buttons .task-approve {
+    background: lightgreen;
+    border: 1px solid rgba(24,24,24,0.3);
+    border-radius: 10px;
+    transition: all 0.2s;
+}
+
+.submitted-tasks .submitted-task .task-buttons .task-disapprove {
+    background: red;
+    color: white;
+    border: 1px solid rgba(24,24,24,0.3);
+    border-radius: 10px;
+    transition: all 0.2s;
+}
+
+.submitted-tasks .submitted-task .task-buttons .task-approve:hover {
+    background: green;
+}
+
+.submitted-tasks .submitted-task .task-buttons .task-disapprove:hover {
+    background: rgb(50, 0, 0);
+}
+
+.role-config {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: relative;
+}
+
+.role-config .set-role-name {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.role-config .set-role-name input {
+    border-radius: 10px;
+    text-align: center;
+}
+
+.role-config .set-role-name button {
+    background: lightgreen;
+    border: rgba(24,24,24,0.3);
+    border-radius: 10px;
+    transition: all 0.2s;
+    padding: 5px;
+}
+
+.role-config .set-role-name button:hover {
+    background-color: green;
+    cursor: pointer;
+}
+
+.role-config .del-role {
+    background: red;
+    color: white;
+    border: rgba(24,24,24,0.3);
+    border-radius: 10px;
+    transition: all 0.2s;
+    padding: 5px;
+}
+
+.role-config .del-role:hover {
+    background-color: rgb(50,0,0);
+    cursor: pointer;
+}
+
 .set-reward-container { 
     display: flex;
     flex-direction: column;
+    gap: 1rem;
 }
 
 .set-reward-container input {
     text-align: center;
+    border-radius: 5px;
+    padding: 5px;
+}
+
+.set-reward-container button {
+    background: lightgreen;
+    border: 1px solid rgba(24,24,24,0.3);
+    border-radius: 5px;
+    transition: all 0.2s;
+}
+
+.set-reward-container button:hover {
+    background: green;
+    cursor: pointer;
 }
