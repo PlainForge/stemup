@@ -28,6 +28,7 @@ export type Task = {
   description: string,
   points: number,
   roleId: string,
+  complete: boolean,
   id: string,
   title: string,
   createdOn: Timestamp
@@ -40,6 +41,7 @@ export type SubmittedTask = {
   points: number,
   roleId: string,
   submission: Timestamp,
+  complete: boolean,
   id: string,
   title: string
 }

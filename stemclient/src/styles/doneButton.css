@@ -1,0 +1,31 @@
+.done-button {
+    border: 1px solid rgba(24,24,24,0.3);
+    border-radius: 5px;
+    padding: 10px;
+}
+
+.done-button:hover {
+    cursor: pointer;
+}
+
+.waiting {
+    color: green;
+    border: 1px solid rgba(24,24,24,0.3);
+    padding: 5px;
+    border-radius: 5px;
+}
+
+.waiting:hover {
+    cursor: default;
+}
+
+.complete {
+    color: green;
+    border: 1px solid rgba(24,24,24,0.3);
+    padding: 5px;
+    border-radius: 5px;
+}
+
+.complete:hover {
+    cursor: default;
+}

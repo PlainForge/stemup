@@ -59,7 +59,8 @@ function RoleAdmin({ role, members } : prop) {
     useEffect(() => {
         const q = query(
             collection(db, "tasksSubmitted"),
-            where("roleId", "==", role.id)
+            where("roleId", "==", role.id),
+            where("complete", "==", false)
         )
 
         const unsub = onSnapshot(q, (snap) => {
@@ -102,6 +103,7 @@ function RoleAdmin({ role, members } : prop) {
                 points: pts,
                 roleId: role.id,
                 createdOn: Timestamp.now(),
+                complete: false,
                 title: title
             });
             form.reset();
@@ -185,8 +187,12 @@ function RoleAdmin({ role, members } : prop) {
         const thisRoleId = submitted.roleId;
 
         try {
-            await deleteDoc(doc(db, "tasks", submitted.id));
-            await deleteDoc(doc(db, "tasksSubmitted", submitted.id));
+            await updateDoc(doc(db, "tasks", submitted.id), {
+                complete: true
+            });
+            await updateDoc(doc(db, "tasksSubmitted", submitted.id), {
+                complete: true
+            });
 
             const roleRef = doc(db, "roles", thisRoleId);
             const roleSnap = await getDoc(roleRef);
@@ -228,8 +234,53 @@ function RoleAdmin({ role, members } : prop) {
         }
     }
 
+    const resetRole = async (roleId : string) => {
+        const confirmDelete = window.confirm("Are you sure you want to reset? This cannot be undone.");
+
+        if (!confirmDelete) return;
+
+        try {
+            const updates: Promise<void>[] = [];
+
+            const tasksQ = query(collection(db, "tasks"), where("roleId", "==", roleId));
+            const tasksSnap = await getDocs(tasksQ);
+            tasksSnap.forEach((taskDoc) => {
+                updates.push(deleteDoc(doc(db, "tasks", taskDoc.id)));
+            });
+
+            const submittedQ = query(collection(db, "tasksSubmitted"), where("roleId", "==", roleId));
+            const submittedSnap = await getDocs(submittedQ);
+            submittedSnap.forEach((taskDoc) => {
+                updates.push(deleteDoc(doc(db, "tasksSubmitted", taskDoc.id)));
+            });
+
+            const roleRef = doc(db, "roles", roleId);
+            const roleSnap = await getDocs(collection(db, "roles"));
+            const thisRole = roleSnap.docs.find((r) => r.id === roleId);
+
+            if (thisRole) {
+                const data = thisRole.data();
+                const members = data.members || [];
+
+                const resetMembers = members.map((m: RoleUserData) => ({
+                    ...m,
+                    points: 0,
+                    taskCompleted: 0,
+                }));
+
+                updates.push(updateDoc(roleRef, { members: resetMembers }));
+            }
+
+            await Promise.all(updates);
+
+            console.log(`Role ${roleId} has been reset.`);
+        } catch (err) {
+            console.error("Error resetting role:", err);
+        }
+    }
+
     const deleteRole = async (roleId : string) => {
-        const confirmDelete = window.confirm("Are you sure you want to delete your account? This cannot be undone.");
+        const confirmDelete = window.confirm("Are you sure you want to delete this role? This cannot be undone.");
 
         if (!confirmDelete) return;
 
@@ -309,31 +360,37 @@ function RoleAdmin({ role, members } : prop) {
                     onClick={() => setPage("requests")} 
                     onTap={() => setPage("requests")}
                     whileHover={{scale: 1.1, cursor: "pointer"}}
+                    style={page === "requests" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Requests <span>{requested.length}</span></motion.button>
                 <motion.button 
                     onClick={() => setPage("creation")} 
                     onTap={() => setPage("creation")}
                     whileHover={{scale: 1.1, cursor: "pointer"}}
+                    style={page === "creation" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Task Creation</motion.button>
                 <motion.button 
                     onClick={() => setPage("submitted")}
                     onTap={() => setPage("submitted")}
                     whileHover={{scale: 1.1, cursor: "pointer"}}
+                    style={page === "submitted" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Submitted Tasks <span>{submittedTasks.length}</span></motion.button>
                 <motion.button 
                     onClick={() => setPage("config")}
                     onTap={() => setPage("config")}
                     whileHover={{scale: 1.1, cursor: "pointer"}}
+                    style={page === "config" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Role Config</motion.button>
                 <motion.button 
                     onClick={() => setPage("kick")}
                     onTap={() => setPage("kick")}
                     whileHover={{scale: 1.1, cursor: "pointer"}}
+                    style={page === "kick" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Member Kick</motion.button>
                 <motion.button 
                     onClick={() => setPage("rewards")}
                     onTap={() => setPage("rewards")}
                     whileHover={{scale: 1.1, cursor: "pointer"}}
+                    style={page === "rewards" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Rewards</motion.button>
             </motion.div>
             <motion.div className="content">
@@ -414,6 +471,7 @@ function RoleAdmin({ role, members } : prop) {
                         <h1>Tasks Submitted</h1>
                         <div className="submitted-tasks">
                             {submittedTasks.map((submitted) => {
+                                if (submitted.complete) return null
                                 return (
                                     <motion.div 
                                         className="submitted-task" 
@@ -455,8 +513,9 @@ function RoleAdmin({ role, members } : prop) {
                         <h1>Role Config</h1>
                         <form className="set-role-name" id="rolename" onSubmit={changeRoleName}>
                             <input type="text" name="newName" placeholder="Change Role Name" required/>
-                            <button type="submit">Change</button>
+                            <button type="submit">Change Role Name</button>
                         </form>
+                        <button className="reset-role" onClick={() => resetRole(role.id)}>Monthly Reset</button>
                         <button className="del-role" onClick={() => deleteRole(role.id)}>Delete Role</button>
                     </motion.div> : ""
                 }

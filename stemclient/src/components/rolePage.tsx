@@ -117,7 +117,8 @@ function RolePage({ role } : RolePageProps) {
     }
 
     const userTasks = roleTasks.filter(task => task.assignedTo === user.uid);
-    const taskCount = userTasks.length;
+    const allTaskCount = userTasks.length;
+    const taskCount = userTasks.filter(task => !task.complete).length;
     let i = 0;
 
     return (
@@ -220,21 +221,23 @@ function RolePage({ role } : RolePageProps) {
                     initial={{x:-10}}
                     animate={{x:0}}
                 >
-                    <h1>Your Tasks</h1>
+                    <h1>Your {currentMonth} Tasks</h1>
                     <div className="all-tasks">
-                        {taskCount > 0 ? roleTasks.map((task) => {
+                        {allTaskCount > 0 ? roleTasks.map((task) => {
                             if (task.assignedTo.match(user.uid)) {
                                 return (
-                                    <div
-                                        className="task"
+                                    <motion.div
+                                        className={task.complete ? "task-completed" : "task"}
                                         key={task.id}
+                                        initial={{x:-10}}
+                                        animate={{x:0}}
                                     >
                                         <h1>{task.title}</h1>
                                         <h3>Description</h3>
-                                        <p>{task.description}</p>
-                                        <p>{task.points} points</p>
+                                        <p>{task.description || "N/A"}</p>
+                                        <h4>{task.points} points</h4>
                                         <DoneButton task={task} />
-                                    </div>
+                                    </motion.div>
                                 )
                             }
                         }) : "No tasks assigned to you"}

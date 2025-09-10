@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import "../styles/settings.css"
 import '../styles/global.css'
-import { deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where } from "firebase/firestore";
 import { deleteUser, onAuthStateChanged } from "firebase/auth";
 import { auth, db, storage } from "../firebase";
-import type { UserData } from "../myDataTypes";
+import type { RoleUserData, UserData } from "../myDataTypes";
 import { motion } from "motion/react";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import useUser from "../hooks/user";
@@ -45,13 +45,35 @@ function Settings() {
         if (!confirmDelete) return;
 
         try {
+            const rolesSnap = await getDocs(collection(db, "roles"));
+            const batchUpdates: Promise<void>[] = [];
+
+            rolesSnap.forEach((roleDoc) => {
+                const data = roleDoc.data();
+                const members = data.members || [];
+
+                if (members.some((m: RoleUserData) => m.id === user.uid)) {
+                    const updatedMembers = members.filter((m: RoleUserData) => m.id !== user.uid);
+                    batchUpdates.push(
+                        updateDoc(doc(db, "roles", roleDoc.id), { members: updatedMembers })
+                    );
+                }
+            });
+
+            const q = query(collection(db, "tasks"), where("assignedTo", "==", user.uid));
+                const tasksSnap = await getDocs(q);
+                tasksSnap.forEach((taskDoc) => {
+                batchUpdates.push(deleteDoc(doc(db, "tasks", taskDoc.id)));
+            });
+
+            await Promise.all(batchUpdates);
+
             await deleteDoc(doc(db, "users", user.uid));
             await deleteUser(user);
 
-            alert("Account deleted successfully.");
+            console.log("User account and related data deleted.");
         } catch (err) {
             console.error("Error deleting account:", err);
-            alert("Something went wrong while deleting your account.");
         }
     };
 

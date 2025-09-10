@@ -3,6 +3,7 @@ import type { Task } from "../myDataTypes";
 import { useEffect, useState } from "react";
 import { auth, db } from "../firebase";
 import { collection, doc, onSnapshot, query, setDoc, Timestamp, where } from "firebase/firestore";
+import "../styles/doneButton.css"
 
 interface DoneButtonProps {
     task: Task
@@ -38,6 +39,7 @@ function DoneButton({ task } : DoneButtonProps) {
                 points: task.points,
                 roleId: task.roleId,
                 submission: Timestamp.now(),
+                complete: false,
                 title: task.title
             });
         }   catch (err) {
@@ -47,11 +49,14 @@ function DoneButton({ task } : DoneButtonProps) {
         }
     }
 
-    if (tasks.includes(task.id)) {
-        return <p>Waiting for approval</p>
+    if (task.complete) {
+        return <h3 className="complete">Completed</h3>
+    } else if (tasks.includes(task.id)) {
+        return <h3 className="waiting">Waiting for approval</h3>
     } else {
         return (
             <motion.button 
+                className="done-button"
                 onClick={submitTask} 
                 onTap={submitTask}
                 disabled={submitting}
