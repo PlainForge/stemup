@@ -33,14 +33,14 @@ function LeftNav({ toPage, setRole, page } : NavProps) {
         window.location.reload();
     };
 
-    if (!userData || loading) {
+    if (loading) {
         return <h1>Loading...</h1>
     }
 
     return (
         <div className={user ? 'left-nav-user' : 'left-nav-login'} id="nav">
             <h1 className='main-title'>StemUP</h1>
-            { user ? <h3>{userData.name}</h3> : "" }
+            { user ? <h3>{userData?.name}</h3> : "" }
             {!user ? <p style={{color: "white"}}>2025</p> : ""}
             { user ? 
                 <div className="roles-container">
