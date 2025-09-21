@@ -6,13 +6,14 @@ import Settings from './components/settings';
 import Dash from './components/dash';
 import Roles from './components/roles';
 import RolePage from './components/rolePage';
-import type { Role } from './myDataTypes';
+import type { Role, UserData } from './myDataTypes';
 import useUser from './hooks/user';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 
 function App() {
-  const [user, loading] = useUser();
+  const [user, userData, loading] = useUser();
+  const [userCache, setUserCache] = useState<Record<string, UserData>>({});
   const [page, setPage] = useState("home");
   const [role, setRole] = useState<Role | null>(null);
 
@@ -22,24 +23,36 @@ function App() {
     const roleRef = doc(db, "roles", role.id);
     const unsub = onSnapshot(roleRef, (snap) => {
       if (snap.exists()) {
-        // ✅ Role still exists → keep it updated
         setRole({ id: snap.id, ...(snap.data() as Omit<Role, "id">) });
       } else {
-        // ❌ Role deleted → reset
         setRole(null);
-        setPage("roles"); // e.g. redirect back to roles list
+        setPage("roles");
       }
     });
 
     return () => unsub();
-  }, [role?.id]);
+  }, [role]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+        const cache: Record<string, UserData> = {};
+        snap.forEach((doc) => {
+            cache[doc.id] = doc.data() as UserData;
+        });
+        setUserCache(cache);
+    });
+
+    return () => unsub();
+  }, [user]);
 
   if (loading) {
     return <h1>Loading...</h1>
   }
   
   return (
-    <div className={user ? 'app' : 'app-login'}>
+    <div className={user && userData ? 'app' : 'app-login'}>
       <LeftNav toPage={setPage} setRole={setRole} page={page} />
       
       {!user ? <LoginBox /> : 
@@ -48,7 +61,7 @@ function App() {
             {page.match("home") ? <div></div> : null}
             {page.match("settings") ? <Settings /> : null}
             {page.match("roles") ? <Roles toPage={setPage} setRole={setRole}/> : null}
-            {page.match("rolepage") ? <RolePage role={role} /> : null}
+            {page.match("rolepage") ? <RolePage role={role} userCache={userCache} /> : null}
           </div>
           <Dash currentPage={page} />
         </div>

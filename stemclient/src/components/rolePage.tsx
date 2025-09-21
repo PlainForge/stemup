@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../firebase";
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
-import { type Task, type RoleUserData, type Role } from "../myDataTypes";
+import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
+import { type Task, type RoleUserData, type Role, type UserData } from "../myDataTypes";
 import '../styles/rolesPage.css'
 import '../styles/global.css'
 import { motion } from "motion/react";
@@ -11,13 +11,15 @@ import useUser from "../hooks/user";
 import useAdmins from "../hooks/admins";
 
 interface RolePageProps {
-    role: Role | null
+    role: Role | null,
+    userCache: Record<string, UserData>
 }
 
-function RolePage({ role } : RolePageProps) {
-    const [user, loading] = useUser()
+function RolePage({ role, userCache } : RolePageProps) {
+    const [user, userData, loading] = useUser()
     const [members, setMembers] = useState<RoleUserData[]>([]);
-    const [leaders, setLeaders] = useState<RoleUserData[]>([]);
+    const [membersWithData, setMembersWithData] = useState<UserData[]>([]);
+    const [leaders, setLeaders] = useState<UserData[]>([]);
     const [roleTasks, setRoleTasks] = useState<Task[]>([]);
     const [pageState, setPageState] = useState("home");
     const [upRole, setUpRole] = useState<Role>();
@@ -38,7 +40,36 @@ function RolePage({ role } : RolePageProps) {
         });
 
         return () => unsub();
-    }, [user, role]);
+    }, [role]);
+
+    useEffect(() => {
+        const fetchMembers = async () => {
+            const detailedMembers: UserData[] = [];
+
+            for (const member of members) {
+                const userRef = doc(db, "users", member.id);
+                const userSnap = await getDoc(userRef);
+
+                if (userSnap.exists()) {
+                    detailedMembers.push({
+                        id: member.id,
+                        uid: member.id,
+                        roles: userSnap.data().roles || [],
+                        name: userSnap.data().name || "Unknown User",
+                        points: userSnap.data().points || 0,
+                        taskCompleted: userSnap.data().taskCompleted || 0,
+                        photoURL: userSnap.data().photoURL || ""
+                    });
+                }
+            }
+
+            setMembersWithData(detailedMembers);
+        };
+
+        if (members.length > 0) {
+            fetchMembers();
+        }
+    }, [role, members]);
 
     // Get role rewards
     useEffect(() => {
@@ -56,24 +87,32 @@ function RolePage({ role } : RolePageProps) {
         })
 
         return () => unsub();
-    }, [user, role])
+    }, [role])
 
     // Update Leaderboard
     useEffect(() => {
-        if (!role) return;
-        const roleRef = doc(db, "roles", role.id);
-        const unsub = onSnapshot(roleRef, (snap) => {
-            if (snap.exists()) {
-                const data = snap.data();
-                const members = (data.members || []) as RoleUserData[];
+        if (!membersWithData.length) return;
 
-                const sorted = [...members].sort((a, b) => (b.points || 0) - (a.points || 0));
-
-                setLeaders(sorted);
-            }
+        const detailed = membersWithData.map((m) : UserData => {
+            const user = userCache[m.uid] || {};
+            return {
+                id: m.uid || "",
+                uid: m.uid || "",
+                roles: m.roles || [],
+                points: m.points || 0,
+                taskCompleted: m.taskCompleted || 0,
+                name: user.name || "Unknown",
+                photoURL: user.photoURL || "",
+            };
         });
-        return () => unsub();
-    }, [role]);
+
+        // Sort by points
+        const sorted = detailed.sort((a, b) => (b.points || 0) - (a.points || 0)) || "Loading";
+        setLeaders(prev => {
+            const same = prev.length === sorted.length && prev.every((p, i) => p.id === sorted[i].id && p.points === sorted[i].points);
+            return same ? prev : sorted;
+        });
+    }, [membersWithData, userCache]);
 
     // Get User Tasks
     useEffect(() => {
@@ -111,10 +150,8 @@ function RolePage({ role } : RolePageProps) {
         return () => unsub();
     }, [role]);
 
-    if (!user || !role || !upRole) return;
-    if (loading) {
-        return <h1>Loading...</h1>
-    }
+    if (loading) return <h1>Loading...</h1>;
+    if (!user || !userData || !role || !upRole) return <h1>Loading role...</h1>;
 
     const userTasks = roleTasks.filter(task => task.assignedTo === user.uid);
     const allTaskCount = userTasks.length;
@@ -126,7 +163,7 @@ function RolePage({ role } : RolePageProps) {
             <div className="header">
                 <h1>{upRole.name}</h1>
                 <div className="user-info">
-                        {members.map((m) => {
+                        {membersWithData.map((m) => {
                             if (m.id.match(user.uid) && !admins.includes(user.uid)) {
                                 return (
                                     <div key={m.id} className="user">
@@ -182,7 +219,7 @@ function RolePage({ role } : RolePageProps) {
                         </div>
                         
                         <div className="board">
-                            {leaders.map((u) => {
+                            {leaders ? leaders.map((u) => {
                                 if (admins.includes(u.id)) return
                                 i++
                                 return (
@@ -194,7 +231,7 @@ function RolePage({ role } : RolePageProps) {
                                         <p className="tasks">{u.taskCompleted} Completed Tasks</p>
                                     </div>
                                 )
-                            })}
+                            }) : "Loading"}
                         </div>
                     </div>
                     <div className="rewards div">
@@ -245,7 +282,7 @@ function RolePage({ role } : RolePageProps) {
                 </motion.div>
             : "" }
             { pageState.match("admin") ?
-                <RoleAdmin role={role} members={members} />
+                <RoleAdmin role={role} membersWithData={membersWithData} />
             : "" }
         </div>
     )

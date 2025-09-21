@@ -2,25 +2,25 @@ import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, ge
 import { motion } from "motion/react";
 import { useEffect, useState, type FormEvent } from "react";
 import { db } from "../firebase";
-import { type Role, type RoleUserData, type SubmittedTask, type UserData } from "../myDataTypes";
+import { type Role, type SubmittedTask, type UserData } from "../myDataTypes";
 import "../styles/rolesAdmin.css"
 import useUser from "../hooks/user";
 import useAdmins from "../hooks/admins";
 
 interface prop {
     role: {name: string, id: string}
-    members: RoleUserData[]
+    membersWithData: UserData[]
 }
 
-function RoleAdmin({ role, members } : prop) {
-    const [user, loading] = useUser()
+function RoleAdmin({ role, membersWithData } : prop) {
+    const [user, userData, loading] = useUser()
     const [page, setPage] = useState("submitted");
     const [requested, setRequested] = useState<string[]>([]);
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
     const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
     const admins = useAdmins();
 
-    // Get Members
+    // Get Members to get requested user's data
     useEffect(() => {
         const roleRef = doc(db, "roles", role.id);
         const unsub = onSnapshot(roleRef, (snap) => {
@@ -30,7 +30,7 @@ function RoleAdmin({ role, members } : prop) {
         });
 
         return () => unsub();
-    }, [user, role]);
+    }, [role.id]);
 
     // Get Users that requested
     useEffect(() => {
@@ -56,6 +56,7 @@ function RoleAdmin({ role, members } : prop) {
         return () => unsubs.forEach((u) => u());
     }, [requested])
 
+    // Getting the current role's submitted tasks
     useEffect(() => {
         const q = query(
             collection(db, "tasksSubmitted"),
@@ -74,6 +75,7 @@ function RoleAdmin({ role, members } : prop) {
         return () => unsub();
     }, [role])
 
+    // Sending a task to a user in the current role
     const sendTask = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
@@ -84,7 +86,7 @@ function RoleAdmin({ role, members } : prop) {
         const pts = Number(formData.get("pts"));
         const assignedId = formData.get("user") as string;
 
-        const selectedUser = members.find(m => m.id === assignedId);
+        const selectedUser = membersWithData.find(m => m.id === assignedId);
         if (!selectedUser) {
             console.error("No user selected");
             return;
@@ -112,6 +114,7 @@ function RoleAdmin({ role, members } : prop) {
         }
     }
 
+    // Change the current role's name
     const changeRoleName = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget)
@@ -127,6 +130,7 @@ function RoleAdmin({ role, members } : prop) {
         }
     }
 
+    // Accept user's join request for the current role
     const acceptRequest = async (id: string | undefined) => {
         if (!id) return console.log("no id given");
 
@@ -146,22 +150,22 @@ function RoleAdmin({ role, members } : prop) {
                 pendingRequests: arrayRemove(id)
             })
             await setDoc(doc(db, "roles", role.id), {
-                members: arrayUnion({
-                    id: thisUser.uid,
-                    name: thisUser.name,
-                    photoURL: thisUser.photoURL,
+                members: arrayUnion(thisUser.uid)
+            }, {merge:true})
+            await updateDoc(doc(db, "users", id), {
+                roles: arrayUnion({
+                    id: role.id, 
+                    name: role.name,
                     points: 0,
                     taskCompleted: 0
                 })
-            }, {merge:true})
-            await updateDoc(doc(db, "users", id), {
-                roles: arrayUnion({id: role.id, name: role.name})
             })
         } catch (err) {
             console.log(err);
         }
     }
 
+    // Decline user's join request for the current role
     const declineRequest = async (id: string | undefined) => {
         if (!id) return console.log("no id given");
 
@@ -180,11 +184,11 @@ function RoleAdmin({ role, members } : prop) {
         }
     }
 
+    // Accept a submitted task from a user
     const acceptTask = async (submitted : SubmittedTask) => {
         if (!submitted) return;
         const addedPts = submitted.points;
         const thisUser = submitted.assignedTo;
-        const thisRoleId = submitted.roleId;
 
         try {
             await updateDoc(doc(db, "tasks", submitted.id), {
@@ -194,28 +198,27 @@ function RoleAdmin({ role, members } : prop) {
                 complete: true
             });
 
-            const roleRef = doc(db, "roles", thisRoleId);
-            const roleSnap = await getDoc(roleRef);
+            const userRef = doc(db, "users", thisUser);
+            const userSnap = await getDoc(userRef);
 
-            if (!roleSnap.exists()) return;
+            if (!userSnap.exists()) return;
 
-            const data = roleSnap.data();
-            const members : RoleUserData[] = data.members || [];
+            const userData = userSnap.data();
 
-            const updatedMembers = members.map((m) => {
-                if (m.id === thisUser) {
-                    return {
-                        ...m,
-                        points: (m.points || 0) + addedPts,
-                        taskCompleted: (m.taskCompleted || 0) + 1,
-                    };
-                }
-                return m;
-            });
-            await updateDoc(roleRef, {
-                members: updatedMembers
-            })
+            const roles = userData.roles || {};
+
+            const roleId = submitted.roleId;
+            const updatedRoles = {
+                ...roles,
+                [roleId]: {
+                    ...roles[roleId],
+                    points: (roles[roleId]?.points || 0) + addedPts,
+                    taskCompleted: (roles[roleId]?.taskCompleted || 0) + 1,
+                },
+            };
+
             await updateDoc(doc(db, "users", thisUser), {
+                roles: updatedRoles,
                 points: increment(addedPts),
                 taskCompleted: increment(1)
             })
@@ -254,22 +257,23 @@ function RoleAdmin({ role, members } : prop) {
                 updates.push(deleteDoc(doc(db, "tasksSubmitted", taskDoc.id)));
             });
 
-            const roleRef = doc(db, "roles", roleId);
-            const roleSnap = await getDocs(collection(db, "roles"));
-            const thisRole = roleSnap.docs.find((r) => r.id === roleId);
+            const usersSnap = await getDocs(collection(db, "users"));
+            usersSnap.forEach((userDoc) => {
+                const data = userDoc.data();
+                const roles = data.roles || {};
 
-            if (thisRole) {
-                const data = thisRole.data();
-                const members = data.members || [];
+                if (roles[roleId]) {
+                    // reset only this role's stats
+                    roles[roleId] = {
+                        points: 0,
+                        taskCompleted: 0,
+                    };
 
-                const resetMembers = members.map((m: RoleUserData) => ({
-                    ...m,
-                    points: 0,
-                    taskCompleted: 0,
-                }));
-
-                updates.push(updateDoc(roleRef, { members: resetMembers }));
-            }
+                    updates.push(
+                        updateDoc(doc(db, "users", userDoc.id), { roles })
+                    );
+                }
+            });
 
             await Promise.all(updates);
 
@@ -341,7 +345,7 @@ function RoleAdmin({ role, members } : prop) {
         }
     }
 
-    if (!user || loading) {
+    if (!user || !userData || loading) {
         return <h1>Loading...</h1>
     }
 
@@ -442,10 +446,11 @@ function RoleAdmin({ role, members } : prop) {
                         <form className="creation-form" id="create" onSubmit={sendTask}>
                             <select name="user" defaultValue="">
                                 <option value="" disabled>Select a member</option>
-                                {members.map((member) => {  
-                                    if (admins.includes(member.id)) return null
+                                {membersWithData.map((member) => {  
+                                    if (!member.uid) return
+                                    if (admins.includes(member.uid)) return null
                                     return (
-                                        <option key={member.id} value={member.id}>
+                                        <option key={member.uid} value={member.uid}>
                                             {member.name}
                                         </option>
                                     )

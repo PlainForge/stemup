@@ -5,7 +5,7 @@ import { db } from "../firebase";
 /*
     Get/Update all admins from the fiirestore
 */
-export default function useUser(): string[] {
+export default function useAdmin(): string[] {
     const [admins, setAdmins] = useState<string[]>([]);
 
     useEffect(() => {
@@ -17,7 +17,7 @@ export default function useUser(): string[] {
         })
 
         return () => unsub();
-    })
+    }, [])
 
     return admins
 }

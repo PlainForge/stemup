@@ -18,28 +18,26 @@ function LoginBox() {
     const [isRegistered, setIsRegistered] = useState(false);
     const [phrase, setPhrase] = useState("");
     const [file, setFile] = useState<File | null>(null);
+    const provider = new GoogleAuthProvider();
 
     // Google Login/Register
     const handleGoogleLogin = async () => {
         try {
-            const provider = new GoogleAuthProvider();
             const result = await signInWithPopup(auth, provider);
             const current = result.user
 
-            const { uid, displayName, email, photoURL } = current;
-
-            const userRef = doc(db, "users", uid);
+            const userRef = doc(db, "users", current.uid);
             const snap = await getDoc(userRef);
 
             if (!snap.exists()) {
                 await setDoc(doc(db, "users",  current.uid), {
-                    email: email,
-                    name: displayName,
-                    roles: [{id: 'r3wUbRSCX7cxwBYhtAdg', name: 'global'}],
+                    email: current.email,
+                    name: current.displayName,
+                    roles: [{id: 'r3wUbRSCX7cxwBYhtAdg', name: 'global', points: 0, taskCompleted: 0}],
                     createdAt: new Date(),
                     points: 0,
                     taskCompleted: 0,
-                    photoURL: photoURL || DEFAULT_AVATAR
+                    photoURL: current.photoURL || DEFAULT_AVATAR
                 });
 
                 await updateDoc(doc(db, "roles", 'r3wUbRSCX7cxwBYhtAdg'), {
@@ -48,12 +46,11 @@ function LoginBox() {
             } else {
                 await setDoc(
                     userRef,
-                    { photoURL },
+                    { photoURL: current.photoURL },
                     { merge: true }
                 );
             }
 
-            console.log("User:", result.user);
             setPhrase("");
             setEmail("");
             setPassword("");
@@ -70,10 +67,9 @@ function LoginBox() {
 
     // Registering with Email
     const registerWithEmail = async () => {
-        
         try {
-            if (!email || !password) {
-                alert("Please enter email and password");
+            if (!email || !password || !name) {
+                alert("Please fill in all fields.");
                 return;
             }
 
@@ -90,7 +86,7 @@ function LoginBox() {
             await setDoc(doc(db, "users", current.uid), {
                 email: current.email,
                 name: name,
-                roles: [{id: 'r3wUbRSCX7cxwBYhtAdg', name: 'global'}],
+                roles: [{id: 'r3wUbRSCX7cxwBYhtAdg', name: 'global', points: 0, taskCompleted: 0}],
                 createdAt: new Date(),
                 points: 0,
                 taskCompleted: 0,
@@ -101,7 +97,6 @@ function LoginBox() {
                 members: arrayUnion(current.uid)
             })
 
-            console.log("User registered:", current.uid);
             setPhrase("");
             setEmail("");
             setPassword("");
@@ -119,10 +114,8 @@ function LoginBox() {
     // Loging in with Email
     const loginWithEmail = async () => {
         try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const current = userCredential.user;
+            await signInWithEmailAndPassword(auth, email, password);
 
-            console.log("User logged in:", current.uid);
             setPhrase("");
             setEmail("");
             setPassword("");
@@ -135,11 +128,11 @@ function LoginBox() {
                     case "auth/user-not-found":
                     case "auth/wrong-password":
                     case "auth/invalid-credential":
-                    setPhrase("Email or password is incorrect.");
+                        setPhrase("Email or password is incorrect.");
                     break;
                     default:
-                    setPhrase("Login failed. Please try again.");
-                    console.error("Login error:", err);
+                        setPhrase("Login failed. Please try again.");
+                        console.error("Login error:", err);
                 }
             } else {
                 console.error("Login error:", err);
@@ -190,6 +183,7 @@ function LoginBox() {
                     <label htmlFor="myFile">Choose your photo</label>
                     <input 
                         itemID="myFile"
+                        id="myFile"
                         name="myFile"
                         type="file" 
                         accept="image/*" 

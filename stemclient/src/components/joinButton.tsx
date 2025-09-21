@@ -1,10 +1,10 @@
-import  { onAuthStateChanged, type User } from "firebase/auth";
 import { useEffect, useState, type ComponentState } from "react";
-import { auth, db } from "../firebase";
+import { db } from "../firebase";
 import { arrayUnion, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { motion } from "motion/react";
 import type { RoleUserData } from "../myDataTypes";
 import '../styles/global.css'
+import useUser from "../hooks/user";
 
 interface JoinProps {
     role: {name: string, id: string}
@@ -13,35 +13,29 @@ interface JoinProps {
 }
 
 function JoinButton({ role, toPage, setRole } : JoinProps) {
-    const [user, setUser] = useState<User | null>(null);
+    const [user, userData, loading] = useUser();
     const [hasRequested, setHasRequested] = useState(false);
     const [isMember, setIsMember] = useState(false);
 
     useEffect(() => {
-        const unsub = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
-        });
-
-        return () => unsub();
-    }, []);
-
-    useEffect(() => {
-        if (!user) return;
+        if (!user || !userData) return;
 
         const roleRef = doc(db, "roles", role.id);
 
         const unsub = onSnapshot(roleRef, (snap) => {
-        if (snap.exists()) {
+            if (!snap.exists()) return;
+
             const data = snap.data();
 
-            setHasRequested(data.pendingRequests?.includes(user.uid) || false);
+            setHasRequested((data.pendingRequests || []).includes(user.uid));
 
-            const isInMembers = data.members?.some((m: RoleUserData) => m.id === user.uid);
-            setIsMember(isInMembers)
-        }
-    });
+            const isInMembers = (data.members || []).some(
+                (m: RoleUserData) => m.id === user.uid
+            );
+            setIsMember(isInMembers);
+        });
         return () => unsub();
-    }, [role, user]);
+    }, [role, user, userData]);
 
     const requestRole = async (roleId: string) => {
         if (!user) return;
@@ -52,20 +46,22 @@ function JoinButton({ role, toPage, setRole } : JoinProps) {
         })
     }
 
-    if (!user) {
+    if (!user || !userData || loading) {
         return <h1>Loading...</h1>
     }
 
     if (isMember) {
-        return <motion.button 
-                    whileHover={{ scale: 1.1}} 
-                    key={role.id + role.id} 
-                    className="button"
-                    onClick={() => {
-                        setRole(role)
-                        toPage("rolepage")
-                    }}
-                >Join</motion.button>
+        return (
+            <motion.button 
+                whileHover={{ scale: 1.1}} 
+                key={role.id + role.id} 
+                className="button"
+                onClick={() => {
+                    setRole(role)
+                    toPage("rolepage")
+                }}
+            >Join</motion.button>
+        )
     }
 
     if (hasRequested) {

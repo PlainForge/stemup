@@ -1,20 +1,17 @@
 import type { Timestamp } from "firebase/firestore";
 
 export type UserData = {
-    name?: string,
-    uid?: string,
-    roles?: [{id: string, name: string}],
-    points?: number,
-    taskCompleted?: number,
-    photoURL?: string;
+    name: string,
+    uid: string,
+    roles: [{id: string, name: string, points: number, taskCompleted: number}],
+    points: number,
+    taskCompleted: number,
+    photoURL: string;
+    id: string
 }
 
 export type RoleUserData = {
-  name: string,
-  id: string,
-  points: number,
-  taskCompleted: number,
-  photoURL?: string
+  id: string
 }
 
 export type Role = {

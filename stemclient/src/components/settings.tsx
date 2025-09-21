@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import "../styles/settings.css"
 import '../styles/global.css'
-import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where } from "firebase/firestore";
-import { deleteUser, onAuthStateChanged } from "firebase/auth";
-import { auth, db, storage } from "../firebase";
-import type { RoleUserData, UserData } from "../myDataTypes";
+import { collection, deleteDoc, doc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
+import { deleteUser } from "firebase/auth";
+import { db, storage } from "../firebase";
+import type { RoleUserData } from "../myDataTypes";
 import { motion } from "motion/react";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import useUser from "../hooks/user";
@@ -13,29 +13,9 @@ const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&
 
 function Settings() {
     const [name, setName] = useState("")
-    const [user, loading] = useUser();
-    const [userData, setUserData] = useState<UserData | null>(null);
+    const [user, userData, loading] = useUser();
     const [file, setFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-    useEffect(() => {
-        const unsub = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                const ref = doc(db, "users", currentUser.uid);
-
-                const unsubscribeSnapshot = onSnapshot(ref, (snap) => {
-                    if (snap.exists()) {
-                        setUserData(snap.data() as UserData);
-                    }
-                });
-
-                return () => unsubscribeSnapshot();
-            } else {
-                setUserData(null);
-            }
-        });
-        return () => unsub();
-    }, []);
 
     const handleDeleteAccount = async () => {
         if (!user) return;
