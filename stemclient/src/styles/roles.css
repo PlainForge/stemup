@@ -7,11 +7,12 @@
 .role-form {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 5px;
 }
 
 .role-form input {
     text-align: center;
+    border-radius: 5px;
 }
 
 .available-roles {
@@ -34,4 +35,5 @@
 .role-container button {
     border: 0;
     background: none;
+    border-radius: 10px;
 }

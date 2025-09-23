@@ -4,7 +4,6 @@ import '../styles/global.css'
 import { collection, deleteDoc, doc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
 import { deleteUser } from "firebase/auth";
 import { db, storage } from "../firebase";
-import type { RoleUserData } from "../myDataTypes";
 import { motion } from "motion/react";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import useUser from "../hooks/user";
@@ -25,30 +24,41 @@ function Settings() {
         if (!confirmDelete) return;
 
         try {
-            const rolesSnap = await getDocs(collection(db, "roles"));
             const batchUpdates: Promise<void>[] = [];
 
+            // Remove user from all roles
+            const rolesSnap = await getDocs(collection(db, "roles"));
             rolesSnap.forEach((roleDoc) => {
                 const data = roleDoc.data();
-                const members = data.members || [];
+                const members: string[] = data.members || [];
 
-                if (members.some((m: RoleUserData) => m.id === user.uid)) {
-                    const updatedMembers = members.filter((m: RoleUserData) => m.id !== user.uid);
+                if (members.includes(user.uid)) {
+                    const updatedMembers = members.filter((m) => m !== user.uid);
                     batchUpdates.push(
-                        updateDoc(doc(db, "roles", roleDoc.id), { members: updatedMembers })
+                    updateDoc(doc(db, "roles", roleDoc.id), { members: updatedMembers })
                     );
                 }
             });
 
             const q = query(collection(db, "tasks"), where("assignedTo", "==", user.uid));
-                const tasksSnap = await getDocs(q);
-                tasksSnap.forEach((taskDoc) => {
+            const tasksSnap = await getDocs(q);
+            tasksSnap.forEach((taskDoc) => {
                 batchUpdates.push(deleteDoc(doc(db, "tasks", taskDoc.id)));
             });
 
-            await Promise.all(batchUpdates);
+            if (userData?.photoURL && userData.photoURL !== DEFAULT_AVATAR) {
+                try {
+                    const oldRef = ref(storage, `profilePictures/${user.uid}`);
+                    await deleteObject(oldRef);
+                } catch (err) {
+                    console.warn("No profile picture to delete or already removed:", err);
+                }
+            }
 
             await deleteDoc(doc(db, "users", user.uid));
+
+            await Promise.all(batchUpdates);
+
             await deleteUser(user);
 
             console.log("User account and related data deleted.");

@@ -2,7 +2,6 @@ import { useEffect, useState, type ComponentState } from "react";
 import { db } from "../firebase";
 import { arrayUnion, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { motion } from "motion/react";
-import type { RoleUserData } from "../myDataTypes";
 import '../styles/global.css'
 import useUser from "../hooks/user";
 
@@ -29,9 +28,7 @@ function JoinButton({ role, toPage, setRole } : JoinProps) {
 
             setHasRequested((data.pendingRequests || []).includes(user.uid));
 
-            const isInMembers = (data.members || []).some(
-                (m: RoleUserData) => m.id === user.uid
-            );
+            const isInMembers = data.members.includes(user.uid);
             setIsMember(isInMembers);
         });
         return () => unsub();
@@ -57,6 +54,10 @@ function JoinButton({ role, toPage, setRole } : JoinProps) {
                 key={role.id + role.id} 
                 className="button"
                 onClick={() => {
+                    setRole(role)
+                    toPage("rolepage")
+                }}
+                onTap={() => {
                     setRole(role)
                     toPage("rolepage")
                 }}

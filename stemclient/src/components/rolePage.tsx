@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../firebase";
-import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
-import { type Task, type RoleUserData, type Role, type UserData } from "../myDataTypes";
+import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { type Task, type Role, type UserData } from "../myDataTypes";
 import '../styles/rolesPage.css'
 import '../styles/global.css'
 import { motion } from "motion/react";
@@ -17,13 +17,14 @@ interface RolePageProps {
 
 function RolePage({ role, userCache } : RolePageProps) {
     const [user, userData, loading] = useUser()
-    const [members, setMembers] = useState<RoleUserData[]>([]);
+    const [members, setMembers] = useState<string[]>([]);
     const [membersWithData, setMembersWithData] = useState<UserData[]>([]);
     const [leaders, setLeaders] = useState<UserData[]>([]);
-    const [roleTasks, setRoleTasks] = useState<Task[]>([]);
+    const [userTasks, setUserTasks] = useState<Task[]>([]);
     const [pageState, setPageState] = useState("home");
     const [upRole, setUpRole] = useState<Role>();
     const [rewards, setRewards] = useState<string[]>([]);
+    const [tasksLoading, setTasksLoading] = useState(true);
     const admins = useAdmins();
 
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
@@ -31,60 +32,77 @@ function RolePage({ role, userCache } : RolePageProps) {
 
     // Get Members
     useEffect(() => {
-        if (!role) return;
+        if (!role?.id) return;
+
         const roleRef = doc(db, "roles", role.id);
         const unsub = onSnapshot(roleRef, (snap) => {
             if (snap.exists()) {
-                setMembers(snap.data().members || []);
-            }
+                const data = snap.data();
+                const newMembers: string[] = data.members || [];
+                
+                // Set both states from a single snapshot
+                setMembers((prev) => {
+                    if (
+                    prev.length === newMembers.length &&
+                    prev.every((m, i) => m === newMembers[i])
+                    ) {
+                    return prev; 
+                    }
+                    return newMembers;
+                });
+
+                setUpRole({
+                    id: snap.id,
+                    ...(data as Omit<Role, "id">),
+                });
+
+            } else {
+                setMembers([]); 
+                }
         });
 
         return () => unsub();
-    }, [role]);
+    }, [role?.id]);
 
     useEffect(() => {
-        const fetchMembers = async () => {
-            const detailedMembers: UserData[] = [];
-
-            for (const member of members) {
-                const userRef = doc(db, "users", member.id);
-                const userSnap = await getDoc(userRef);
-
-                if (userSnap.exists()) {
-                    detailedMembers.push({
-                        id: member.id,
-                        uid: member.id,
-                        roles: userSnap.data().roles || [],
-                        name: userSnap.data().name || "Unknown User",
-                        points: userSnap.data().points || 0,
-                        taskCompleted: userSnap.data().taskCompleted || 0,
-                        photoURL: userSnap.data().photoURL || ""
-                    });
-                }
-            }
-
-            setMembersWithData(detailedMembers);
-        };
-
-        if (members.length > 0) {
-            fetchMembers();
+        if (members.length === 0) {
+            setMembersWithData([]);
+            return;
         }
-    }, [role, members]);
+
+        const detailedMembers: UserData[] = members.map((uid) => {
+            const cached = userCache[uid];
+            return {
+                id: uid,
+                uid,
+                name: cached?.name || "Unknown User",
+                roles: cached?.roles || [],
+                points: cached?.points || 0,
+                taskCompleted: cached?.taskCompleted || 0,
+                photoURL: cached?.photoURL || "",
+            };
+        });
+
+        setMembersWithData(detailedMembers);
+    }, [members, userCache]);
 
     // Get role rewards
     useEffect(() => {
         if (!role) return;
+
         const rewardRef = doc(db, "rewards", role.id);
         const unsub = onSnapshot(rewardRef, (snap) => {
-            const temp : string[] = []
             if (snap.exists()) {
                 const data = snap.data();
-                temp.push(data.first);
-                temp.push(data.second);
-                temp.push(data.third);
-                setRewards(temp)
+                setRewards([
+                    data.first || "No reward set",
+                    data.second || "No reward set",
+                    data.third || "No reward set",
+                ]);
+            } else {
+                setRewards(["No reward set", "No reward set", "No reward set"]);
             }
-        })
+        });
 
         return () => unsub();
     }, [role])
@@ -107,7 +125,8 @@ function RolePage({ role, userCache } : RolePageProps) {
         });
 
         // Sort by points
-        const sorted = detailed.sort((a, b) => (b.points || 0) - (a.points || 0)) || "Loading";
+        const sorted = [...detailed].sort((a, b) => (b.points || 0) - (a.points || 0));
+        
         setLeaders(prev => {
             const same = prev.length === sorted.length && prev.every((p, i) => p.id === sorted[i].id && p.points === sorted[i].points);
             return same ? prev : sorted;
@@ -116,45 +135,40 @@ function RolePage({ role, userCache } : RolePageProps) {
 
     // Get User Tasks
     useEffect(() => {
-        if (!role) return;
+        if (!role || !user) {
+            setTasksLoading(false);
+            return
+        }
+
+        setTasksLoading(true);
+
         const q = query(
             collection(db, "tasks"),
-            where("roleId", "==", role.id)
+            where("roleId", "==", role.id),
+            where("assignedTo", "==", user.uid)
         )
 
         const unsub = onSnapshot(q, (snap) => {
-            setRoleTasks(
+            setUserTasks(
                 snap.docs.map((doc) => ({
                     id: doc.id,
                     ...(doc.data() as Omit<Task, "id">),
                 }))
             )
+            setTasksLoading(false);
+        }, (err) => {
+            console.error("Error fetching tasks:", err);
+            setTasksLoading(false);
         })
-        return () => unsub();
-    } , [role])
-
-    useEffect(() => {
-        if (!role) return;
-
-        const roleRef = doc(db, "roles", role.id);
-        const unsub = onSnapshot(roleRef, (snap) => {
-            if (snap.exists()) {
-                const updatedRole: Role = {
-                    id: snap.id,
-                    ...(snap.data() as Omit<Role, "id">),
-                };
-                setUpRole(updatedRole);
-            }
-        });
 
         return () => unsub();
-    }, [role]);
+    } , [role, user])
+
+    
 
     if (loading) return <h1>Loading...</h1>;
     if (!user || !userData || !role || !upRole) return <h1>Loading role...</h1>;
 
-    const userTasks = roleTasks.filter(task => task.assignedTo === user.uid);
-    const allTaskCount = userTasks.length;
     const taskCount = userTasks.filter(task => !task.complete).length;
     let i = 0;
 
@@ -165,12 +179,19 @@ function RolePage({ role, userCache } : RolePageProps) {
                 <div className="user-info">
                         {membersWithData.map((m) => {
                             if (m.id.match(user.uid) && !admins.includes(user.uid)) {
-                                return (
-                                    <div key={m.id} className="user">
-                                        <h3>{m.points} points</h3>
-                                        <h3>{m.taskCompleted} tasks completed</h3>
-                                    </div>
-                                )
+                                return Object.values(m.roles || {}).map((x) => {
+                                    if (x.id === role.id) {
+                                        return (
+                                            <div key={x.id} className="user">
+                                                <h3>{x.points} points</h3>
+                                                <h3>{x.taskCompleted} tasks completed</h3>
+                                            </div>
+                                        )
+                                    }
+                                    return null
+                                })
+                            } else {
+                                return null
                             }
                         })}
                         {admins.includes(user.uid) ? <p>Admin View</p> : null}
@@ -227,8 +248,16 @@ function RolePage({ role, userCache } : RolePageProps) {
                                         <h4>{i}</h4>
                                         <img src={u.photoURL} alt="" className="user-photo" />
                                         <p>{u.name}</p>
-                                        <p>{u.points} pts</p>
-                                        <p className="tasks">{u.taskCompleted} Completed Tasks</p>
+                                        <p>{Object.values(u.roles || {}).map((x) => {
+                                            if (x.id === role.id) {
+                                                return x.points
+                                            }
+                                        })} pts</p>
+                                        <p className="tasks">{Object.values(u.roles || {}).map((x) => {
+                                            if (x.id === role.id) {
+                                                return x.taskCompleted
+                                            }
+                                        })} Completed Tasks</p>
                                     </div>
                                 )
                             }) : "Loading"}
@@ -236,18 +265,12 @@ function RolePage({ role, userCache } : RolePageProps) {
                     </div>
                     <div className="rewards div">
                         <h1>{currentMonth} Rewards</h1>
-                        <div className="reward">
-                            <h1>First</h1>
-                            <p>{rewards[0]}</p>
-                        </div>
-                        <div className="reward">
-                            <h1>Second</h1>
-                            <p>{rewards[1]}</p>
-                        </div>
-                        <div className="reward">
-                            <h1>Third</h1>
-                            <p>{rewards[2]}</p>
-                        </div>
+                        {["First", "Second", "Third"].map((label, idx) => (
+                            <div className="reward" key={label}>
+                                <h1>{label}</h1>
+                                <p>{rewards[idx] ?? "No reward set"}</p>
+                            </div>
+                        ))}
                     </div>
                     
                 </motion.div>
@@ -260,24 +283,23 @@ function RolePage({ role, userCache } : RolePageProps) {
                 >
                     <h1>Your {currentMonth} Tasks</h1>
                     <div className="all-tasks">
-                        {allTaskCount > 0 ? roleTasks.map((task) => {
-                            if (task.assignedTo.match(user.uid)) {
-                                return (
-                                    <motion.div
-                                        className={task.complete ? "task-completed" : "task"}
-                                        key={task.id}
-                                        initial={{x:-10}}
-                                        animate={{x:0}}
-                                    >
-                                        <h1>{task.title}</h1>
-                                        <h3>Description</h3>
-                                        <p>{task.description || "N/A"}</p>
-                                        <h4>{task.points} points</h4>
-                                        <DoneButton task={task} />
-                                    </motion.div>
-                                )
-                            }
-                        }) : "No tasks assigned to you"}
+                        {tasksLoading ? <p>Loading Tasks...</p> 
+                        : userTasks.length > 0 && !admins.includes(user.uid) ? userTasks.map((task) => {
+                            return (
+                                <motion.div
+                                    className={task.complete ? "task-completed" : "task"}
+                                    key={task.id}
+                                    initial={{x:-10}}
+                                    animate={{x:0}}
+                                >
+                                    <h1>{task.title}</h1>
+                                    <h3>Description</h3>
+                                    <p>{task.description || "N/A"}</p>
+                                    <h4>{task.points} points</h4>
+                                    <DoneButton task={task} />
+                                </motion.div>
+                            )
+                        }) : <p>"No tasks assigned to you"</p>}
                     </div>
                 </motion.div>
             : "" }

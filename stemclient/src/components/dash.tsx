@@ -48,7 +48,6 @@ function Dash({ currentPage } : dashProps) {
         >
             <div className="account-container div">
                 <h1>Dashboard</h1>
-                <h1>{userData?.name}</h1>
                 {userData?.photoURL ? (
                     <img src={userData.photoURL} alt="Profile" className={currentPage.match("home") ? "pfp-image-open" : "pfp-image"} />
                 ) : (

@@ -8,33 +8,18 @@ import Roles from './components/roles';
 import RolePage from './components/rolePage';
 import type { Role, UserData } from './myDataTypes';
 import useUser from './hooks/user';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 
 function App() {
   const [user, userData, loading] = useUser();
   const [userCache, setUserCache] = useState<Record<string, UserData>>({});
-  const [page, setPage] = useState("home");
+  const [page, setPage] = useState("");
   const [role, setRole] = useState<Role | null>(null);
 
-  useEffect(() => {
-    if (!role?.id) return;
-
-    const roleRef = doc(db, "roles", role.id);
-    const unsub = onSnapshot(roleRef, (snap) => {
-      if (snap.exists()) {
-        setRole({ id: snap.id, ...(snap.data() as Omit<Role, "id">) });
-      } else {
-        setRole(null);
-        setPage("roles");
-      }
-    });
-
-    return () => unsub();
-  }, [role]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userData) return;
 
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
         const cache: Record<string, UserData> = {};
@@ -45,17 +30,17 @@ function App() {
     });
 
     return () => unsub();
-  }, [user]);
+  }, [user, userData]);
 
   if (loading) {
     return <h1>Loading...</h1>
   }
   
   return (
-    <div className={user && userData ? 'app' : 'app-login'}>
+    <div className={user ? 'app' : 'app-login'}>
       <LeftNav toPage={setPage} setRole={setRole} page={page} />
       
-      {!user ? <LoginBox /> : 
+      {!user ? <LoginBox setPage={setPage} /> : 
         <div className='app-container'>
           <div className={page.match("home") ? 'content-container-open' : 'content-container'}>
             {page.match("home") ? <div></div> : null}

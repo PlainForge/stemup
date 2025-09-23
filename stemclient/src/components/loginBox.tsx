@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ComponentState } from "react";
 import { auth, db, storage} from "../firebase.ts";
 import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider } from "firebase/auth";
 import { arrayUnion, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
@@ -11,7 +11,11 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
 const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
 
-function LoginBox() {
+interface props {
+    setPage: ComponentState
+}
+
+function LoginBox({ setPage } : props) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [name, setName] = useState("");
@@ -29,7 +33,17 @@ function LoginBox() {
             const userRef = doc(db, "users", current.uid);
             const snap = await getDoc(userRef);
 
+            let photoURL = DEFAULT_AVATAR;
+
             if (!snap.exists()) {
+                if (current.photoURL) {
+                    const response = await fetch(current.photoURL);
+                    const blob = await response.blob();
+                    const storageRef = ref(storage, `profilePictures/${current.uid}`);
+                    await uploadBytes(storageRef, blob);
+                    photoURL = await getDownloadURL(storageRef);
+                }
+
                 await setDoc(doc(db, "users",  current.uid), {
                     email: current.email,
                     name: current.displayName,
@@ -37,18 +51,34 @@ function LoginBox() {
                     createdAt: new Date(),
                     points: 0,
                     taskCompleted: 0,
-                    photoURL: current.photoURL || DEFAULT_AVATAR
+                    photoURL: photoURL
                 });
 
                 await updateDoc(doc(db, "roles", 'r3wUbRSCX7cxwBYhtAdg'), {
                     members: arrayUnion(current.uid)
                 })
+                setPage("home")
             } else {
+                const existingData = snap.data();
+
+                let newPhotoURL = existingData.photoURL || DEFAULT_AVATAR;
+                if (current.photoURL && current.photoURL !== existingData.photoURL) {
+                    const response = await fetch(current.photoURL);
+                    const blob = await response.blob();
+                    const storageRef = ref(storage, `profilePictures/${current.uid}`);
+                    await uploadBytes(storageRef, blob);
+                    newPhotoURL = await getDownloadURL(storageRef);
+                }
+
                 await setDoc(
                     userRef,
-                    { photoURL: current.photoURL },
+                    { 
+                        name: current.displayName || existingData.name,
+                        photoURL: newPhotoURL
+                    },
                     { merge: true }
                 );
+                setPage("home")
             }
 
             setPhrase("");
@@ -96,6 +126,7 @@ function LoginBox() {
             await updateDoc(doc(db, "roles", 'r3wUbRSCX7cxwBYhtAdg'), {
                 members: arrayUnion(current.uid)
             })
+            setPage("home")
 
             setPhrase("");
             setEmail("");
@@ -116,6 +147,7 @@ function LoginBox() {
         try {
             await signInWithEmailAndPassword(auth, email, password);
 
+            setPage("home")
             setPhrase("");
             setEmail("");
             setPassword("");

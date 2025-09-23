@@ -44,7 +44,7 @@ function LeftNav({ toPage, setRole, page } : NavProps) {
             {!user ? <p style={{color: "white"}}>2025</p> : ""}
             { user ? 
                 <div className="roles-container">
-                    <a onClick={() => toPage("roles")}>Roles</a>
+                    <a onClick={() => {toPage("roles"); setRole(null)}}>Roles</a>
                 </div> : "" 
             }
             

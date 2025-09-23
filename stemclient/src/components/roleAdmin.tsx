@@ -1,8 +1,8 @@
-import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
 import { motion } from "motion/react";
 import { useEffect, useState, type FormEvent } from "react";
 import { db } from "../firebase";
-import { type Role, type SubmittedTask, type UserData } from "../myDataTypes";
+import { type Role, type SubmittedTask, type UserData, type UserRoleData } from "../myDataTypes";
 import "../styles/rolesAdmin.css"
 import useUser from "../hooks/user";
 import useAdmins from "../hooks/admins";
@@ -187,7 +187,7 @@ function RoleAdmin({ role, membersWithData } : prop) {
     // Accept a submitted task from a user
     const acceptTask = async (submitted : SubmittedTask) => {
         if (!submitted) return;
-        const addedPts = submitted.points;
+        const addedPts = submitted.points || 0;
         const thisUser = submitted.assignedTo;
 
         try {
@@ -203,25 +203,25 @@ function RoleAdmin({ role, membersWithData } : prop) {
 
             if (!userSnap.exists()) return;
 
-            const userData = userSnap.data();
+            const userData = userSnap.data() as UserData;
+            const roles: UserRoleData[] = Array.isArray(userData.roles) ? userData.roles : [];
 
-            const roles = userData.roles || {};
+            const updatedRoles = roles.map(r => {
+                if (r.id === submitted.roleId) {
+                    return {
+                        ...r,
+                        points: (r.points || 0) + addedPts,
+                        taskCompleted: (r.taskCompleted || 0) + 1
+                    };
+                }
+                return r;
+            });
 
-            const roleId = submitted.roleId;
-            const updatedRoles = {
-                ...roles,
-                [roleId]: {
-                    ...roles[roleId],
-                    points: (roles[roleId]?.points || 0) + addedPts,
-                    taskCompleted: (roles[roleId]?.taskCompleted || 0) + 1,
-                },
-            };
-
-            await updateDoc(doc(db, "users", thisUser), {
+            await updateDoc(userRef, {
                 roles: updatedRoles,
-                points: increment(addedPts),
-                taskCompleted: increment(1)
-            })
+                points: userData.points + addedPts,
+                taskCompleted: userData.taskCompleted + 1
+            });            
         } catch (err) {
             console.log(err);
         }
@@ -257,22 +257,36 @@ function RoleAdmin({ role, membersWithData } : prop) {
                 updates.push(deleteDoc(doc(db, "tasksSubmitted", taskDoc.id)));
             });
 
+            // Reset rewards
+            const rewardRef = doc(db, "rewards", roleId);
+            updates.push(
+                updateDoc(rewardRef, {
+                    first: "No reward set",
+                    second: "No reward set",
+                    third: "No reward set",
+                })
+            );
+
+            // Reset all users' points and taskCompleted for this role
             const usersSnap = await getDocs(collection(db, "users"));
             usersSnap.forEach((userDoc) => {
                 const data = userDoc.data();
-                const roles = data.roles || {};
+                const roles: UserRoleData[] = Array.isArray(data.roles) ? data.roles : [];
 
-                if (roles[roleId]) {
-                    // reset only this role's stats
-                    roles[roleId] = {
-                        points: 0,
-                        taskCompleted: 0,
-                    };
+                const updatedRoles = roles.map((r) => {
+                    if (r.id === roleId) {
+                        return {
+                            ...r,
+                            points: 0,
+                            taskCompleted: 0,
+                        };
+                    }
+                    return r;
+                });
 
-                    updates.push(
-                        updateDoc(doc(db, "users", userDoc.id), { roles })
-                    );
-                }
+                updates.push(
+                    updateDoc(doc(db, "users", userDoc.id), { roles: updatedRoles })
+                );
             });
 
             await Promise.all(updates);

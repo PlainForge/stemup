@@ -68,14 +68,14 @@ function Roles({ toPage, setRole } : JoinProps) {
 
                 if (snap.exists()) {
                     await updateDoc(doc(db, "roles", docRef.id), {
-                        members: arrayUnion({id: admin, name: snap.data().name, points: 0, taskCompleted: 0, photoURL: snap.data().photoURL})
+                        members: arrayUnion(admin)
                     })
                 }
             })
 
             admins.map(async (admin) => {
                 await updateDoc(doc(db, "users", admin), {
-                    roles: arrayUnion({id: docRef.id, name: roleName})
+                    roles: arrayUnion({id: docRef.id, name: roleName, points: 0, taskCompleted: 0})
                 })
             })
 
@@ -118,8 +118,12 @@ function Roles({ toPage, setRole } : JoinProps) {
             {admins.includes(user?.uid) ? <form className='role-form' onSubmit={(e) => e.preventDefault()}>
                     <h1>Create a Role</h1>
                     <label htmlFor="role-name">Role Name</label>
-                    <input id='role-name' name='role-name' type="text" placeholder='Name' onChange={(e) => setRoleName(e.target.value)}/>
-                    <button className='create-button' onClick={createRole}>Create</button>
+                    <input id='role-name' name='role-name' type="text" placeholder='Name' value={roleName} onChange={(e) => setRoleName(e.target.value)}/>
+                    <motion.button 
+                        className='create-button' 
+                        onClick={createRole}
+                        whileHover={{cursor: "pointer"}}
+                    >Create</motion.button>
                 </form> : <div></div>}
         </motion.div>
     )
