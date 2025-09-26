@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
-import { type Task, type Role, type UserData } from "../myDataTypes";
+import { type Task, type Role, type UserData, type UserRoleData } from "../myDataTypes";
 import '../styles/rolesPage.css'
 import '../styles/global.css'
 import { motion } from "motion/react";
@@ -70,21 +70,35 @@ function RolePage({ role, userCache } : RolePageProps) {
             return;
         }
 
-        const detailedMembers: UserData[] = members.map((uid) => {
-            const cached = userCache[uid];
-            return {
-                id: uid,
-                uid,
-                name: cached?.name || "Unknown User",
-                roles: cached?.roles || [],
-                points: cached?.points || 0,
-                taskCompleted: cached?.taskCompleted || 0,
-                photoURL: cached?.photoURL || "",
-            };
+        const unsubs = members.map(uid => {
+            const userRef = doc(db, "users", uid);
+            return onSnapshot(userRef, (snap) => {
+                if (snap.exists() && role) {
+                    const data = snap.data();
+                    setMembersWithData(prev => {
+                        const updated = prev.filter(m => m.id !== uid);
+                        const roleData = Array.isArray(data.roles)
+                            ? data.roles.find((r: UserRoleData) => r.id === role.id) || {}
+                            : {};
+                        return [
+                            ...updated,
+                            {
+                                id: uid,
+                                uid,
+                                name: data.name || "Unknown User",
+                                roles: data.roles || [],
+                                points: roleData.points || 0 || 0,
+                                taskCompleted: roleData.taskCompleted || 0,
+                                photoURL: data.photoURL || "",
+                            }
+                        ];
+                    });
+                }
+            });
         });
 
-        setMembersWithData(detailedMembers);
-    }, [members, userCache]);
+        return () => unsubs.forEach(unsub => unsub());
+    }, [members, userCache, role]);
 
     // Get role rewards
     useEffect(() => {
@@ -111,26 +125,11 @@ function RolePage({ role, userCache } : RolePageProps) {
     useEffect(() => {
         if (!membersWithData.length) return;
 
-        const detailed = membersWithData.map((m) : UserData => {
-            const user = userCache[m.uid] || {};
-            return {
-                id: m.uid || "",
-                uid: m.uid || "",
-                roles: m.roles || [],
-                points: m.points || 0,
-                taskCompleted: m.taskCompleted || 0,
-                name: user.name || "Unknown",
-                photoURL: user.photoURL || "",
-            };
-        });
+        const sorted = [...membersWithData].sort(
+            (a, b) => (b.points || 0) - (a.points || 0)
+        );
 
-        // Sort by points
-        const sorted = [...detailed].sort((a, b) => (b.points || 0) - (a.points || 0));
-        
-        setLeaders(prev => {
-            const same = prev.length === sorted.length && prev.every((p, i) => p.id === sorted[i].id && p.points === sorted[i].points);
-            return same ? prev : sorted;
-        });
+        setLeaders(sorted);
     }, [membersWithData, userCache]);
 
     // Get User Tasks
@@ -248,16 +247,8 @@ function RolePage({ role, userCache } : RolePageProps) {
                                         <h4>{i}</h4>
                                         <img src={u.photoURL} alt="" className="user-photo" />
                                         <p>{u.name}</p>
-                                        <p>{Object.values(u.roles || {}).map((x) => {
-                                            if (x.id === role.id) {
-                                                return x.points
-                                            }
-                                        })} pts</p>
-                                        <p className="tasks">{Object.values(u.roles || {}).map((x) => {
-                                            if (x.id === role.id) {
-                                                return x.taskCompleted
-                                            }
-                                        })} Completed Tasks</p>
+                                        <p>{u.points} pts</p>
+                                        <p className="tasks">{u.taskCompleted} Completed Tasks</p>
                                     </div>
                                 )
                             }) : "Loading"}

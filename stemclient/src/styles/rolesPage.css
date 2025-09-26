@@ -89,8 +89,8 @@
 }
 
 .content .leaderboard .board .user-board img {
-    width: 20px;
-    height: 20px;
+    width: 35px;
+    height: 35px;
     border-radius: 50%;
     border: 1px solid black;
     object-fit: cover;

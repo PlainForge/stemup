@@ -1,4 +1,4 @@
-import { addDoc, arrayUnion, collection, doc, getDoc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import '../styles/roles.css'
 import '../styles/global.css'
 import { auth, db } from '../firebase';
@@ -52,7 +52,7 @@ function Roles({ toPage, setRole } : JoinProps) {
         try {
             const docRef = await addDoc(collection(db, "roles"), {
                 name: roleName,
-                members: [],
+                members: admins,
                 pendingRequests: [],
                 createdAt: new Date()
             })
@@ -60,17 +60,6 @@ function Roles({ toPage, setRole } : JoinProps) {
                 first: "not set",
                 second: "not set",
                 third: "not set"
-            })
-
-            admins.map(async (admin) => {
-                const userRef = doc(db, "users", admin);
-                const snap = await getDoc(userRef);
-
-                if (snap.exists()) {
-                    await updateDoc(doc(db, "roles", docRef.id), {
-                        members: arrayUnion(admin)
-                    })
-                }
             })
 
             admins.map(async (admin) => {
@@ -97,7 +86,7 @@ function Roles({ toPage, setRole } : JoinProps) {
         >
             <h1>Available Roles</h1>
             <div className='available-roles'>
-                {roles.map((role) => {
+                {roles.length > 0 ? roles.map((role) => {
                     if (!role.name.match("global")) {
                         return (
                             <motion.div 
@@ -112,7 +101,7 @@ function Roles({ toPage, setRole } : JoinProps) {
                             </motion.div>
                         )
                     }
-                })}
+                }) : "Nothing at the moment"}
             </div>
 
             {admins.includes(user?.uid) ? <form className='role-form' onSubmit={(e) => e.preventDefault()}>
