@@ -7,7 +7,8 @@ export type UserData = {
     points: number,
     taskCompleted: number,
     photoURL: string;
-    id: string
+    id: string,
+    currentRole: string
 }
 
 export type RoleUserData = {

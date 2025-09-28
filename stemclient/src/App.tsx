@@ -8,15 +8,16 @@ import Roles from './components/roles';
 import RolePage from './components/rolePage';
 import type { Role, UserData } from './myDataTypes';
 import useUser from './hooks/user';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from './firebase';
+import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { auth, db } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 function App() {
   const [user, userData, loading] = useUser();
   const [userCache, setUserCache] = useState<Record<string, UserData>>({});
-  const [page, setPage] = useState("");
+  const [page, setPage] = useState("login");
   const [role, setRole] = useState<Role | null>(null);
-
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   useEffect(() => {
     if (!user || !userData) return;
@@ -31,6 +32,40 @@ function App() {
 
     return () => unsub();
   }, [user, userData]);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async () => {
+      if (!user || hasRedirected) return;
+
+      try {
+        const thisUser = await getDoc(doc(db, "users", user.uid));
+        if (thisUser.exists()) {
+          const currentRoleId = thisUser.data().currentRole;
+
+          if (currentRoleId) {
+            const roleSnap = await getDoc(doc(db, "roles", currentRoleId));
+            if (roleSnap.exists()) {
+              const roleData = roleSnap.data() as Omit<Role, "id">;
+              setRole({ id: roleSnap.id, ...roleData });
+
+              setPage((prev) =>
+                prev === "loading" || prev === "login" ? "rolepage" : prev
+              );
+              setHasRedirected(true);
+              return;
+            }
+          }
+        }
+
+        // fallback if no role set
+        setPage((prev) => (prev === "loading" ? "home" : prev));
+      } catch (err) {
+        console.error(err);
+      }
+    })
+
+    return () => unsub();
+  })
 
   if (loading) {
     return <h1>Loading...</h1>

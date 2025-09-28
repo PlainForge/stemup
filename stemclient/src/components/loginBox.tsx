@@ -51,13 +51,13 @@ function LoginBox({ setPage } : props) {
                     createdAt: new Date(),
                     points: 0,
                     taskCompleted: 0,
-                    photoURL: photoURL
+                    photoURL: photoURL,
+                    currentRole: ""
                 });
 
                 await updateDoc(doc(db, "roles", 'r3wUbRSCX7cxwBYhtAdg'), {
                     members: arrayUnion(current.uid)
                 })
-                setPage("home")
             } else {
                 const existingData = snap.data();
 
@@ -78,7 +78,6 @@ function LoginBox({ setPage } : props) {
                     },
                     { merge: true }
                 );
-                setPage("home")
             }
 
             setPhrase("");
@@ -120,13 +119,13 @@ function LoginBox({ setPage } : props) {
                 createdAt: new Date(),
                 points: 0,
                 taskCompleted: 0,
-                photoURL: photoURL
+                photoURL: photoURL,
+                currentRole: ""
             });
 
             await updateDoc(doc(db, "roles", 'r3wUbRSCX7cxwBYhtAdg'), {
                 members: arrayUnion(current.uid)
             })
-            setPage("home")
 
             setPhrase("");
             setEmail("");

@@ -83,6 +83,17 @@
     border-color: rgb(24,24,24);
 }
 
+.settings-account .curr {
+    border-radius: 5px;
+    transition: all 0.2s;
+}
+
+.settings-account .curr:hover {
+    cursor: pointer;
+    background-color: lightgrey;
+    border-color: rgb(24,24,24);
+}
+
 .settings-account .del-acc {
     border-radius: 5px;
     transition: all 0.2s;

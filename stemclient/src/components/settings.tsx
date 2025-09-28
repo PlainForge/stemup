@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import "../styles/settings.css"
 import '../styles/global.css'
 import { collection, deleteDoc, doc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
@@ -14,7 +14,16 @@ function Settings() {
     const [name, setName] = useState("")
     const [user, userData, loading] = useUser();
     const [file, setFile] = useState<File | null>(null);
+    const [currentRoleName, setCurrentRoleName] = useState("None")
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        if (!user || !userData) return;
+
+        userData.roles.map((role) => {
+            if (role.id === userData.currentRole) return setCurrentRoleName(role.name)
+        })
+    }, [user, userData])
 
     const handleDeleteAccount = async () => {
         if (!user) return;
@@ -117,6 +126,13 @@ function Settings() {
             console.log(err);
         }
     }
+
+    const handleCurrentRole = async () => {
+        const userRef = doc(db, "users", user.uid)
+        await updateDoc(userRef, {
+            currentRole: ""
+        })
+    }
     
     return (
         <motion.div className="main-settings-container"
@@ -155,6 +171,8 @@ function Settings() {
                             />
                             <button type="submit">Submit</button>
                         </form>
+                        <h3>Current Role: {currentRoleName}</h3>
+                        <button onClick={handleCurrentRole} className="curr">Set Current Role to None</button>
                         <button onClick={handleDeleteAccount} className="del-acc">Delete Account</button>
                     </div>
                 </div>

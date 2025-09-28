@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { db } from "../firebase";
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { type Task, type Role, type UserData, type UserRoleData } from "../myDataTypes";
 import '../styles/rolesPage.css'
 import '../styles/global.css'
@@ -25,6 +25,7 @@ function RolePage({ role, userCache } : RolePageProps) {
     const [upRole, setUpRole] = useState<Role>();
     const [rewards, setRewards] = useState<string[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
+    const [isCurrentRole, setIsCurrentRole] = useState(false);
     const admins = useAdmins();
 
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
@@ -64,8 +65,20 @@ function RolePage({ role, userCache } : RolePageProps) {
         return () => unsub();
     }, [role?.id]);
 
+    // Get current role
     useEffect(() => {
-        if (members.length === 0) {
+        if (!user) return;
+        const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
+            if (!snap.exists()) return
+            const data = snap.data();
+            if (data.currentRole === role?.id) setIsCurrentRole(true)
+        })
+
+        return () => unsub();
+    })
+
+    useEffect(() => {
+        if (members.length === 0 || !role?.id) {
             setMembersWithData([]);
             return;
         }
@@ -73,7 +86,7 @@ function RolePage({ role, userCache } : RolePageProps) {
         const unsubs = members.map(uid => {
             const userRef = doc(db, "users", uid);
             return onSnapshot(userRef, (snap) => {
-                if (snap.exists() && role) {
+                if (snap.exists()) {
                     const data = snap.data();
                     setMembersWithData(prev => {
                         const updated = prev.filter(m => m.id !== uid);
@@ -90,6 +103,7 @@ function RolePage({ role, userCache } : RolePageProps) {
                                 points: roleData.points || 0 || 0,
                                 taskCompleted: roleData.taskCompleted || 0,
                                 photoURL: data.photoURL || "",
+                                currentRole: data.currentRole || ""
                             }
                         ];
                     });
@@ -98,7 +112,7 @@ function RolePage({ role, userCache } : RolePageProps) {
         });
 
         return () => unsubs.forEach(unsub => unsub());
-    }, [members, userCache, role]);
+    }, [members, role?.id]);
 
     // Get role rewards
     useEffect(() => {
@@ -163,7 +177,12 @@ function RolePage({ role, userCache } : RolePageProps) {
         return () => unsub();
     } , [role, user])
 
-    
+    const setCurrentRole = async (id : string) => {
+        if (!user) return;
+        await updateDoc(doc(db, "users", user.uid), {
+            currentRole: id
+        })
+    }
 
     if (loading) return <h1>Loading...</h1>;
     if (!user || !userData || !role || !upRole) return <h1>Loading role...</h1>;
@@ -226,6 +245,13 @@ function RolePage({ role, userCache } : RolePageProps) {
                         </motion.button>
                     }
                 })}
+                {isCurrentRole ? <strong>Current Role</strong> : 
+                    <motion.button 
+                        onClick={() => setCurrentRole(role.id)}
+                        onTap={() => setCurrentRole(role.id)}
+                        whileHover={{scale: 1.1, cursor: 'pointer'}}
+                    >Set Current Role</motion.button>
+                }
             </div>
             { pageState.match("home") ?
                 <motion.div 
