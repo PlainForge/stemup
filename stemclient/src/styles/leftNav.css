@@ -104,6 +104,7 @@
         width: 100%;
         min-height: 100px;
         gap: 1rem;
+        z-index: 3;
     }
     .left-nav-login {
         flex-direction: row;
