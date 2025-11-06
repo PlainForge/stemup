@@ -18,6 +18,7 @@ function RoleAdmin({ role, membersWithData } : prop) {
     const [requested, setRequested] = useState<string[]>([]);
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
     const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
+    const [createTaskFor, setCreateSetTaskFor] = useState<string[]>([]);
     const admins = useAdmins();
 
     // Get Members to get requested user's data
@@ -80,37 +81,44 @@ function RoleAdmin({ role, membersWithData } : prop) {
         e.preventDefault();
 
         const form = e.currentTarget;
-        const formData = new FormData(e.currentTarget)
+        const formData = new FormData(form);
         const desc = formData.get("desc") as string;
         const title = formData.get("title") as string;
         const pts = Number(formData.get("pts"));
-        const assignedId = formData.get("user") as string;
 
-        const selectedUser = membersWithData.find(m => m.id === assignedId);
-        if (!selectedUser) {
-            console.error("No user selected");
+        if (!title || pts < 0) {
+            console.error("Invalid title or points");
             return;
         }
-        if (!title) {
-            console.error("No title")
-        } else if (pts < 0) {
-            console.error("Points need to be positive");
+
+        if (createTaskFor.length === 0) {
+            console.error("No users selected");
+            return;
         }
 
         try {
-            await addDoc(collection(db, "tasks"), {
-                assignedTo: selectedUser.id,
-                assignedName: selectedUser.name,
-                description: desc,
-                points: pts,
-                roleId: role.id,
-                createdOn: Timestamp.now(),
-                complete: false,
-                title: title
-            });
+            
+            for (const uid of createTaskFor) {
+                const selectedUser = membersWithData.find((m) => m.uid === uid);
+                if (!selectedUser) continue;
+
+                await addDoc(collection(db, "tasks"), {
+                    assignedTo: selectedUser.uid,
+                    assignedName: selectedUser.name,
+                    description: desc,
+                    points: pts,
+                    roleId: role.id,
+                    createdOn: Timestamp.now(),
+                    complete: false,
+                    title,
+                });
+            }
+
+            // Reset
             form.reset();
+            setCreateSetTaskFor([]);
         } catch (err) {
-            console.log(err)
+            console.error(err);
         }
     }
 
@@ -458,7 +466,16 @@ function RoleAdmin({ role, membersWithData } : prop) {
                     >
                         <h1>Task Creation</h1>
                         <form className="creation-form" id="create" onSubmit={sendTask}>
-                            <select name="user" defaultValue="">
+                            <select 
+                                name="user" 
+                                defaultValue=""
+                                onChange={(e) => {
+                                    const uid = e.target.value;
+                                    if (uid && !createTaskFor.includes(uid)) {
+                                        setCreateSetTaskFor((prev) => [...prev, uid]);
+                                    }
+                                }}
+                            >
                                 <option value="" disabled>Select a member</option>
                                 {membersWithData.map((member) => {  
                                     if (!member.uid) return
@@ -470,6 +487,47 @@ function RoleAdmin({ role, membersWithData } : prop) {
                                     )
                                 })}
                             </select>
+                            {createTaskFor.length > 0 && (
+                                <div className="selected-members">
+                                    <h4>Selected Members:</h4>
+                                    <div className="selected-list">
+                                        {createTaskFor.map((uid) => {
+                                            const member = membersWithData.find((m) => m.uid === uid);
+                                            if (!member) return null;
+                                            return (
+                                                <motion.div
+                                                    key={uid}
+                                                    className="selected-member"
+                                                >
+                                                    <span>{member.name}</span>
+                                                    <motion.button
+                                                        type="button"
+                                                        onClick={() =>
+                                                        setCreateSetTaskFor((prev) =>
+                                                            prev.filter((id) => id !== uid)
+                                                        )
+                                                        }
+                                                        whileHover={{ scale: 1.05, cursor: "pointer" }}
+                                                        className="remove-member"
+                                                    >
+                                                        Remove
+                                                    </motion.button>
+                                                </motion.div>
+                                            );
+                                        })}
+                                </div>
+
+                                <motion.button
+                                    type="button"
+                                    onClick={() => setCreateSetTaskFor([])}
+                                    whileHover={{ scale: 1.05, cursor: "pointer" }}
+                                    className="clear-all"
+                                >
+                                    Clear All
+                                </motion.button>
+                                </div>
+                            )}
+
                             <input type="text" name="title" placeholder="Title" required/>
                             <input type="text" name="desc" placeholder="Description"/>
                             <input type="number" id="pts" name="pts" placeholder="Points" required/>

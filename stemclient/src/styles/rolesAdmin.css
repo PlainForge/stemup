@@ -108,6 +108,28 @@
     background: green;
 }
 
+.selected-members {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.selected-members h4 {
+    margin-bottom: 0;
+}
+
+.selected-members .selected-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.selected-members .selected-list .selected-member {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
 .submitted-container {
     position: relative;
     width: 100%;
