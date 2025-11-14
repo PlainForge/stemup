@@ -1,0 +1,172 @@
+.main-settings-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 900px;
+}
+
+.main-settings-container h1 {
+    font-weight: 500;
+    text-align: left;
+    width: 100%;
+}
+
+.settings-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.main-settings-container h3 {
+    font-weight: 400;
+}
+
+.settings-container button,
+.current-account-2 .photo-button {
+    text-align: center;
+    width: 244px;
+    padding: 1rem 0;
+    border-radius: 20px;
+    cursor: pointer;
+    background: none;
+    color: rgb(var(--background));
+    background-color: rgb(var(--foreground));
+    border: 1px solid rgb(var(--button-border));
+    transition: background-color 0.3s ease;
+}
+
+.settings-container button:hover {
+    color: rgb(var(--background));
+    background-color: rgba(var(--primary-hover), 0.8);
+}
+
+.settings-container .del-acc:hover,
+.settings-container .curr:hover {
+    background-color: rgba(var(--error-background), 0.8);
+}
+
+.settings-current {
+    width: 100%;
+    padding: 1rem;
+    box-shadow: 0 0 5px rgb(var(--foreground), 0.5);
+    border-radius: 4px;
+}
+
+
+.settings-account {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+}
+
+.settings-title {
+    width: 100%;
+}
+
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.settings-form .form-options {
+    display: flex;
+    width: 50%;
+    justify-content: space-evenly;
+}
+
+.settings-form input {
+    text-align: left;
+    width: 244px;
+    padding: 1rem 1rem;
+    border-radius: 10px;
+}
+
+.settings-user {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+}
+
+.current-account-2 .pfp-image {
+    border-radius: 50%;
+    width: 100px;
+    height: 100px;
+    margin: auto;
+}
+
+.current-account-2  {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.current-account-2 .hidden-button {
+    display: none;
+}
+
+.current-account-2 .photo-button:hover {
+    color: rgb(var(--background));
+    background-color: rgba(var(--primary-hover), 0.8);
+}
+
+.other-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.other-options .current-role {
+    display: flex;
+    gap: 1rem;
+    height: 50px;
+}
+
+@media (max-width: 1000px) {
+    .main-settings-container {
+        width: 90%;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .main-settings-container h1 {
+        font-size: large;
+    }
+    .settings-user {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+    }
+    .current-account-2 {
+        justify-content: left;
+        align-items: start;
+    }
+    .settings-form .form-options {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        gap: 2px;
+        margin-top: 1rem;
+    }
+    .other-options {
+        margin-top: 2rem;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+    }
+    .other-options .current-role {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0px;
+    }
+}

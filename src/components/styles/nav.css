@@ -1,0 +1,111 @@
+.nav-login {
+    width: 100%;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.nav-login > h2, 
+.nav-login > p,
+.nav-login > .right-side {
+    padding: 0 16px;
+}
+
+.main-title {
+    font-weight: 400;
+}
+
+.nav-login .nav-right-side {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+}
+
+.nav-login .nav-right-side .button {
+    transition: all 0.2s;
+}
+
+.nav-login .nav-right-side .button span {
+    text-decoration: underline;
+}
+
+.nav-login .nav-right-side .button:hover {
+    color: rgb(var(--button-hover));
+}
+
+/* Used for logged in users */
+
+.nav-user {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    width: 900px;
+    color: rgb(var(--foreground));
+}
+
+.nav-user .roles-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-items: center;
+    justify-items: center;
+    gap: 2rem;
+}
+
+.nav-user .roles-container a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.nav-user .user-name {
+    font-weight: 300;
+}
+
+.nav-user .link-button, 
+.nav-user a:hover {
+    text-decoration: none;
+    color: rgb(var(--foreground));
+    transition: all 0.3s ease;
+}
+
+.nav-user .button {
+    margin: auto;
+    padding: 2px 10px;
+    border-radius: 5px;
+    font-size: medium;
+    transition: all 0.3s ease;
+    background: none;
+    border: none;
+}
+
+.nav-user button:hover, 
+.nav-user .link-button:hover, 
+.nav-user a:hover {
+    color: rgb(var(--button-hover));
+    cursor: pointer;
+}
+
+.nav-user .user-info-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2rem;
+}
+
+.nav-user .user-info-container h1 {
+    font-size: medium;
+}
+
+@media (max-width: 916px) {
+    .nav-user {
+        width: 90%;
+    }
+    .nav-user .user-name {
+        display: none;
+    }
+}

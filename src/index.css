@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap');
+
+:root {
+  font-family: "Rubik", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 300;
+  font-style: normal;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --background: 255,255,255;
+  --foreground: 24,24,24;
+  --primary: 50,100,200;
+  --primary-hover: 40,80,160;
+  --button-hover: 180,180,180;
+  --button-background: 200,200,200;
+  --button-transparent: 0.5;
+  --error-color: 255,0,0;
+  --error-background: 255,100,100;
+  --button-border: 150,150,150;
+}
+
+/* For dark mode support -- wip
+[data-theme="dark"] {
+  --background: 10,10,10;
+  --foreground: 255,255,255;
+  --primary-hover: 150,150,255;
+  --button-background: 255,255,255;
+  --button-transparent: 1;
+  --button-border: 255,255,255;
+}
+*/
+
+body {
+  color: rgb(var(--foreground));
+  background: rgb(var(--background));
+  margin: 0;
+  padding: 0;
+}
