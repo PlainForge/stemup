@@ -1,14 +1,11 @@
 .roles-page {
     width: 900px;
+    position: relative;
 }
 
 .header {
     display: flex;
     justify-content: space-evenly;
-}
-
-.header h1 {
-    align-content: center;
 }
 
 .header .user {
@@ -43,7 +40,7 @@
 }
 
 .content {
-    width: 900px;
+    width: 100%;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -57,10 +54,7 @@
     text-align: center;
 }
 
-.content .leaderboard, .content .rewards {
-    box-shadow: 0px 0px 10px rgba(24,24,24,0.3);
-    background-color: rgba(255,255,255,0.3);
-    border: 1px solid rgba(24,24,24,0);
+.content .leaderboard {
     border-radius: 10px;
     width: 500px;
     position: relative;
@@ -72,6 +66,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+    border-bottom: 1px solid rgb(var(--foreground));
 }
 
 .content .leaderboard .board .user-board img {
@@ -101,6 +96,19 @@
     width: 30%;
 }
 
+.content .leaderboard .board .top-three {
+    height: 75px;
+}
+
+.content .leaderboard .board .top-three img {
+    width: 50px;
+    height: 50px;
+}
+.content .leaderboard .board .top-three .stats,
+.content .leaderboard .board .top-three .info {
+    font-weight: 400;
+}
+
 .nav-buttons {
     display: flex;
     padding: 1rem 0;
@@ -115,19 +123,19 @@
     border-radius: 5px;
 }
 
-.content .rewards {
+.rewards {
     display: flex;
     flex-direction: column;
     align-items: center;
     flex-grow: 1;
 }
 
-.content .rewards .title {
+.rewards .title {
     font-weight: 400;
     text-align: center;
 }
 
-.content .rewards .reward {
+.rewards .reward {
     width: 100%;
     position: relative;
     display: flex;

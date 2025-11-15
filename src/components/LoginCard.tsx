@@ -23,17 +23,19 @@ export default function LoginCard({email, setEmail, password, setPassword, phras
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.1 }}
         >
-            <h2 className="login-title">Sign in to your account</h2>
-            <p className="welcome-phrase">Welcome back User</p>
+            <div className="title-container">
+                <h2 className="title-main">Sign in to your account</h2>
+                <p className="sub-title">Welcome back User</p>
+            </div>
 
             <button 
                 onClick={handleGoogleLogin} 
-                className="google-signin-button"
+                className="button-md"
             >
                 <FontAwesomeIcon icon={faGoogle}/> Sign in with Google
             </button>
 
-            <p>or</p>
+            <p className="or">or</p>
 
             <form className="form-container" action={loginWithEmail} onSubmit={async (e) => {
                 e.preventDefault();
@@ -44,7 +46,7 @@ export default function LoginCard({email, setEmail, password, setPassword, phras
                     placeholder="Email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="input"
+                    className="input-lg"
                     required
                 />
 
@@ -53,12 +55,12 @@ export default function LoginCard({email, setEmail, password, setPassword, phras
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="input"
+                    className="input-lg"
                     required
                 />
 
                 {phrase != "" && 
-                    <motion.p className="phrase"
+                    <motion.p className="phrase-error"
                         initial={{ y: -20, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ duration: 0.2 }}
@@ -68,8 +70,7 @@ export default function LoginCard({email, setEmail, password, setPassword, phras
                 }
 
                 <motion.button 
-                    className="button"
-                    whileHover={{cursor: 'pointer', backgroundColor: 'rgb(var(--primary-hover))', color: 'rgb(var(--background))'}}
+                    className="button-md"
                 >
                     Sign In
                 </motion.button>

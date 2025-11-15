@@ -48,7 +48,7 @@ function JoinButton({ role } : JoinProps) {
     if (isMember) {
         return (
             <motion.button
-                whileHover={{ y: -2 }} 
+                whileHover={{cursor: 'pointer', y: -4, scale: 1.02}} 
                 key={role.id + role.id} 
                 className="join-button-container"
             >
@@ -63,7 +63,7 @@ function JoinButton({ role } : JoinProps) {
 
     return (
         <motion.button 
-            whileHover={{cursor: 'pointer', y: -2}} 
+            whileHover={{cursor: 'pointer', y: -4, scale: 1.02}} 
             onClick={() => requestRole(role.id)}
             onTap={() => requestRole(role.id)}
         >Request to join</motion.button>

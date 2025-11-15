@@ -9,6 +9,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 import './App.css'
 import Nav from './components/Nav';
+import Loading from './pages/Loading';
 
 function App() {
   const [user, userData, loading] = useUser();
@@ -81,12 +82,14 @@ function App() {
     }
   }, [user, navigate]);
 
-  if (loading) return <div className="loading-screen">Loading...</div>;
+  if (loading) return <Loading />
 
   if (!user) {
-    return <div className='app'>
-      <Outlet />
-    </div>
+    return (
+      <div className='app'>
+        <Outlet />
+      </div>
+    )
   } else {
     return (
       <div className='app'>

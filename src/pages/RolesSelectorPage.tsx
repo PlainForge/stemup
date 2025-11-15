@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { type Role } from '../myDataTypes';
 import JoinButton from '../components/RoleJoinButton';
 import useAdmins from '../hooks/Admin';
+import Loading from './Loading';
 
 
 function RolesSelectorPage() {
@@ -70,9 +71,7 @@ function RolesSelectorPage() {
         }
     }
 
-    if (!user) {
-        return <h1>Loading...</h1>
-    }
+    if (!user) return <Loading />
 
     return (
         <motion.div className='roles-container'
@@ -91,7 +90,7 @@ function RolesSelectorPage() {
                                 animate={{ x: 0 }}
                                 key={role.id}
                             >
-                                <p>{role.name}</p>
+                                <p className='title-card'>{role.name}</p>
                                 <JoinButton role={role} />
                             </motion.div>
                         )

@@ -1,46 +1,24 @@
 .login-page {
     height: 100vh;
-    width: 100vw;
+    width: 100%;
 
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
     color: rgb(var(--foreground));
 }
 
 /* Login Card for login page */
 .login-container {
-    margin: auto;
     padding: 1rem 2rem;
     position: relative;
 
-    width: 25%;
+    width: 50%;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     transition: all 0.3s;
-}
-
-.login-title {
-    font-weight: 500;
-}
-
-.google-signin-button {
-    width: 312px;
-    padding: 1rem;
-    border-radius: 20px;
-    cursor: pointer;
-    background: none;
-    background-color: rgba(var(--button-background), var(--button-transparent));
-    border: 1px solid rgb(var(--button-border));
-    transition: background-color 0.3s ease;
-}
-
-.google-signin-button:hover {
-    color: rgb(var(--background));
-    background-color: rgba(var(--primary-hover), 0.8);
 }
 
 .form-container {
@@ -52,47 +30,9 @@
     width: 100%;
 }
 
-.phrase {
-    background-color: rgba(var(--error-background), 0.3);
-    color: rgb(var(--error-color));
-    padding: 16px 32px;
-    border-radius: 5px;
-    text-align: center;
-    width: 312px;
-}
-
-.form-container .input {
-    width: 312px;
-    border: 1px solid rgba(var(--foreground), 0.3);
-    border-radius: 20px;
-    padding: 16px;
-    outline: none;
-    transition: all 0.3s ease;
-}
-
-.form-container .input:focus, .form-container .input:hover {
-    border: 1px solid rgba(var(--foreground), 0.9);
-}
-
-.form-container .button {
-    width: 512px;
-    padding: 1rem;
-    border-radius: 20px;
-    cursor: pointer;
-    background: none;
-    color: rgb(var(--background));
-    background-color: rgb(var(--foreground));
-    border: 1px solid rgb(var(--button-border));
-    transition: background-color 0.3s ease;
-}
-
-.form-container .button:hover {
-    color: rgb(var(--background));
-    background-color: rgba(var(--primary-hover), 0.8);
-}
-
-.button {
-    padding: 5px 10px;
-    border-radius: 5px;
-    color: black;
+@media (max-width: 1000px) {
+  .login-container, .login-page {
+    width: 100%;
+    padding: 0;
+  }
 }

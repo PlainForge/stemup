@@ -1,15 +1,13 @@
 import { useState } from "react";
-import { auth, db, storage} from "../firebase.ts";
+import { auth, db} from "../firebase.ts";
 import { signInWithPopup, signInWithEmailAndPassword, GoogleAuthProvider } from "firebase/auth";
 import { arrayUnion, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import "./styles/loginPage.css";
 import { FirebaseError } from "firebase/app";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import LoginCard from "../components/LoginCard.tsx";
 import Nav from "../components/Nav.tsx";
 
 const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
-
 
 function LoginPage() {
     const [email, setEmail] = useState("");
@@ -26,17 +24,9 @@ function LoginPage() {
             const userRef = doc(db, "users", current.uid);
             const snap = await getDoc(userRef);
 
-            let photoURL = DEFAULT_AVATAR;
+            const photoURL = current.photoURL || DEFAULT_AVATAR;
 
             if (!snap.exists()) {
-                if (current.photoURL) {
-                    const response = await fetch(current.photoURL);
-                    const blob = await response.blob();
-                    const storageRef = ref(storage, `profilePictures/${current.uid}`);
-                    await uploadBytes(storageRef, blob);
-                    photoURL = await getDownloadURL(storageRef);
-                }
-
                 await setDoc(doc(db, "users",  current.uid), {
                     email: current.email,
                     name: current.displayName,
@@ -51,26 +41,6 @@ function LoginPage() {
                 await updateDoc(doc(db, "roles", 'r3wUbRSCX7cxwBYhtAdg'), {
                     members: arrayUnion(current.uid)
                 })
-            } else {
-                const existingData = snap.data();
-
-                let newPhotoURL = existingData.photoURL || DEFAULT_AVATAR;
-                if (current.photoURL && current.photoURL !== existingData.photoURL) {
-                    const response = await fetch(current.photoURL);
-                    const blob = await response.blob();
-                    const storageRef = ref(storage, `profilePictures/${current.uid}`);
-                    await uploadBytes(storageRef, blob);
-                    newPhotoURL = await getDownloadURL(storageRef);
-                }
-
-                await setDoc(
-                    userRef,
-                    { 
-                        name: current.displayName || existingData.name,
-                        photoURL: newPhotoURL
-                    },
-                    { merge: true }
-                );
             }
 
             setPhrase("");
@@ -115,16 +85,18 @@ function LoginPage() {
     return (
         <div className="login-page">
             <Nav />
-            <LoginCard 
-                email={email} 
-                setEmail={setEmail} 
-                password={password}
-                setPassword={setPassword}
-                phrase={phrase}
-                setPhrase={setPhrase}
-                handleGoogleLogin={handleGoogleLogin}
-                loginWithEmail={loginWithEmail} 
-            />
+            <div className="content-container">
+                <LoginCard 
+                    email={email} 
+                    setEmail={setEmail} 
+                    password={password}
+                    setPassword={setPassword}
+                    phrase={phrase}
+                    setPhrase={setPhrase}
+                    handleGoogleLogin={handleGoogleLogin}
+                    loginWithEmail={loginWithEmail} 
+                />
+            </div>
         </div>
     )
 }

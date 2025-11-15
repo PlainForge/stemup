@@ -25,7 +25,7 @@ export default function RegisterCard({email, setEmail, password, setPassword, na
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.1 }}
         >
-            <h1 className="register-title">Create your account</h1>
+            <h2 className="title-main">Create your account</h2>
             <form className="form-container" action={registerWithEmail} onSubmit={async (e) => {
                 e.preventDefault();
                 await registerWithEmail();
@@ -35,7 +35,7 @@ export default function RegisterCard({email, setEmail, password, setPassword, na
                     placeholder="Email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="input"
+                    className="input-lg"
                     required
                 />
 
@@ -44,7 +44,7 @@ export default function RegisterCard({email, setEmail, password, setPassword, na
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="input"
+                    className="input-lg"
                     required
                 />
 
@@ -53,13 +53,14 @@ export default function RegisterCard({email, setEmail, password, setPassword, na
                     placeholder="Display Name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="input"
+                    className="input-lg"
                     maxLength={16} 
                     required
                 />
 
                 {phrase != "" && 
-                    <motion.p className="phrase"
+                    <motion.p 
+                        className="phrase-error"
                         initial={{ y: -20, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ duration: 0.2 }}
@@ -69,8 +70,7 @@ export default function RegisterCard({email, setEmail, password, setPassword, na
                 }
 
                 <motion.button 
-                    className="button"
-                    whileHover={{cursor: 'pointer', backgroundColor: 'rgb(var(--primary-hover))', color: 'rgb(var(--background))'}}
+                    className="button-md"
                 >
                     Register
                 </motion.button>

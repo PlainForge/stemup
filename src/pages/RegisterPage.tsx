@@ -150,15 +150,15 @@ export default function RegisterPage() {
                         animate={{ y: 0, opacity: 1}}
                         transition={{ duration: 0.1 }}
                     >
-                        <h1 className="register-title">Create your account</h1>
+                        <h1 className="title-main">Create your account</h1>
                         <button 
-                            className="google-signin-button"
+                            className="button-md"
                             onClick={handleGoogleLogin} 
                         >
                             Connect with <FontAwesomeIcon icon={faGoogle}/>
                         </button>
                         <button 
-                            className="email-signup-button"
+                            className="button-md"
                             onClick={() => setSignInEmail(true)}
                         >
                             Continue with email

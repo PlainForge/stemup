@@ -137,16 +137,14 @@ function Settings() {
         })
     }
 
-    
-
     return (
         <motion.div className="main-settings-container"
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
         >
-            <div className="settings-title">
-                <h1 className="settings-title">Account Settings</h1>
-                <p><strong>Account ID</strong>: {user.uid}</p>
+            <div className="title-container">
+                <h1 className="title-main">Account Settings</h1>
+                <p className="sub-title"><strong>Account ID</strong>: {user.uid}</p>
             </div>
             <div className="settings-container">
                 <div className="settings-current">
@@ -159,7 +157,7 @@ function Settings() {
                                         type="name" 
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
-                                        className="input"
+                                        className="input-lg"
                                         maxLength={16}
                                         required
                                     />
@@ -170,7 +168,7 @@ function Settings() {
                                     ) : (
                                         <div style={{ background: "#fff" }} className="pfp-image" />
                                     )}
-                                    <label className="photo-button">
+                                    <label className="button-sm">
                                         Upload a new Photo
                                         <input 
                                             ref={fileInputRef}
@@ -185,16 +183,16 @@ function Settings() {
                                 </div>
                             </div>
                             <div className="form-options">
-                                <button className="cancel curr" onClick={cancelCurrent}>Cancel</button>
-                                <button type="submit">Save</button>
+                                <button className="button-sm button-error" onClick={cancelCurrent}>Cancel</button>
+                                <button type="submit" className="button-sm">Save</button>
                             </div>
                         </form>
                         <div className="other-options">
                             <div className="current-role">
-                                <button onClick={handleCurrentRole} className="curr">Reset current role</button>
-                                <h3>Current Role: {currentRoleName}</h3>
+                                <button onClick={handleCurrentRole} className="button-sm button-error">Reset current role</button>
+                                <h3 className="title-card">Current Role: {currentRoleName}</h3>
                             </div>
-                            <button onClick={handleDeleteAccount} className="del-acc">Delete my account</button>
+                            <button onClick={handleDeleteAccount} className="button-sm button-error">Delete my account</button>
                         </div>
                     </div>
                 </div>

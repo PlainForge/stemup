@@ -9,6 +9,7 @@ import DoneButton from "../components/TaskDoneButton";
 import useUser from "../hooks/UserHook";
 import useAdmins from "../hooks/Admin";
 import { useParams } from "react-router-dom";
+import Loading from "./Loading";
 
 function RolePage() {
     const { id: roleId } = useParams<{ id: string }>();
@@ -17,7 +18,7 @@ function RolePage() {
     const [membersWithData, setMembersWithData] = useState<UserData[]>([]);
     const [leaders, setLeaders] = useState<UserData[]>([]);
     const [userTasks, setUserTasks] = useState<Task[]>([]);
-    const [pageState, setPageState] = useState("home");
+    const [pageState, setPageState] = useState("leaderboard");
     const [role, setRole] = useState<Role | null>(null);
     const [rewards, setRewards] = useState<string[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
@@ -25,7 +26,6 @@ function RolePage() {
     const admins = useAdmins();
 
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
-    const pages = ["home", "tasks", "admin"];
 
     useEffect(() => {
         if (!roleId) return;
@@ -203,7 +203,7 @@ function RolePage() {
         })
     }
 
-    if (!user || !role) return <h1>Loading role...</h1>;
+    if (!user || !role) return <Loading />
 
     const taskCount = userTasks.filter(task => !task.complete).length;
     let i = 0;
@@ -211,7 +211,7 @@ function RolePage() {
     return (
         <div className="roles-page">
             <div className="header">
-                <h1>{role.name}</h1>
+                <h1 className="title-main">{role.name}</h1>
                 <div className="user-info">
                         {membersWithData.map((m) => {
                             if (m.id.match(user.uid) && !admins.includes(user.uid)) {
@@ -234,58 +234,68 @@ function RolePage() {
                 </div>
             </div>
             <div className="nav-buttons div">
-                {pages.map((page) => {
-                    if (!admins.includes(user.uid) && page.match("admin")) return
-                    if (page.match("tasks")) {
-                        if (admins.includes(user.uid)) return null
-                        return (
-                            <div className="tasks-container" key={page}>
-                                <motion.button 
-                                    onClick={() => setPageState(page)}
-                                    onTap={() => setPageState(page)}
-                                    whileHover={{y: -2, cursor: 'pointer'}}
-                                    style={pageState === "tasks" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
-                                >
-                                    {page.toLocaleUpperCase()}
-                                </motion.button>
-                                {taskCount > 0 ? <p>{taskCount}</p> : ""}
-                            </div>
-                        )
-                    } else {
-                        return <motion.button 
-                            onClick={() => setPageState(page)}
-                            onTap={() => setPageState(page)}
-                            whileHover={{y: -2, cursor: 'pointer'}}
-                            key={page}
-                            style={pageState === page ? {fontWeight: "500"} : {fontWeight: "300"}}
-                        >
-                            {page.toLocaleUpperCase()}
-                        </motion.button>
-                    }
-                })}
-                {isCurrentRole ? <strong>CURRENT ROLE</strong> : 
+                <motion.button 
+                    onClick={() => setPageState("leaderboard")}
+                    onTap={() => setPageState("leaderboard")}
+                    whileHover={{y: -2, cursor: 'pointer'}}
+                    style={pageState === "leaderboard" ? {fontWeight: "500"} : {fontWeight: "300"}}
+                >
+                    Leaderboard
+                </motion.button>
+                <motion.button 
+                    onClick={() => setPageState("rewards")}
+                    onTap={() => setPageState("rewards")}
+                    whileHover={{y: -2, cursor: 'pointer'}}
+                    style={pageState === "rewards" ? {fontWeight: "500"} : {fontWeight: "300"}}
+                >
+                    Rewards
+                </motion.button>
+                <div className="tasks-container">
+                    <motion.button 
+                        onClick={() => setPageState("tasks")}
+                        onTap={() => setPageState("tasks")}
+                        whileHover={{y: -2, cursor: 'pointer'}}
+                        style={pageState === "tasks" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
+                    >
+                        Tasks
+                    </motion.button>
+                    {taskCount > 0 ? <p>{taskCount}</p> : ""}
+                </div>
+                {isCurrentRole ? <p><strong>Your Role</strong></p> : 
                     <motion.button 
                         onClick={() => setCurrentRole(role.id)}
                         onTap={() => setCurrentRole(role.id)}
                         whileHover={{y: -2, cursor: 'pointer'}}
-                    >SET CURRENT ROLE</motion.button>
+                    >Set Role</motion.button>
                 }
+                { admins.includes(user.uid) ?
+                        <motion.button 
+                        onClick={() => setPageState("admin")}
+                        onTap={() => setPageState("admin")}
+                        whileHover={{y: -2, cursor: 'pointer'}}
+                        style={pageState === "admin" ? {fontWeight: "500"} : {fontWeight: "300"}}
+                    >
+                        Admin
+                    </motion.button>
+                : null }
             </div>
-            { pageState.match("home") ?
+            { pageState.match("leaderboard") ?
                 <motion.div 
                     className="content"
                     initial={{x:-10,position:'absolute'}}
                     animate={{x:0}}
                 >
                     <div className="leaderboard div">
-                        <h1 className="title">Leaderboard</h1>
-                        
+                        <div className="title-container">
+                            <h1 className="title-main">Leaderboard</h1>
+                        </div>
+
                         <div className="board">
                             {leaders ? leaders.map((u) => {
                                 if (admins.includes(u.id)) return
                                 i++
                                 return (
-                                    <div className="user-board" key={u.id}>
+                                    <div className={i < 4 ? "user-board top-three" : "user-board" } key={u.id}>
                                         <div className="info">
                                             <p><strong>{i}</strong></p>
                                             <img src={u.photoURL} alt="" className="user-photo" />
@@ -300,25 +310,38 @@ function RolePage() {
                             }) : "Loading"}
                         </div>
                     </div>
-                    <div className="rewards div">
-                        <h1 className="title">{currentMonth} Rewards</h1>
-                        {["First", "Second", "Third"].map((label, idx) => (
-                            <div className="reward" key={label}>
-                                <h1>{label}</h1>
-                                <p>{rewards[idx] ?? "No reward set"}</p>
-                            </div>
-                        ))}
-                    </div>
+                    
                     
                 </motion.div>
+            : "" }
+            { pageState.match("rewards") ?
+                <div className="rewards div">
+                    <h1 className="title">{currentMonth} Rewards</h1>
+                    {["First", "Second", "Third"].map((label, idx) => {
+                        const filteredLeaders = leaders.filter(
+                            (leader) => !admins.includes(leader.uid)
+                        );
+                        const winners = filteredLeaders[idx];
+                        return <div className="reward" key={label}>
+                            <div>
+                                <h1>{label}</h1>
+                                <p>{winners ? winners.name : "No user"}</p>
+                            </div>
+                            <p>{rewards[idx] ?? "No reward set"}</p>
+                        </div>
+                    })}
+                </div>
             : "" }
             { pageState.match("tasks") ?
                 <motion.div 
                     className="tasks div"
                     initial={{x:-10}}
                     animate={{x:0}}
-                >
-                    <h1>Your {currentMonth} Tasks</h1>
+                >   
+                    <div className="title-container">
+                        <h1 className="title-main">Your {currentMonth} Tasks</h1>
+                    </div>
+                    
                     <div className="all-tasks">
                         {tasksLoading ? <p>Loading Tasks...</p> 
                         : userTasks.length > 0 && !admins.includes(user.uid) ? userTasks.map((task) => {

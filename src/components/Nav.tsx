@@ -38,20 +38,20 @@ export default function Nav() {
     if (user != null) {
         return (
             <div className='nav-user'>
-                <h1 className='main-title'>StemUP</h1>
+                <h2 className='title-main'>StemUP</h2>
                 <h3 className="user-name">{userData?.name}</h3>
                 <div className="roles-container">
-                    <Link to={"/roles"} className="link-button">Roles</Link>
+                    <Link to={"/roles"} className="link-btn">Roles</Link>
                 </div>
                 <div className="user-info-container">
-                    <Link to={"/"} className="link-button">
-                        {windowWidth > 900 || windowHeight > 1200 ? "Home" : <FontAwesomeIcon icon={faHomeAlt}/>}
+                    <Link to={"/"} className="link-btn">
+                        {windowWidth > 1000 || windowHeight > 1200 ? "Home" : <FontAwesomeIcon icon={faHomeAlt}/>}
                     </Link>
-                    <Link to={"/settings"} className="link-button">
-                        {windowWidth > 900 || windowHeight > 1200 ? "Settings" : <FontAwesomeIcon icon={faGears}/>}
+                    <Link to={"/settings"} className="link-btn">
+                        {windowWidth > 1000 || windowHeight > 1200 ? "Settings" : <FontAwesomeIcon icon={faGears}/>}
                     </Link>
-                    <a onClick={handleLogout}>
-                        {windowWidth > 900 || windowHeight > 1200 ? "Logout" : <FontAwesomeIcon icon={faPowerOff}/>}
+                    <a onClick={handleLogout} className="link-btn">
+                        {windowWidth > 1000 || windowHeight > 1200 ? "Logout" : <FontAwesomeIcon icon={faPowerOff}/>}
                     </a>
                 </div>
             </div>
@@ -59,12 +59,12 @@ export default function Nav() {
     } else {
         return (
             <div className="nav-login">
-                <h2 className="main-title">StemUp</h2>
+                <h2 className="title-main">StemUp</h2>
                 <div className="nav-right-side">
                     <motion.a
                         onClick={handleSwitch}
                         onTap={handleSwitch}
-                        className="button" 
+                        className="link-btn" 
                         whileHover={{ cursor: 'pointer' }}
                     >
                         {isLogin ? "Don't have an account? " : "Already have an account? "}
