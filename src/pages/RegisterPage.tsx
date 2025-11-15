@@ -178,12 +178,12 @@ export default function RegisterPage() {
                     <h2 className="bottom-title">Used by these Universities</h2>
                     <div className="used-by-logos">
                         <img 
-                            src="/src/assets/umb-logo.png" 
+                            src="https://firebasestorage.googleapis.com/v0/b/stempower-fellowship.firebasestorage.app/o/logo%2Fumb-logo.png?alt=media&token=bed49a81-4745-4e28-b19f-6c9f2e9bdcfa" 
                             alt="UMass Boston campus" 
                             className="logo"
                         />
                         <img 
-                            src="/src/assets/uma-logo.png" 
+                            src="https://firebasestorage.googleapis.com/v0/b/stempower-fellowship.firebasestorage.app/o/logo%2Fuma-logo.png?alt=media&token=822f15ac-dfdc-4b70-ba66-bd757fc3f1f6" 
                             alt="UMass Boston campus" 
                             className="logo"
                         />
