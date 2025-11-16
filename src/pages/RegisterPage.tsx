@@ -172,7 +172,7 @@ export default function RegisterPage() {
                 </div>
                 
                 <div className="middle">
-                    <h2 className="middle-title">Track all your tasks and gain points and rewards from your roles</h2>
+                    <h2 className="title-main middle-title">Track all your tasks and gain points and rewards from your roles</h2>
                 </div>
                 <div className="bottom">
                     <h2 className="bottom-title">Used by these Universities</h2>

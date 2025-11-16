@@ -261,13 +261,6 @@ function RolePage() {
                     </motion.button>
                     {taskCount > 0 ? <p>{taskCount}</p> : ""}
                 </div>
-                {isCurrentRole ? <p><strong>Your Role</strong></p> : 
-                    <motion.button 
-                        onClick={() => setCurrentRole(role.id)}
-                        onTap={() => setCurrentRole(role.id)}
-                        whileHover={{y: -2, cursor: 'pointer'}}
-                    >Set Role</motion.button>
-                }
                 { admins.includes(user.uid) ?
                         <motion.button 
                         onClick={() => setPageState("admin")}
@@ -278,12 +271,19 @@ function RolePage() {
                         Admin
                     </motion.button>
                 : null }
+                {isCurrentRole ? <motion.p whileHover={{cursor: "default"}}><strong>Your Role</strong></motion.p> : 
+                    <motion.button 
+                        onClick={() => setCurrentRole(role.id)}
+                        onTap={() => setCurrentRole(role.id)}
+                        whileHover={{y: -2, cursor: 'pointer'}}
+                    >Set Role</motion.button>
+                }
             </div>
             { pageState.match("leaderboard") ?
                 <motion.div 
                     className="content"
-                    initial={{x:-10,position:'absolute'}}
-                    animate={{x:0}}
+                    initial={{y:50}}
+                    animate={{y:0}}
                 >
                     <div className="leaderboard div">
                         <div className="title-container">
@@ -315,7 +315,11 @@ function RolePage() {
                 </motion.div>
             : "" }
             { pageState.match("rewards") ?
-                <div className="rewards div">
+                <motion.div 
+                    className="rewards"
+                    initial={{y:50}}
+                    animate={{y:0}}
+                >
                     <h1 className="title">{currentMonth} Rewards</h1>
                     {["First", "Second", "Third"].map((label, idx) => {
                         const filteredLeaders = leaders.filter(
@@ -330,7 +334,7 @@ function RolePage() {
                             <p>{rewards[idx] ?? "No reward set"}</p>
                         </div>
                     })}
-                </div>
+                </motion.div>
             : "" }
             { pageState.match("tasks") ?
                 <motion.div 
@@ -338,7 +342,7 @@ function RolePage() {
                     initial={{x:-10}}
                     animate={{x:0}}
                 >   
-                    <div className="title-container">
+                    <div className="title-container title-container-stay">
                         <h1 className="title-main">Your {currentMonth} Tasks</h1>
                     </div>
                     
@@ -349,14 +353,20 @@ function RolePage() {
                                 <motion.div
                                     className={task.complete ? "task-completed" : "task"}
                                     key={task.id}
-                                    initial={{x:-10}}
-                                    animate={{x:0}}
+                                    initial={{y:50}}
+                                    animate={{y:0}}
                                 >
-                                    <h1>{task.title}</h1>
-                                    <h3>Description</h3>
-                                    <p>{task.description || "N/A"}</p>
-                                    <h4>{task.points} points</h4>
-                                    <DoneButton task={task} />
+                                    <div className="title-container title-container-change top">
+                                        <h1 className="title-main">{task.title}</h1>
+                                        <h4 className="sub-title">{task.points} points</h4>
+                                    </div>
+                                    <div className="middle">
+                                        <p>Description:</p>
+                                        <p>{task.description || "N/A"}</p>
+                                    </div>
+                                    <div className="bottom">
+                                        <DoneButton task={task} />
+                                    </div>
                                 </motion.div>
                             )
                         }) : <p>"No tasks assigned to you"</p>}

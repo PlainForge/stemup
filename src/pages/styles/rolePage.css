@@ -113,6 +113,7 @@
     display: flex;
     padding: 1rem 0;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 1rem;
 }
 
@@ -154,23 +155,38 @@
 
 .tasks .all-tasks {
     display: flex;
-    flex-direction: row;
-    gap: 2rem;
-    overflow: auto;
-    padding: 2rem 4rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: center;
 }
 
-.tasks .all-tasks .task {
+.tasks .task {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 5px;
-    box-shadow: 0px 0px 10px red;
-    border-radius: 10px;
-    width: 300px;
-    height: 300px;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid;
+    border-bottom-color: rgb(var(--foreground));
+    width: 90%;
+}
+
+.tasks .task > .top {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.tasks .task > .middle {
+    width: 100%;
+}
+
+.tasks .task > .bottom {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .tasks .all-tasks .task-completed {

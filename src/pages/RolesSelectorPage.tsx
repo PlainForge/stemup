@@ -75,8 +75,8 @@ function RolesSelectorPage() {
 
     return (
         <motion.div className='roles-container'
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
+            initial={{ y: 50 }}
+            animate={{ y: 0 }}
         >
             <h1>Available Roles</h1>
             <div className='available-roles'>
@@ -85,7 +85,7 @@ function RolesSelectorPage() {
                         return (
                             <motion.div 
                                 className='role-container' 
-                                whileHover={{borderColor: 'rgba(24,24,24,1)'}}
+                                whileHover={{borderColor: 'rgba(24,24,24,1)', y:-5, scale: 1.01}}
                                 initial={{ x: -100 }}
                                 animate={{ x: 0 }}
                                 key={role.id}

@@ -385,37 +385,37 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                 <motion.button 
                     onClick={() => setPage("requests")} 
                     onTap={() => setPage("requests")}
-                    whileHover={{scale: 1.1, cursor: "pointer"}}
+                    whileHover={{y: -2, cursor: "pointer"}}
                     style={page === "requests" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Requests <span>{requested.length}</span></motion.button>
                 <motion.button 
                     onClick={() => setPage("creation")} 
                     onTap={() => setPage("creation")}
-                    whileHover={{scale: 1.1, cursor: "pointer"}}
+                    whileHover={{y: -2, cursor: "pointer"}}
                     style={page === "creation" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Task Creation</motion.button>
                 <motion.button 
                     onClick={() => setPage("submitted")}
                     onTap={() => setPage("submitted")}
-                    whileHover={{scale: 1.1, cursor: "pointer"}}
+                    whileHover={{y: -2, cursor: "pointer"}}
                     style={page === "submitted" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Submitted Tasks <span>{submittedTasks.length}</span></motion.button>
                 <motion.button 
                     onClick={() => setPage("config")}
                     onTap={() => setPage("config")}
-                    whileHover={{scale: 1.1, cursor: "pointer"}}
+                    whileHover={{y: -2, cursor: "pointer"}}
                     style={page === "config" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Role Config</motion.button>
                 <motion.button 
                     onClick={() => setPage("kick")}
                     onTap={() => setPage("kick")}
-                    whileHover={{scale: 1.1, cursor: "pointer"}}
+                    whileHover={{y: -2, cursor: "pointer"}}
                     style={page === "kick" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Member Kick</motion.button>
                 <motion.button 
                     onClick={() => setPage("rewards")}
                     onTap={() => setPage("rewards")}
-                    whileHover={{scale: 1.1, cursor: "pointer"}}
+                    whileHover={{y: -2, cursor: "pointer"}}
                     style={page === "rewards" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
                 >Rewards</motion.button>
             </motion.div>
@@ -426,7 +426,7 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                         initial={{x: -10}}
                         animate={{x:0}}
                     >
-                        <h1>Requests</h1>
+                        <h1 className="title-main">Requests</h1>
                         <div className="requested-users">
                             {userRequested.map((user) => {
                                 return (
@@ -436,19 +436,19 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                                         initial={{x: -10}}
                                         animate={{x:0}}
                                     >
-                                        <h3>{user.name}</h3>
+                                        <h3 className="title-card">{user.name}</h3>
                                         <div className="req-user-buttons">
                                             <motion.button 
                                                 onClick={() => acceptRequest(user.uid)} 
                                                 onTap={() => acceptRequest(user.uid)}
                                                 whileHover={{cursor: "pointer"}}
-                                                className="req-accept"
+                                                className="button-sm"
                                             >accept</motion.button>
                                             <motion.button 
                                                 onClick={() => declineRequest(user.uid)}
                                                 onTap={() => declineRequest(user.uid)} 
                                                 whileHover={{cursor: "pointer"}}
-                                                className="req-decline"
+                                                className="button-sm button-error"
                                             >decline</motion.button>
                                         </div>
                                         
@@ -464,7 +464,7 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                         initial={{x: -10}}
                         animate={{x:0}}
                     >
-                        <h1>Task Creation</h1>
+                        <h1 className="title-main">Task Creation</h1>
                         <form className="creation-form" id="create" onSubmit={sendTask}>
                             <select 
                                 name="user" 
@@ -475,6 +475,7 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                                         setCreateSetTaskFor((prev) => [...prev, uid]);
                                     }
                                 }}
+                                className="select-sm"
                             >
                                 <option value="" disabled>Select a member</option>
                                 {membersWithData.map((member) => {  
@@ -499,16 +500,15 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                                                     key={uid}
                                                     className="selected-member"
                                                 >
-                                                    <span>{member.name}</span>
+                                                    <span className="title-card">{member.name}</span>
                                                     <motion.button
                                                         type="button"
                                                         onClick={() =>
-                                                        setCreateSetTaskFor((prev) =>
-                                                            prev.filter((id) => id !== uid)
-                                                        )
+                                                            setCreateSetTaskFor((prev) =>
+                                                                prev.filter((id) => id !== uid)
+                                                            )
                                                         }
-                                                        whileHover={{ scale: 1.05, cursor: "pointer" }}
-                                                        className="remove-member"
+                                                        className="button-xsm button-error"
                                                     >
                                                         Remove
                                                     </motion.button>
@@ -520,20 +520,19 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                                 <motion.button
                                     type="button"
                                     onClick={() => setCreateSetTaskFor([])}
-                                    whileHover={{ scale: 1.05, cursor: "pointer" }}
-                                    className="clear-all"
+                                    className="button-sm button-error"
                                 >
                                     Clear All
                                 </motion.button>
                                 </div>
                             )}
 
-                            <input type="text" name="title" placeholder="Title" required/>
-                            <input type="text" name="desc" placeholder="Description"/>
-                            <input type="number" id="pts" name="pts" placeholder="Points" required/>
+                            <input type="text" name="title" placeholder="Title" className="input-lg" required/>
+                            <input type="text" name="desc" placeholder="Description" className="input-lg"/>
+                            <input type="number" id="pts" name="pts" placeholder="Points" className="input-lg" required/>
                             <motion.button 
                                 type="submit" 
-                                className="submit" 
+                                className="button-sm" 
                                 whileHover={{cursor: "pointer"}}
                             >Create</motion.button>
                         </form>
@@ -545,7 +544,7 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                         initial={{x: -10}}
                         animate={{x:0}}
                     >
-                        <h1>Tasks Submitted</h1>
+                        <h1 className="title-main">Tasks Submitted</h1>
                         <div className="submitted-tasks">
                             {submittedTasks.map((submitted) => {
                                 if (submitted.complete) return null
@@ -556,22 +555,34 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                                         initial={{x: -10}}
                                         animate={{x:0}}
                                     >
-                                        <h1>{submitted.title}</h1>
-                                        <h4>{submitted.description}</h4>
-                                        <p>{submitted.points} pts</p>
-                                        <p className="task-date">Submitted on {submitted.submission ? submitted.submission.toDate().toString() : 'N/A'}</p>
-                                        <p>by {submitted.assignedName}</p>
+                                        <div className="title-container">
+                                            <h1 className="title-main">{submitted.title}</h1>
+                                        </div>
+                                        <div className="task-desc">
+                                            <h4 className="title-card">Description</h4>
+                                            <p>{submitted.description}</p>
+                                            <h4 className="title-card">Points</h4>
+                                            <p>{submitted.points} pts</p>
+                                        </div>
+                                        <div>
+                                            <h4 className="title-card">Submission Date</h4>
+                                            <p className="task-date">{submitted.submission ? submitted.submission.toDate().toString() : 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <h4 className="title-card">Submitted by</h4>
+                                            <p>by {submitted.assignedName}</p>
+                                        </div>
                                         <div className="task-buttons">
                                             <motion.button 
                                                 onClick={() => acceptTask(submitted)}
                                                 onTap={() => acceptTask(submitted)} 
-                                                className="task-approve"
+                                                className="button-xsm"
                                                 whileHover={{cursor: "pointer"}}
                                             >Approve</motion.button>
                                             <motion.button 
                                                 onClick={() => declineTask(submitted)}
                                                 onTap={() => declineTask(submitted)} 
-                                                className="task-disapprove"
+                                                className="button-xsm button-error"
                                                 whileHover={{cursor: "pointer"}}
                                             >Disapprove</motion.button>
                                         </div>
@@ -587,13 +598,13 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                         initial={{x: -10}}
                         animate={{x:0}}
                     >
-                        <h1>Role Config</h1>
+                        <h1 className="title-main">Role Config</h1>
                         <form className="set-role-name" id="rolename" onSubmit={changeRoleName}>
-                            <input type="text" name="newName" placeholder="Change Role Name" required/>
-                            <button type="submit">Change Role Name</button>
+                            <input type="text" name="newName" placeholder="Change Role Name" className="input-lg" required/>
+                            <button type="submit" className="button-md">Change Role Name</button>
                         </form>
-                        <button className="reset-role" onClick={() => resetRole(role.id)}>Monthly Reset</button>
-                        <button className="del-role" onClick={() => deleteRole(role.id)}>Delete Role</button>
+                        <button className="button-md button-error" onClick={() => resetRole(role.id)}>Monthly Reset</button>
+                        <button className="button-md button-error" onClick={() => deleteRole(role.id)}>Delete Role</button>
                     </motion.div> : ""
                 }
                 {page.match("kick") ? 
@@ -611,12 +622,14 @@ function RoleAdminPage({ role, membersWithData } : prop) {
                         initial={{x: -10}}
                         animate={{x:0}}
                     >
-                        <h1>Rewards</h1>
+                        <div className="title-container title-container-stay">
+                            <h1 className="title-main">Rewards</h1>
+                        </div>
                         <form className="set-reward-container" onSubmit={setReward}>
-                            <input type="text" name="first" placeholder="first" required />
-                            <input type="text" name="second" placeholder="second" required />
-                            <input type="text" name="third" placeholder="third" required />
-                            <button type="submit">Set Reward</button>
+                            <input type="text" name="first" placeholder="first" className="input-lg" required />
+                            <input type="text" name="second" placeholder="second" className="input-lg" required />
+                            <input type="text" name="third" placeholder="third" className="input-lg" required />
+                            <button type="submit" className="button-md">Set Reward</button>
                         </form>
                     </motion.div> : ""
                 }

@@ -22,6 +22,9 @@
   width: 100%;
   display: flex;
   flex-direction: column;
+}
+
+.title-container-stay {
   align-items: center;
   justify-content: center;
 }
@@ -95,9 +98,23 @@
   text-align: center;
 }
 
+.button-xsm {
+  width: 144px;
+  padding: 0.5rem;
+  border-radius: 20px;
+  cursor: pointer;
+  background: none;
+  color: rgb(var(--background));
+  background-color: rgb(var(--foreground));
+  border: 1px solid rgb(var(--button-border));
+  transition: background-color 0.3s ease;
+  text-align: center;
+}
+
 .button-lg:hover,
 .button-md:hover,
-.button-sm:hover {
+.button-sm:hover,
+.button-xsm:hover {
   color: rgb(var(--background));
   background-color: rgba(var(--primary-hover), 0.8);
 }
@@ -130,11 +147,34 @@
   padding: 16px;
   outline: none;
   transition: all 0.3s ease;
+  box-shadow: 0 0 5px rgba(var(--foreground), 0.5) inset;
 }
 
 .input-lg:focus,
 .input-lg:hover {
     border: 1px solid rgba(var(--foreground), 0.9);
+}
+
+/* Selects */
+.select-sm {
+  appearance: none; /* For older browsers */
+  -webkit-appearance: none; /* For Webkit browsers */
+  -moz-appearance: none; /* For Firefox */
+  appearance: base-select; /* Modern approach for custom styling */
+  /* Other basic styles */
+  width: 50%;
+  text-align: center;
+  border: 1px solid rgba(var(--foreground), 0.3);
+  padding: 8px;
+  font-size: 16px;
+  background-color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.select-sm:focus, .select-sm:hover {
+  border: 1px solid rgba(var(--foreground), 0.9);
 }
 
 /* Containers */
@@ -166,6 +206,10 @@
   }
   .title-card {
     font-size: 16px;
+  }
+  .title-container-change {
+    align-items: center;
+    justify-content: center;
   }
   .sub-title {
     font-size: 12px;

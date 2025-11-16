@@ -3,6 +3,8 @@
 }
 
 .control-buttons {
+    border-top: 1px solid rgba(var(--foreground));
+    padding-top: 1rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -21,104 +23,80 @@
 
 .role-admin-page .content {
     position: relative;
-    overflow: hidden;
 }
 
 .request-container {
     position: relative;
     display: flex;
     flex-direction: column;
-    width: 100%;
+    align-items: center;
+    width: 90%;
 }
 
 .request-container .requested-users {
+    width: 100%;
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
-    overflow: auto;
     padding: 1rem;
+    gap: 1rem;
 }
 
 .request-container .requested-users .requested-user {
     display: flex;
-    width: 25%;
+    width: 50%;
     flex-direction: column;
-    box-shadow: 0px 0px 10px rgba(24,24,24,0.3);
+    align-items: center;
+    box-shadow: 0px 0px 10px rgba(var(--foreground), 0.5) inset;
     padding: 1rem;
     border-radius: 20px;
+    position: relative;
 }
 
 .request-container .requested-users .requested-user .req-user-buttons {
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: space-evenly;
-}
-
-.request-container .requested-users .requested-user .req-user-buttons .req-accept {
-    background: lightgreen;
-    border: 1px solid rgba(24,24,24,0.3);
-    border-radius: 10px;
-}
-
-.request-container .requested-users .requested-user .req-user-buttons .req-decline {
-    background: red;
-    color: white;
-    border: 1px solid rgba(24,24,24,0.3);
-    border-radius: 10px;
+    gap: 1rem;
 }
 
 .creation {
     position: relative;
     display: flex;
     align-items: center;
+    justify-content: center;
     flex-direction: column;
     width: 100%;
 }
 
 .creation .creation-form {
+    position: relative;
+    width: 90%;
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 1rem;
-}
-
-.creation .creation-form select {
-    text-align: center;
-    border-radius: 5px;
-}
-
-.creation .creation-form input {
-    text-align: center;
-    border-radius: 5px;
 }
 
 #pts::-webkit-inner-spin-button {
     -webkit-appearance: none;
-     margin: 0;
-}
-
-.creation .creation-form .submit {
-    background: lightgreen;
-    border: 1px solid rgba(24,24,24,0.3);
-    border-radius: 5px;
-    transition: all 0.2s;
-}
-
-.creation .creation-form .submit:hover {
-    background: green;
+    margin: 0;
 }
 
 .selected-members {
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
     gap: 1rem;
-}
-
-.selected-members h4 {
-    margin-bottom: 0;
+    width: 50%;
+    position: relative;
 }
 
 .selected-members .selected-list {
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -128,76 +106,55 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    width: 100%;
 }
 
 .submitted-container {
     position: relative;
     width: 100%;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
 }
 
 .submitted-tasks {
     display: flex;
-    width: 100%;
+    width: 90%;
     flex-direction: column;
-    overflow: auto;
     align-items: center;
     justify-content: center;
     padding: 1rem 0;
+    gap: 1rem;
+}
+
+.submitted-task h4 {
+    padding-top: 8px;
+    margin: 0;
+    border-top: 1px solid rgba(var(--foreground));
 }
 
 .submitted-tasks .submitted-task {
+    width: 400px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0px 0px 10px rgba(24,24,24,0.3);
+    box-shadow: 0px 0px 10px rgba(var(--foreground),0.5) inset;
     padding: 2rem;
     border-radius: 20px;
-}
-
-.submitted-tasks .submitted-task h1, .submitted-tasks .submitted-task h4, .submitted-tasks .submitted-task p {
-    margin: 0;
-}
-
-.submitted-tasks .submitted-task .task-date {
-    font-size: 12px;
-    margin: 0;
 }
 
 .submitted-tasks .submitted-task .task-buttons {
     display: flex;
     align-items: center;
     justify-content: space-evenly;
-}
-
-.submitted-tasks .submitted-task .task-buttons button {
-    padding: 10px 20px;
-}
-
-.submitted-tasks .submitted-task .task-buttons .task-approve {
-    background: lightgreen;
-    border: 1px solid rgba(24,24,24,0.3);
-    border-radius: 10px;
-    transition: all 0.2s;
-}
-
-.submitted-tasks .submitted-task .task-buttons .task-disapprove {
-    background: red;
-    color: white;
-    border: 1px solid rgba(24,24,24,0.3);
-    border-radius: 10px;
-    transition: all 0.2s;
-}
-
-.submitted-tasks .submitted-task .task-buttons .task-approve:hover {
-    background: green;
-}
-
-.submitted-tasks .submitted-task .task-buttons .task-disapprove:hover {
-    background: rgb(50, 0, 0);
+    margin-top: 1rem;
 }
 
 .role-config {
+    width: 90%;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
     gap: 1rem;
     position: relative;
 }
@@ -205,75 +162,22 @@
 .role-config .set-role-name {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    align-items: center;
+    gap: 8px;
 }
 
-.role-config .set-role-name input {
-    border-radius: 10px;
-    text-align: center;
-}
-
-.role-config .set-role-name button {
-    background: lightgreen;
-    border: rgba(24,24,24,0.3);
-    border-radius: 10px;
-    transition: all 0.2s;
-    padding: 5px;
-}
-
-.role-config .set-role-name button:hover {
-    background-color: green;
-    cursor: pointer;
-}
-
-.role-config .reset-role {
-    background: orangered;
-    color: white;
-    border: rgba(24,24,24,0.3);
-    border-radius: 10px;
-    transition: all 0.2s;
-    padding: 5px;
-}
-
-.role-config .reset-role:hover {
-    background-color: rgb(50,0,0);
-    cursor: pointer;
-}
-
-.role-config .del-role {
-    background: red;
-    color: white;
-    border: rgba(24,24,24,0.3);
-    border-radius: 10px;
-    transition: all 0.2s;
-    padding: 5px;
-}
-
-.role-config .del-role:hover {
-    background-color: rgb(50,0,0);
-    cursor: pointer;
+.rewards-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 90%;
 }
 
 .set-reward-container { 
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
     gap: 1rem;
-}
-
-.set-reward-container input {
-    text-align: center;
-    border-radius: 5px;
-    padding: 5px;
-}
-
-.set-reward-container button {
-    background: lightgreen;
-    border: 1px solid rgba(24,24,24,0.3);
-    border-radius: 5px;
-    transition: all 0.2s;
-}
-
-.set-reward-container button:hover {
-    background: green;
-    cursor: pointer;
 }

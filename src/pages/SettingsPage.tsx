@@ -142,7 +142,7 @@ function Settings() {
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
         >
-            <div className="title-container">
+            <div className="title-container title-container-change">
                 <h1 className="title-main">Account Settings</h1>
                 <p className="sub-title"><strong>Account ID</strong>: {user.uid}</p>
             </div>

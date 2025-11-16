@@ -23,7 +23,7 @@ export default function LoginCard({email, setEmail, password, setPassword, phras
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.1 }}
         >
-            <div className="title-container">
+            <div className="title-container title-container-stay">
                 <h2 className="title-main">Sign in to your account</h2>
                 <p className="sub-title">Welcome back User</p>
             </div>
