@@ -23,7 +23,7 @@
   --button-border: 150,150,150;
 }
 
-/* For dark mode support -- wip
+/* For dark mode support
 [data-theme="dark"] {
   --background: 10,10,10;
   --foreground: 255,255,255;

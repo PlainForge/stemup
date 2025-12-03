@@ -1,17 +1,13 @@
-import { auth, db, storage } from "../firebase";
 import { useState } from "react";
-import { arrayUnion, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { GoogleAuthProvider } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import RegisterCard from "../components/RegisterCard";
 import { motion } from "motion/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGoogle } from "@fortawesome/free-brands-svg-icons";
 import "./styles/registerPage.css"
-import Nav from "../components/Nav";
-
-const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
+import { firebaseAuthService } from "../lib/firebaseService";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export default function RegisterPage() {
     const [email, setEmail] = useState("");
@@ -20,35 +16,18 @@ export default function RegisterPage() {
     const [phrase, setPhrase] = useState("");
     const [signInEmail, setSignInEmail] = useState<boolean>(false);
     const provider = new GoogleAuthProvider();
+    const navigate = useNavigate?.();
+    const location = useLocation();
+    const isLogin = location.pathname === '/login';
 
     const registerWithEmail = async () => {
         try {
-            if (!email || !password || !name) {
-                return;
-            }
-
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const current = userCredential.user;
-
-            await setDoc(doc(db, "users", current.uid), {
-                email: current.email,
-                name: name,
-                roles: [{id: 'r3wUbRSCX7cxwBYhtAdg', name: 'global', points: 0, taskCompleted: 0}],
-                createdAt: new Date(),
-                points: 0,
-                taskCompleted: 0,
-                photoURL: DEFAULT_AVATAR,
-                currentRole: ""
-            });
-
-            await updateDoc(doc(db, "roles", 'r3wUbRSCX7cxwBYhtAdg'), {
-                members: arrayUnion(current.uid)
-            })
-
-            setPhrase("");
+            await firebaseAuthService.registerWithEmail(email, password, name);
+            navigate("/");
             setEmail("");
             setPassword("");
             setName("");
+            setPhrase("");
         } catch (err) {
             if (err instanceof FirebaseError && err.code === "auth/email-already-in-use") {
                 setPhrase("This email is already registered. Please login instead.");
@@ -61,59 +40,8 @@ export default function RegisterPage() {
     // Google Login/Register
     const handleGoogleLogin = async () => {
         try {
-            const result = await signInWithPopup(auth, provider);
-            const current = result.user
-
-            const userRef = doc(db, "users", current.uid);
-            const snap = await getDoc(userRef);
-
-            let photoURL = DEFAULT_AVATAR;
-
-            if (!snap.exists()) {
-                if (current.photoURL) {
-                    const response = await fetch(current.photoURL);
-                    const blob = await response.blob();
-                    const storageRef = ref(storage, `profilePictures/${current.uid}`);
-                    await uploadBytes(storageRef, blob);
-                    photoURL = await getDownloadURL(storageRef);
-                }
-
-                await setDoc(doc(db, "users",  current.uid), {
-                    email: current.email,
-                    name: current.displayName,
-                    roles: [{id: 'r3wUbRSCX7cxwBYhtAdg', name: 'global', points: 0, taskCompleted: 0}],
-                    createdAt: new Date(),
-                    points: 0,
-                    taskCompleted: 0,
-                    photoURL: photoURL,
-                    currentRole: ""
-                });
-
-                await updateDoc(doc(db, "roles", 'r3wUbRSCX7cxwBYhtAdg'), {
-                    members: arrayUnion(current.uid)
-                })
-            } else {
-                const existingData = snap.data();
-
-                let newPhotoURL = existingData.photoURL || DEFAULT_AVATAR;
-                if (current.photoURL && current.photoURL !== existingData.photoURL) {
-                    const response = await fetch(current.photoURL);
-                    const blob = await response.blob();
-                    const storageRef = ref(storage, `profilePictures/${current.uid}`);
-                    await uploadBytes(storageRef, blob);
-                    newPhotoURL = await getDownloadURL(storageRef);
-                }
-
-                await setDoc(
-                    userRef,
-                    { 
-                        name: current.displayName || existingData.name,
-                        photoURL: newPhotoURL
-                    },
-                    { merge: true }
-                );
-            }
-
+            await firebaseAuthService.signInWithGoogle(provider);
+            navigate("/");
             setPhrase("");
             setEmail("");
             setPassword("");
@@ -125,11 +53,33 @@ export default function RegisterPage() {
             }
         }
     };
+
+    const handleSwitch = () => {
+        navigate(isLogin ? "/register" : "/login");
+    };
     
     return (
         <div className="register-page">
             <div className="left-side">
-                <Nav />
+                <div className="top">
+                    <div className="title-container">
+                        <h1 className="title-main text-center">StemUp</h1>
+                        <p className="sub-title">Track all your tasks and gain points and rewards from your role</p>
+                    </div>
+                </div>
+                <div className="bottom">
+                    <h1 className="sub-title"><span className="umb-title">UMass Boston</span> x <span className="uma-title">UMass Amherst</span> Gamification Platform</h1>
+                    <div className="how-to-container">
+                        <h1 className="title-card text-center">HOW TO PLAY STEMUP</h1>
+                        <ul>
+                            <li>Regularly check and complete your tasks</li>
+                            <li>Track your progress</li>
+                            <li><span>Level UP</span> on the leaderboard</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div className="right-side">
                 {signInEmail?
                     <RegisterCard 
                         email={email} 
@@ -163,32 +113,17 @@ export default function RegisterPage() {
                         >
                             Continue with email
                         </  button>
+                        <motion.a
+                            onClick={handleSwitch}
+                            onTap={handleSwitch}
+                            className="link-btn"
+                            id="reg-buttons" 
+                            whileHover={{ cursor: 'pointer' }}
+                        >
+                            Already have an account? <span>Sign In</span>
+                        </motion.a>
                     </motion.div>
                 }
-            </div>
-            <div className="right-side">
-                <div className="top">
-
-                </div>
-                
-                <div className="middle">
-                    <h2 className="title-main middle-title">Track all your tasks and gain points and rewards from your roles</h2>
-                </div>
-                <div className="bottom">
-                    <h2 className="bottom-title">Used by these Universities</h2>
-                    <div className="used-by-logos">
-                        <img 
-                            src="https://firebasestorage.googleapis.com/v0/b/stempower-fellowship.firebasestorage.app/o/logo%2Fumb-logo.png?alt=media&token=bed49a81-4745-4e28-b19f-6c9f2e9bdcfa" 
-                            alt="UMass Boston campus" 
-                            className="logo"
-                        />
-                        <img 
-                            src="https://firebasestorage.googleapis.com/v0/b/stempower-fellowship.firebasestorage.app/o/logo%2Fuma-logo.png?alt=media&token=822f15ac-dfdc-4b70-ba66-bd757fc3f1f6" 
-                            alt="UMass Boston campus" 
-                            className="logo"
-                        />
-                    </div>
-                </div>
             </div>
         </div>
     )

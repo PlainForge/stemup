@@ -1,19 +1,18 @@
-import { useEffect, useState } from "react";
-import { db } from "../firebase";
+import { useContext, useEffect, useState } from "react";
+import { db } from "../lib/firebase";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { type Task, type Role, type UserData, type UserRoleData } from "../myDataTypes";
 import './styles/rolePage.css'
 import { motion } from "motion/react";
 import RoleAdminPage from "../components/RoleAdmin";
 import DoneButton from "../components/TaskDoneButton";
-import useUser from "../hooks/UserHook";
-import useAdmins from "../hooks/Admin";
 import { useParams } from "react-router-dom";
 import Loading from "./Loading";
+import { MainContext } from "../context/MainContext";
 
-function RolePage() {
+export default function RolePage() {
+    const context = useContext(MainContext);
     const { id: roleId } = useParams<{ id: string }>();
-    const [user] = useUser()
     const [members, setMembers] = useState<string[]>([]);
     const [membersWithData, setMembersWithData] = useState<UserData[]>([]);
     const [leaders, setLeaders] = useState<UserData[]>([]);
@@ -23,9 +22,12 @@ function RolePage() {
     const [rewards, setRewards] = useState<string[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
     const [isCurrentRole, setIsCurrentRole] = useState(false);
-    const admins = useAdmins();
 
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
+
+    const user = context?.user ?? null;
+    const loading = context?.loading ?? true;
+    const admins = context?.admins ?? [];
 
     useEffect(() => {
         if (!roleId) return;
@@ -48,36 +50,36 @@ function RolePage() {
     // Get Members
     useEffect(() => {
         if (members.length === 0 || !roleId) {
-        setMembersWithData([]);
-        return;
+            setMembersWithData([]);
+            return;
         }
 
         const unsubs = members.map((uid) => {
-        const userRef = doc(db, "users", uid);
-        return onSnapshot(userRef, (snap) => {
-            if (snap.exists()) {
-            const data = snap.data();
-            setMembersWithData((prev) => {
-                const updated = prev.filter((m) => m.id !== uid);
-                const roleData = Array.isArray(data.roles)
-                ? data.roles.find((r: UserRoleData) => r.id === roleId) || {}
-                : {};
-                return [
-                ...updated,
-                {
-                    id: uid,
-                    uid,
-                    name: data.name || "Unknown User",
-                    roles: data.roles || [],
-                    points: roleData.points || 0,
-                    taskCompleted: roleData.taskCompleted || 0,
-                    photoURL: data.photoURL || "",
-                    currentRole: data.currentRole || "",
-                },
-                ];
+            const userRef = doc(db, "users", uid);
+            return onSnapshot(userRef, (snap) => {
+                if (snap.exists()) {
+                const data = snap.data();
+                setMembersWithData((prev) => {
+                    const updated = prev.filter((m) => m.id !== uid);
+                    const roleData = Array.isArray(data.roles)
+                    ? data.roles.find((r: UserRoleData) => r.id === roleId) || {}
+                    : {};
+                    return [
+                    ...updated,
+                    {
+                        id: uid,
+                        uid,
+                        name: data.name || "Unknown User",
+                        roles: data.roles || [],
+                        points: roleData.points || 0,
+                        taskCompleted: roleData.taskCompleted || 0,
+                        photoURL: data.photoURL || "",
+                        currentRole: data.currentRole || "",
+                    },
+                    ];
+                });
+                }
             });
-            }
-        });
         });
 
         return () => unsubs.forEach((unsub) => unsub());
@@ -94,43 +96,6 @@ function RolePage() {
         });
         return () => unsub();
     }, [user, roleId]);
-
-    useEffect(() => {
-        if (members.length === 0 || !roleId) {
-        setMembersWithData([]);
-        return;
-        }
-
-        const unsubs = members.map((uid) => {
-        const userRef = doc(db, "users", uid);
-        return onSnapshot(userRef, (snap) => {
-            if (snap.exists()) {
-            const data = snap.data();
-            setMembersWithData((prev) => {
-                const updated = prev.filter((m) => m.id !== uid);
-                const roleData = Array.isArray(data.roles)
-                ? data.roles.find((r: UserRoleData) => r.id === roleId) || {}
-                : {};
-                return [
-                ...updated,
-                {
-                    id: uid,
-                    uid,
-                    name: data.name || "Unknown User",
-                    roles: data.roles || [],
-                    points: roleData.points || 0,
-                    taskCompleted: roleData.taskCompleted || 0,
-                    photoURL: data.photoURL || "",
-                    currentRole: data.currentRole || "",
-                },
-                ];
-            });
-            }
-        });
-        });
-
-        return () => unsubs.forEach((unsub) => unsub());
-    }, [members, roleId]);
 
     // Get role rewards
     useEffect(() => {
@@ -165,32 +130,32 @@ function RolePage() {
     // Get User Tasks
     useEffect(() => {
         if (!roleId || !user) {
-        setTasksLoading(false);
-        return;
+            setTasksLoading(false);
+            return;
         }
 
         setTasksLoading(true);
         const q = query(
-        collection(db, "tasks"),
-        where("roleId", "==", roleId),
-        where("assignedTo", "==", user.uid)
+            collection(db, "tasks"),
+            where("roleId", "==", roleId),
+            where("assignedTo", "==", user.uid)
         );
 
         const unsub = onSnapshot(
-        q,
-        (snap) => {
-            setUserTasks(
-            snap.docs.map((doc) => ({
-                id: doc.id,
-                ...(doc.data() as Omit<Task, "id">),
-            }))
-            );
-            setTasksLoading(false);
-        },
-        (err) => {
-            console.error("Error fetching tasks:", err);
-            setTasksLoading(false);
-        }
+            q,
+            (snap) => {
+                setUserTasks(
+                snap.docs.map((doc) => ({
+                    id: doc.id,
+                    ...(doc.data() as Omit<Task, "id">),
+                }))
+                );
+                setTasksLoading(false);
+            },
+            (err) => {
+                console.error("Error fetching tasks:", err);
+                setTasksLoading(false);
+            }
         );
 
         return () => unsub();
@@ -203,7 +168,7 @@ function RolePage() {
         })
     }
 
-    if (!user || !role) return <Loading />
+    if (!user || !role || loading) return <Loading />
 
     const taskCount = userTasks.filter(task => !task.complete).length;
     let i = 0;
@@ -250,18 +215,20 @@ function RolePage() {
                 >
                     Rewards
                 </motion.button>
-                <div className="tasks-container">
-                    <motion.button 
-                        onClick={() => setPageState("tasks")}
-                        onTap={() => setPageState("tasks")}
-                        whileHover={{y: -2, cursor: 'pointer'}}
-                        style={pageState === "tasks" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
-                    >
-                        Tasks
-                    </motion.button>
-                    {taskCount > 0 ? <p>{taskCount}</p> : ""}
-                </div>
-                { admins.includes(user.uid) ?
+                {!admins.includes(user.uid) ? 
+                    <div className="tasks-container">
+                        <motion.button 
+                            onClick={() => setPageState("tasks")}
+                            onTap={() => setPageState("tasks")}
+                            whileHover={{y: -2, cursor: 'pointer'}}
+                            style={pageState === "tasks" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
+                        >
+                            Tasks
+                        </motion.button>
+                        {taskCount > 0 ? <p>{taskCount}</p> : ""}
+                    </div>
+                : null}
+                {admins.includes(user.uid) ?
                         <motion.button 
                         onClick={() => setPageState("admin")}
                         onTap={() => setPageState("admin")}
@@ -270,7 +237,7 @@ function RolePage() {
                     >
                         Admin
                     </motion.button>
-                : null }
+                : null}
                 {isCurrentRole ? <motion.p whileHover={{cursor: "default"}}><strong>Your Role</strong></motion.p> : 
                     <motion.button 
                         onClick={() => setCurrentRole(role.id)}
@@ -292,7 +259,7 @@ function RolePage() {
 
                         <div className="board">
                             {leaders ? leaders.map((u) => {
-                                if (admins.includes(u.id)) return
+                                if (admins.includes(u.id)) return;
                                 i++
                                 return (
                                     <div className={i < 4 ? "user-board top-three" : "user-board" } key={u.id}>
@@ -379,5 +346,3 @@ function RolePage() {
         </div>
     )
 }
-
-export default RolePage;

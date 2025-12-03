@@ -1,125 +1,59 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useContext, useEffect, useRef, useState, type FormEvent } from "react";
 import "./styles/settingsPage.css"
-import { collection, deleteDoc, doc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
-import { deleteUser } from "firebase/auth";
-import { db, storage } from "../firebase";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 import { motion } from "motion/react";
-import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import useUser from "../hooks/UserHook";
+import { firebaseAuthService } from "../lib/firebaseService";
+import { MainContext } from "../context/MainContext";
+import Loading from "./Loading";
 
-const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
 
-function Settings() {
-    const [user, userData, loading] = useUser();
-    const [name, setName] = useState("")
+export default function Settings() {
+    const context = useContext(MainContext);
+    const [roleName, setRoleName] = useState("");
     const [file, setFile] = useState<File | null>(null);
-    const [currentRoleName, setCurrentRoleName] = useState("None")
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-    useEffect(() => {
-        if (!user || !userData) return;
+    const user = context?.user ?? null;
+    const userData = context?.userData ?? null;
+    const loading = context?.loading ?? true;
+    const [name, setName] = useState<string | undefined>(userData? userData.name : undefined);
 
-        setName(userData.name)
-        userData.roles.map((role) => {
-            if (role.id === userData.currentRole) return setCurrentRoleName(role.name)
-        })
-    }, [user, userData])
+    useEffect(() => {
+        const fetchRoleName = async () => {
+            if (!userData?.currentRole) {
+                setRoleName("");
+                return;
+            }
+
+            const roleRef = doc(db, "roles", userData.currentRole);
+            const roleSnap = await getDoc(roleRef);
+
+            setRoleName(roleSnap.exists() ? roleSnap.data().name : "");
+        };
+
+        fetchRoleName();
+    }, [userData?.currentRole]);
 
     if (!user || !userData || loading) {
-        return <h1>Loading...</h1>;
+        return <Loading />
     }
 
     const handleDeleteAccount = async () => {
         const confirmDelete = window.confirm("Are you sure you want to delete your account? This cannot be undone.");
 
         if (!confirmDelete) return;
-
-        try {
-            const batchUpdates: Promise<void>[] = [];
-
-            // Remove user from all roles
-            const rolesSnap = await getDocs(collection(db, "roles"));
-            rolesSnap.forEach((roleDoc) => {
-                const data = roleDoc.data();
-                const members: string[] = data.members || [];
-
-                if (members.includes(user.uid)) {
-                    const updatedMembers = members.filter((m) => m !== user.uid);
-                    batchUpdates.push(
-                    updateDoc(doc(db, "roles", roleDoc.id), { members: updatedMembers })
-                    );
-                }
-            });
-
-            const q = query(collection(db, "tasks"), where("assignedTo", "==", user.uid));
-            const tasksSnap = await getDocs(q);
-            tasksSnap.forEach((taskDoc) => {
-                batchUpdates.push(deleteDoc(doc(db, "tasks", taskDoc.id)));
-            });
-
-            if (userData?.photoURL && userData.photoURL !== DEFAULT_AVATAR) {
-                try {
-                    const oldRef = ref(storage, `profilePictures/${user.uid}`);
-                    await deleteObject(oldRef);
-                } catch (err) {
-                    console.warn("No profile picture to delete or already removed:", err);
-                }
-            }
-
-            await deleteDoc(doc(db, "users", user.uid));
-
-            await Promise.all(batchUpdates);
-
-            await deleteUser(user);
-
-            console.log("User account and related data deleted.");
-        } catch (err) {
-            console.error("Error deleting account:", err);
-        }
+        await firebaseAuthService.deleteAccount(user, userData);
     };
 
     const changeAccount = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
-        // Keep the same photo unless a new one is uploaded
-        let photoURL = userData.photoURL;
-
-        try {
-            // 1. If a new file was selected, replace the old file
-            if (file) {
-                // If user had a custom pic, delete it
-                if (userData.photoURL && userData.photoURL !== DEFAULT_AVATAR) {
-                    try {
-                        const oldRef = ref(storage, `profilePictures/${user.uid}`);
-                        await deleteObject(oldRef);
-                    } catch (err) {
-                        console.warn("Couldn't delete old picture:", err);
-                    }
-                }
-
-                // Upload the new file
-                const storageRef = ref(storage, `profilePictures/${user.uid}`);
-                await uploadBytes(storageRef, file);
-                photoURL = await getDownloadURL(storageRef);
-            }
-
-            // 2. Update Firestore (only changing name + photoURL if needed)
-            await setDoc(
-                doc(db, "users", user.uid),
-                {
-                    name: name,
-                    photoURL: photoURL,
-                },
-                { merge: true }
-            );
-
-            // Reset file input
-            setFile(null);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = "";
-            }
-        } catch (err) {
-            console.log(err);
+        await firebaseAuthService.setAccountInformation(name, file, user, userData);
+        // Reset file input
+        setFile(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
         }
     };
 
@@ -190,7 +124,7 @@ function Settings() {
                         <div className="other-options">
                             <div className="current-role">
                                 <button onClick={handleCurrentRole} className="button-sm button-error">Reset current role</button>
-                                <h3 className="title-card">Current Role: {currentRoleName}</h3>
+                                <h3 className="title-card">Current Role: {roleName}</h3>
                             </div>
                             <button onClick={handleDeleteAccount} className="button-sm button-error">Delete my account</button>
                         </div>
@@ -200,5 +134,3 @@ function Settings() {
         </motion.div>
     )
 }
-
-export default Settings;

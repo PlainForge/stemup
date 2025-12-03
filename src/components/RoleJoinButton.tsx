@@ -1,21 +1,26 @@
-import { useEffect, useState } from "react";
-import { db } from "../firebase";
+import { useContext, useEffect, useState } from "react";
+import { db } from "../lib/firebase";
 import { arrayUnion, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { motion } from "motion/react";
-import useUser from "../hooks/UserHook";
 import { Link } from "react-router-dom";
+import { MainContext } from "../context/MainContext";
+import Loading from "../pages/Loading";
 
 interface JoinProps {
     role: {name: string, id: string}
 }
 
-function JoinButton({ role } : JoinProps) {
-    const [user, userData, loading] = useUser();
+export default function JoinButton({ role } : JoinProps) {
+    const context = useContext(MainContext);
     const [hasRequested, setHasRequested] = useState(false);
     const [isMember, setIsMember] = useState(false);
 
+    const user = context?.user ?? null;
+    const userData = context?.userData ?? null;
+    const loading = context?.loading ?? true;
+
     useEffect(() => {
-        if (!user || !userData) return;
+        if (!user) return;
 
         const roleRef = doc(db, "roles", role.id);
 
@@ -30,7 +35,11 @@ function JoinButton({ role } : JoinProps) {
             setIsMember(isInMembers);
         });
         return () => unsub();
-    }, [role, user, userData]);
+    }, [role, user]);
+
+    if (!user || !userData || loading) {
+        return <Loading />
+    }
 
     const requestRole = async (roleId: string) => {
         if (!user) return;
@@ -41,9 +50,7 @@ function JoinButton({ role } : JoinProps) {
         })
     }
 
-    if (!user || !userData || loading) {
-        return <h1>Loading...</h1>
-    }
+    
 
     if (isMember) {
         return (
@@ -69,5 +76,3 @@ function JoinButton({ role } : JoinProps) {
         >Request to join</motion.button>
     )
 }
-
-export default JoinButton

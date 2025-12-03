@@ -1,25 +1,23 @@
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
 import { motion } from "motion/react";
-import { useEffect, useState, type FormEvent } from "react";
-import { db } from "../firebase";
+import { useContext, useEffect, useState, type FormEvent } from "react";
+import { db } from "../lib/firebase";
 import { type Role, type SubmittedTask, type UserData, type UserRoleData } from "../myDataTypes";
 import "./styles/rolesAdmin.css"
-import useUser from "../hooks/UserHook";
-import useAdmins from "../hooks/Admin";
+import { MainContext } from "../context/MainContext";
 
 interface prop {
     role: {name: string, id: string}
     membersWithData: UserData[]
 }
 
-function RoleAdminPage({ role, membersWithData } : prop) {
-    const [user, userData, loading] = useUser()
+export default function RoleAdminPage({ role, membersWithData } : prop) {
+    const context = useContext(MainContext);
     const [page, setPage] = useState("submitted");
     const [requested, setRequested] = useState<string[]>([]);
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
     const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
     const [createTaskFor, setCreateSetTaskFor] = useState<string[]>([]);
-    const admins = useAdmins();
 
     // Get Members to get requested user's data
     useEffect(() => {
@@ -74,7 +72,10 @@ function RoleAdminPage({ role, membersWithData } : prop) {
             )
         })
         return () => unsub();
-    }, [role])
+    }, [role]);
+
+    if (!context) return null;
+    const {user, userData, loading, admins} = context
 
     // Sending a task to a user in the current role
     const sendTask = async (e: FormEvent<HTMLFormElement>) => {
@@ -637,5 +638,3 @@ function RoleAdminPage({ role, membersWithData } : prop) {
         </motion.div>
     )
 }
-
-export default RoleAdminPage;

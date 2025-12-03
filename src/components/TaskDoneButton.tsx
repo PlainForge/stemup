@@ -1,20 +1,23 @@
 import { motion } from "motion/react";
 import type { Task } from "../myDataTypes";
-import { useEffect, useState } from "react";
-import { auth, db } from "../firebase";
+import { useContext, useEffect, useState } from "react";
+import { db } from "../lib/firebase";
 import { collection, doc, onSnapshot, query, setDoc, Timestamp, where } from "firebase/firestore";
 import "./styles/doneButton.css"
+import { MainContext } from "../context/MainContext";
 
 interface DoneButtonProps {
     task: Task
 }
 
-function DoneButton({ task } : DoneButtonProps) {
+export default function DoneButton({ task } : DoneButtonProps) {
+    const context = useContext(MainContext);
     const [tasks, setTasks] = useState<string[]>([]);
     const [submitting, setSubmitting] = useState(false);
 
+    const user = context?.user ?? null;
+
     useEffect(() => {
-        const user = auth.currentUser;
         if (!user) return;
 
         const q = query(
@@ -27,7 +30,7 @@ function DoneButton({ task } : DoneButtonProps) {
         });
 
         return () => unsub();
-    }, []);
+    }, [user]);
 
     const submitTask = async () => {
         setSubmitting(true);
@@ -66,5 +69,3 @@ function DoneButton({ task } : DoneButtonProps) {
         );
     }
 }
-
-export default DoneButton;

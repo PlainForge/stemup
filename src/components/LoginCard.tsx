@@ -1,7 +1,8 @@
 import { motion } from "motion/react";
-import { auth } from "../firebase";
+import { auth } from "../lib/firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGoogle } from "@fortawesome/free-brands-svg-icons";
+import { useLocation, useNavigate } from "react-router-dom";
 
 interface LoginCardProps {
     email: string;
@@ -14,7 +15,16 @@ interface LoginCardProps {
     loginWithEmail: () => Promise<void>;
 }
 
+
 export default function LoginCard({email, setEmail, password, setPassword, phrase, handleGoogleLogin, loginWithEmail}: LoginCardProps) {
+    const navigate = useNavigate?.();
+    const location = useLocation();
+    const isLogin = location.pathname === '/login';
+    
+    const handleSwitch = () => {
+        navigate(isLogin ? "/register" : "/login");
+    };
+    
     return (
         <motion.div 
             className="login-container" 
@@ -24,18 +34,16 @@ export default function LoginCard({email, setEmail, password, setPassword, phras
             transition={{ duration: 0.1 }}
         >
             <div className="title-container title-container-stay">
-                <h2 className="title-main">Sign in to your account</h2>
-                <p className="sub-title">Welcome back User</p>
+                <h2 className="title-main">Sign In</h2>
+                <motion.a
+                    onClick={handleSwitch}
+                    onTap={handleSwitch}
+                    className="link-btn" 
+                    whileHover={{ cursor: 'pointer' }}
+                >
+                    Don't have an account? <span>Sign Up</span>
+                </motion.a>
             </div>
-
-            <button 
-                onClick={handleGoogleLogin} 
-                className="button-md"
-            >
-                <FontAwesomeIcon icon={faGoogle}/> Sign in with Google
-            </button>
-
-            <p className="or">or</p>
 
             <form className="form-container" action={loginWithEmail} onSubmit={async (e) => {
                 e.preventDefault();
@@ -75,6 +83,15 @@ export default function LoginCard({email, setEmail, password, setPassword, phras
                     Sign In
                 </motion.button>
             </form>
+
+            <p className="or">or sign in with</p>
+
+            <button 
+                onClick={handleGoogleLogin} 
+                className="button-md"
+            >
+                <FontAwesomeIcon icon={faGoogle}/> Sign in with Google
+            </button>
         </motion.div>
     )
 }

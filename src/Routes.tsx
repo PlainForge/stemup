@@ -7,6 +7,7 @@ import Settings from "./pages/SettingsPage";
 import RegisterPage from "./pages/RegisterPage";
 import Home from "./pages/Home";
 import Loading from "./pages/Loading";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 export const router = createBrowserRouter([
   {
@@ -19,7 +20,8 @@ export const router = createBrowserRouter([
       { path: "register", element: <RegisterPage /> },
       { path: "settings", element: <Settings /> },  
       { path: "roles", element: <RolesSelectorPage /> },
-      { path: "roles/:id", element: <RolePage /> },
+      { path: "roles/:id", element: <ProtectedRoute />, children: [{ index: true, element: <RolePage /> }], },
+
     ],
   },
 ]);

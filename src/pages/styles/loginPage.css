@@ -5,7 +5,9 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     color: rgb(var(--foreground));
+    background: linear-gradient(to right, #92AEFF, #6CFFFF);
 }
 
 /* Login Card for login page */
@@ -28,6 +30,7 @@
     justify-content: center;
     gap: 1rem;
     width: 100%;
+    margin-top: 1em;
 }
 
 @media (max-width: 1000px) {

@@ -1,20 +1,21 @@
 import { addDoc, arrayUnion, collection, doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import './styles/rolesSelectorPage.css'
-import { auth, db } from '../firebase';
-import { useEffect, useState } from 'react';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import { db } from '../lib/firebase';
+import { useContext, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { type Role } from '../myDataTypes';
 import JoinButton from '../components/RoleJoinButton';
-import useAdmins from '../hooks/Admin';
 import Loading from './Loading';
+import { MainContext } from '../context/MainContext';
 
 
-function RolesSelectorPage() {
+export default function RolesSelectorPage() {
+    const context = useContext(MainContext);
     const [roleName, setRoleName] = useState("");
-    const [user, setUser] = useState<User | null>(null);
     const [roles, setRoles] = useState<Role[]>([]);
-    const admins = useAdmins();
+
+    const user = context?.user ?? null;
+    const admins = context?.admins ?? [];
 
     useEffect(() => {
         const rolesCol = collection(db, "roles");
@@ -36,13 +37,7 @@ function RolesSelectorPage() {
         return () => unsub();
     }, []);
 
-    useEffect(() => {
-        const unsub = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
-        });
-
-        return () => unsub();
-    }, []);
+    if (!user) return <Loading />
 
     const createRole = async () => {
         try {
@@ -71,7 +66,6 @@ function RolesSelectorPage() {
         }
     }
 
-    if (!user) return <Loading />
 
     return (
         <motion.div className='roles-container'
@@ -118,5 +112,3 @@ function RolesSelectorPage() {
         </motion.div>
     )
 }
-
-export default RolesSelectorPage;

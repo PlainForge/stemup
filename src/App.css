@@ -58,6 +58,11 @@
   width: 312px;
 }
 
+/* Texts */
+.text-center {
+  text-align: center;
+}
+
 /* Buttons */
 .button-lg {
   width: 512px;

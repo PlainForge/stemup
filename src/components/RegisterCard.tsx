@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { auth } from "../firebase";
+import { auth } from "../lib/firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 
@@ -80,6 +80,7 @@ export default function RegisterCard({email, setEmail, password, setPassword, na
                 onClick={() => setSignInEmail(false)}
                 onTap={() => setSignInEmail(false)}
                 className="back-button"
+                id="reg-buttons"
                 whileHover={{y: -2, cursor: 'pointer'}}
             >
                 <FontAwesomeIcon icon={faArrowLeft}/> Go Back

@@ -1,10 +1,14 @@
 import { Navigate, Outlet } from "react-router-dom";
-import useUser from "../hooks/UserHook";
+import { useContext } from "react";
+import { MainContext } from "../context/MainContext";
+import Loading from "../pages/Loading";
 
 export default function ProtectedRoute() {
-  const [user, , loading] = useUser();
+  const context = useContext(MainContext);
+  if (!context) return null;
+  const {user, loading} = context;
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <Loading />;
 
   return user ? <Outlet /> : <Navigate to="/login" replace />;
 }

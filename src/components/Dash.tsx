@@ -1,37 +1,15 @@
-import { onAuthStateChanged, type User } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
-import { useEffect, useState } from "react";
-import { auth, db } from "../firebase";
+import { useContext } from "react";
 import "./styles/dash.css"
-import type { UserData } from "../myDataTypes";
 import { motion } from "motion/react";
+import { MainContext } from "../context/MainContext";
 
 const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
 
 export default function Dash() {
-    const [user, setUser] = useState<User | null>(null);
-    const [userData, setUserData] = useState<UserData | null>(null);
-    
-    useEffect(() => {
-            const unsub = onAuthStateChanged(auth, async (currentUser) => {
-            setUser(currentUser);
-    
-            if (currentUser) {
-                const ref = doc(db, "users", currentUser.uid);
-    
-                const unsubscribeSnapshot = onSnapshot(ref, (snap) => {
-                    if (snap.exists()) {
-                        setUserData(snap.data() as UserData);
-                    }
-                });
-    
-                return () => unsubscribeSnapshot();
-            } else {
-                setUserData(null);
-            }
-            });
-            return () => unsub();
-        }, []);
+    const context = useContext(MainContext);
+
+    if (!context) return null;
+    const {user, userData} = context;
 
     if (!user || !userData) {
         return "";
