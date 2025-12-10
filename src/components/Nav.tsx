@@ -1,16 +1,17 @@
 import { useContext, useEffect, useState } from "react";
-import "./styles/nav.css"
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGears, faHomeAlt, faPowerOff } from "@fortawesome/free-solid-svg-icons";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { MainContext } from "../context/MainContext";
+import LinkButton from "./LinkButton";
 
 export default function Nav() {
     const context = useContext(MainContext);
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
     const [windowHeight, setWindowHeight] = useState(window.innerHeight);
+    const navigate = useNavigate?.();
 
     useEffect(() => {
         const handleResize = () => {
@@ -23,30 +24,31 @@ export default function Nav() {
     }, []);
 
     if (!context) return null;
-    const {userData} = context
+    const {user, userData} = context
 
     const handleLogout = async () => {
         await signOut(auth);
         window.location.reload();
     };
 
+    if (!user || !userData) return null;
     return (
-        <div className='nav-user'>
-            <h2 className='title-main'>StemUP</h2>
-            <h3 className="user-name">{userData?.name}</h3>
+        <div className='flex w-full justify-evenly items-center'>
+            <h2 className='text-2xl font-bold'>StemUP</h2>
+            <h3 className="">{userData?.name}</h3>
             <div className="roles-container">
-                <Link to={"/roles"} className="link-btn">Roles</Link>
+                <LinkButton onClick={() => navigate("roles")}>Roles</LinkButton>
             </div>
-            <div className="user-info-container">
-                <Link to={"/"} className="link-btn">
+            <div className="flex space-x-4">
+                <LinkButton onClick={() => navigate("/")}>
                     {windowWidth > 1000 || windowHeight > 1200 ? "Home" : <FontAwesomeIcon icon={faHomeAlt}/>}
-                </Link>
-                <Link to={"/settings"} className="link-btn">
+                </LinkButton>
+                <LinkButton onClick={() => navigate("/settings")}>
                     {windowWidth > 1000 || windowHeight > 1200 ? "Settings" : <FontAwesomeIcon icon={faGears}/>}
-                </Link>
-                <a onClick={handleLogout} className="link-btn">
+                </LinkButton>
+                <LinkButton onClick={handleLogout}>
                     {windowWidth > 1000 || windowHeight > 1200 ? "Logout" : <FontAwesomeIcon icon={faPowerOff}/>}
-                </a>
+                </LinkButton>
             </div>
         </div>
     )

@@ -1,5 +1,4 @@
 import { useContext } from "react";
-import "./styles/dash.css"
 import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
 
@@ -11,33 +10,31 @@ export default function Dash() {
     if (!context) return null;
     const {user, userData} = context;
 
-    if (!user || !userData) {
-        return "";
-    }
+    if (!user || !userData) return
 
     return (
         <motion.div 
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="dash-card"
+            className="flex flex-col w-full items-center justify-center space-y-8"
         >
-            <h1 className="title-main">Your Stats</h1>
-            <div className="stats-div">
+            <h1 className="font-bold text-2xl">Your Stats</h1>
+            <div className="flex flex-col items-center justify-center space-x-0 md:space-x-4 space-y-4 md:space-y-0 sm:flex-row">
                 {userData?.photoURL ? (
-                    <img src={userData.photoURL || DEFAULT_AVATAR} alt="Profile" className={"pfp-image"} />
+                    <img src={userData.photoURL || DEFAULT_AVATAR} alt="Profile" className="size-32 object-cover rounded-full" />
                 ) : (
-                    <div style={{ background: "#fff" }} className="pfp-image" />
+                    <div style={{ background: "#fff" }} className="size-32 rounded-full" />
                 )}
-                <h3 className="title-card">{userData?.name ? userData.name : ""}</h3>
+                <h3 className="text-2xl">{userData?.name ? userData.name : ""}</h3>
             </div>
             
             
-            <motion.div className="points-div">
-                <h3 className="title-card">Total Points</h3>
+            <motion.div className="flex justify-between items-center w-full border-b">
+                <h3 className="text-2xl">Total Points</h3>
                 <p>{userData?.points ? userData.points : 0}</p>
             </motion.div>
-            <motion.div className="completed-div">
-                <h3 className="title-card">Task Completed</h3>
+            <motion.div className="flex justify-between items-center w-full border-b">
+                <h3 className="text-2xl">Task Completed</h3>
                 <p>{userData?.taskCompleted ? userData.taskCompleted : 0}</p>
             </motion.div>
         </motion.div>

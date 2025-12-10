@@ -1,4 +1,4 @@
-import { createUserWithEmailAndPassword, deleteUser, GoogleAuthProvider, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
+import { createUserWithEmailAndPassword, deleteUser, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithPopup, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
 import { auth, db, storage } from "./firebase";
 import { arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -117,8 +117,10 @@ export const firebaseAuthService = {
                 },
                 { merge: true }
             );
+            return true;
         } catch (err) {
             console.log(err);
+            return false;
         }
     },
 
@@ -129,6 +131,9 @@ export const firebaseAuthService = {
      */
     async deleteAccount(user: User, userData: UserData) {
         try {
+            const provider = new GoogleAuthProvider(); 
+            await reauthenticateWithPopup(user, provider);
+
             const batchUpdates: Promise<void>[] = [];
 
             // Remove user from all roles
@@ -140,7 +145,9 @@ export const firebaseAuthService = {
                 if (members.includes(user.uid)) {
                     const updatedMembers = members.filter((m) => m !== user.uid);
                     batchUpdates.push(
-                    updateDoc(doc(db, "roles", roleDoc.id), { members: updatedMembers })
+                    updateDoc(doc(db, "roles", roleDoc.id), {
+                            members: updatedMembers 
+                        })
                     );
                 }
             });
@@ -160,15 +167,17 @@ export const firebaseAuthService = {
                 }
             }
 
-            await deleteDoc(doc(db, "users", user.uid));
+            batchUpdates.push(deleteDoc(doc(db, "users", user.uid)));
 
             await Promise.all(batchUpdates);
 
             await deleteUser(user);
 
             console.log("User account and related data deleted.");
+            return true;
         } catch (err) {
             console.error("Error deleting account:", err);
+            return false;
         }
     },
 

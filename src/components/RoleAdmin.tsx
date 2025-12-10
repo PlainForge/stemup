@@ -3,8 +3,11 @@ import { motion } from "motion/react";
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { db } from "../lib/firebase";
 import { type Role, type SubmittedTask, type UserData, type UserRoleData } from "../myDataTypes";
-import "./styles/rolesAdmin.css"
 import { MainContext } from "../context/MainContext";
+import LinkButton from "./LinkButton";
+import Button from "./Button";
+import Input from "./Input";
+import { Alert } from "./PhraseAlert";
 
 interface prop {
     role: {name: string, id: string}
@@ -18,6 +21,10 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
     const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
     const [createTaskFor, setCreateSetTaskFor] = useState<string[]>([]);
+    const [phrase, setPhrase] = useState(""); // Role name change phrase
+    const [phrase2, setPhrase2] = useState(""); // Role reset phrase
+    const [phrase3, setPhrase3] = useState(""); // Role reward phrase
+    const [phrase4, setPhrase4] = useState(""); // Sent task phrase
 
     // Get Members to get requested user's data
     useEffect(() => {
@@ -116,6 +123,7 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
             }
 
             // Reset
+            setPhrase4("Task(s) created successfully");
             form.reset();
             setCreateSetTaskFor([]);
         } catch (err) {
@@ -134,6 +142,8 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
             await updateDoc(doc(db, "roles", role.id), {
                 name: newName
             })
+            setPhrase("Role name updated successfully");
+            e.currentTarget.reset();
         } catch (err) {
             console.log(err);
         }
@@ -300,6 +310,7 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
 
             await Promise.all(updates);
 
+            setPhrase2("Role has been reset successfully");
             console.log(`Role ${roleId} has been reset.`);
         } catch (err) {
             console.error("Error resetting role:", err);
@@ -362,6 +373,8 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
                 second,
                 third
             })
+
+            setPhrase3("Rewards updated successfully");
             form.reset();
         } catch (err) {
             console.log(err);
@@ -374,99 +387,92 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
 
     return (
         <motion.div
-            initial={{x:-10}}
-            animate={{x:0}}
-            className="role-admin-page"
+            className="w-full"
         >
             <motion.div 
-                className="control-buttons"
-                initial={{x:-10}}
-                animate={{x:0}}
+                className="w-full flex gap-4 px-8 flex-col items-center justify-center md:flex-row"
             >
-                <motion.button 
+                <LinkButton
                     onClick={() => setPage("requests")} 
-                    onTap={() => setPage("requests")}
-                    whileHover={{y: -2, cursor: "pointer"}}
-                    style={page === "requests" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
-                >Requests <span>{requested.length}</span></motion.button>
-                <motion.button 
-                    onClick={() => setPage("creation")} 
-                    onTap={() => setPage("creation")}
-                    whileHover={{y: -2, cursor: "pointer"}}
-                    style={page === "creation" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
-                >Task Creation</motion.button>
-                <motion.button 
+                    moreClass={page === "requests" ? "font-semibold" : "font-regular"}
+                >
+                    Requests <span className="bg-blue-300 px-1 py-0.5 rounded-full">{requested.length}</span>
+                </LinkButton>
+                <LinkButton
+                    onClick={() => setPage("creation")}
+                    moreClass={page === "creation" ? "font-semibold" : "font-regular"}
+                >
+                    Task Creation
+                </LinkButton>
+                <LinkButton
                     onClick={() => setPage("submitted")}
-                    onTap={() => setPage("submitted")}
-                    whileHover={{y: -2, cursor: "pointer"}}
-                    style={page === "submitted" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
-                >Submitted Tasks <span>{submittedTasks.length}</span></motion.button>
-                <motion.button 
+                    moreClass={page === "submitted" ? "font-semibold" : "font-regular"}
+                >
+                    Submitted Tasks <span className="bg-blue-300 px-1 py-0.5 rounded-full">{submittedTasks.length}</span>
+                </LinkButton>
+                <LinkButton
                     onClick={() => setPage("config")}
-                    onTap={() => setPage("config")}
-                    whileHover={{y: -2, cursor: "pointer"}}
-                    style={page === "config" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
-                >Role Config</motion.button>
-                <motion.button 
-                    onClick={() => setPage("kick")}
-                    onTap={() => setPage("kick")}
-                    whileHover={{y: -2, cursor: "pointer"}}
-                    style={page === "kick" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
-                >Member Kick</motion.button>
-                <motion.button 
+                    moreClass={page === "config" ? "font-semibold" : "font-regular"}
+                >
+                    Role Config
+                </LinkButton>
+                <LinkButton
                     onClick={() => setPage("rewards")}
-                    onTap={() => setPage("rewards")}
-                    whileHover={{y: -2, cursor: "pointer"}}
-                    style={page === "rewards" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
-                >Rewards</motion.button>
+                    moreClass={page === "rewards" ? "font-semibold" : "font-regular"}
+                >
+                    Rewards
+                </LinkButton>
             </motion.div>
-            <motion.div className="content">
+            <motion.div className="w-full px-4 mt-4">
                 {page.match("requests") ? 
                     <motion.div 
-                        className="request-container"
-                        initial={{x: -10}}
-                        animate={{x:0}}
+                        className="w-full flex flex-col items-center"
                     >
-                        <h1 className="title-main">Requests</h1>
-                        <div className="requested-users">
-                            {userRequested.map((user) => {
-                                return (
-                                    <motion.div 
-                                        key={user.name} 
-                                        className="requested-user"
-                                        initial={{x: -10}}
-                                        animate={{x:0}}
-                                    >
-                                        <h3 className="title-card">{user.name}</h3>
-                                        <div className="req-user-buttons">
-                                            <motion.button 
-                                                onClick={() => acceptRequest(user.uid)} 
-                                                onTap={() => acceptRequest(user.uid)}
-                                                whileHover={{cursor: "pointer"}}
-                                                className="button-sm"
-                                            >accept</motion.button>
-                                            <motion.button 
-                                                onClick={() => declineRequest(user.uid)}
-                                                onTap={() => declineRequest(user.uid)} 
-                                                whileHover={{cursor: "pointer"}}
-                                                className="button-sm button-error"
-                                            >decline</motion.button>
-                                        </div>
-                                        
-                                    </motion.div>
-                                )
-                            })}
+                        <h1 className="text-2xl font-semibold">Requests</h1>
+                        <div className="flex flex-col space-y-4 mt-4">
+                            {
+                                userRequested.length <= 0 ?
+                                <p>No pending requests</p>
+                            : 
+                                userRequested.map((user) => {
+                                    return (
+                                        <motion.div 
+                                            key={user.name} 
+                                            className="flex flex-col items-center bg-gray-100 p-4 rounded-xl gap-4"
+                                            initial={{x: -10}}
+                                            animate={{x:0}}
+                                        >
+                                            <h3 className="text-2xl font-medium">{user.name}</h3>
+                                            <div className="flex flex-col space-y-2">
+                                                <Button
+                                                    onClick={() => acceptRequest(user.uid)} 
+                                                >
+                                                    accept
+                                                </Button>
+                                                <Button
+                                                    onClick={() => declineRequest(user.uid)}
+                                                    color="red"
+                                                >
+                                                    decline
+                                                </Button>
+                                            </div>
+                                            
+                                        </motion.div>
+                                    )
+                                })
+                            }
                         </div>
-                    </motion.div> : null
-                }
-                {page.match("creation") ? 
+                    </motion.div> 
+                    : 
+                    page.match("creation") ? 
                     <motion.div 
-                        className="creation"
-                        initial={{x: -10}}
-                        animate={{x:0}}
+                        className="w-full flex flex-col items-center"
                     >
-                        <h1 className="title-main">Task Creation</h1>
-                        <form className="creation-form" id="create" onSubmit={sendTask}>
+                        <h1 className="text-2xl font-semibold">Task Creation</h1>
+                        <form className="flex flex-col gap-4 mt-4 w-full items-center" 
+                            id="create" 
+                            onSubmit={sendTask}
+                        >
                             <select 
                                 name="user" 
                                 defaultValue=""
@@ -476,7 +482,7 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
                                         setCreateSetTaskFor((prev) => [...prev, uid]);
                                     }
                                 }}
-                                className="select-sm"
+                                className="w-sm bg-gray-100 p-2 rounded-xl focus:rounded-none transition-all duration-200"
                             >
                                 <option value="" disabled>Select a member</option>
                                 {membersWithData.map((member) => {  
@@ -490,148 +496,188 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
                                 })}
                             </select>
                             {createTaskFor.length > 0 && (
-                                <div className="selected-members">
-                                    <h4>Selected Members:</h4>
-                                    <div className="selected-list">
+                                <div className="flex flex-col w-full items-center">
+                                    <h4 className="text-2xl">Selected Members:</h4>
+                                    <div className="flex flex-col space-y-2 my-2">
                                         {createTaskFor.map((uid) => {
                                             const member = membersWithData.find((m) => m.uid === uid);
                                             if (!member) return null;
                                             return (
                                                 <motion.div
                                                     key={uid}
-                                                    className="selected-member"
+                                                    className="flex items-center justify-between bg-gray-100 p-2 rounded-xl w-sm"
                                                 >
                                                     <span className="title-card">{member.name}</span>
-                                                    <motion.button
-                                                        type="button"
+                                                    <LinkButton
                                                         onClick={() =>
                                                             setCreateSetTaskFor((prev) =>
                                                                 prev.filter((id) => id !== uid)
                                                             )
                                                         }
-                                                        className="button-xsm button-error"
                                                     >
                                                         Remove
-                                                    </motion.button>
+                                                    </LinkButton>
                                                 </motion.div>
                                             );
                                         })}
-                                </div>
+                                    </div>
 
-                                <motion.button
-                                    type="button"
-                                    onClick={() => setCreateSetTaskFor([])}
-                                    className="button-sm button-error"
-                                >
-                                    Clear All
-                                </motion.button>
+                                    <Button
+                                        onClick={() => setCreateSetTaskFor([])}
+                                        size="sm"
+                                    >
+                                        Clear All
+                                    </Button>
                                 </div>
                             )}
 
-                            <input type="text" name="title" placeholder="Title" className="input-lg" required/>
-                            <input type="text" name="desc" placeholder="Description" className="input-lg"/>
-                            <input type="number" id="pts" name="pts" placeholder="Points" className="input-lg" required/>
-                            <motion.button 
+                            <Input 
+                                type="text" 
+                                name="title" 
+                                placeholder="Title" 
+                                required={true}
+                                autocomplete="false"
+                            />
+                            <Input 
+                                type="text" 
+                                name="desc" 
+                                placeholder="Description"
+                                required={false}
+                                autocomplete="false"
+                            />
+                            <Input 
+                                type="number" 
+                                id="pts" 
+                                name="pts" 
+                                placeholder="Points" 
+                                required={true}
+                                autocomplete="false"
+                            />
+                            <Button
                                 type="submit" 
-                                className="button-sm" 
-                                whileHover={{cursor: "pointer"}}
-                            >Create</motion.button>
+                                size="sm"
+                                color="green"
+                            >
+                                Create
+                            </Button>
                         </form>
-                    </motion.div> : ""
-                }
-                {page.match("submitted") ? 
+                        <Alert value={phrase4} setValue={setPhrase4}/>
+                    </motion.div> 
+                    :
+                    page.match("submitted") ? 
                     <motion.div 
-                        className="submitted-container"
-                        initial={{x: -10}}
-                        animate={{x:0}}
+                        className="w-full flex flex-col items-center"
                     >
-                        <h1 className="title-main">Tasks Submitted</h1>
-                        <div className="submitted-tasks">
+                        <h1 className="text-2xl font-semibold">Tasks Submitted</h1>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 my-4 w-full">
                             {submittedTasks.map((submitted) => {
                                 if (submitted.complete) return null
                                 return (
                                     <motion.div 
-                                        className="submitted-task" 
+                                        className="flex flex-col bg-gray-100 p-4 rounded-xl space-y-2" 
                                         key={submitted.id}
-                                        initial={{x: -10}}
-                                        animate={{x:0}}
                                     >
-                                        <div className="title-container">
-                                            <h1 className="title-main">{submitted.title}</h1>
+                                        <h1 className="w-full text-2xl font-medium text-center">{submitted.title}</h1>
+                                        <div className="flex flex-col space-y-1">
+                                            <h4 className="font-medium">Description:</h4>
+                                            <p className="border-b">{submitted.description}</p>
+                                            <h4 className="font-medium">Points:</h4>
+                                            <p className="border-b">{submitted.points} pts</p>
                                         </div>
-                                        <div className="task-desc">
-                                            <h4 className="title-card">Description</h4>
-                                            <p>{submitted.description}</p>
-                                            <h4 className="title-card">Points</h4>
-                                            <p>{submitted.points} pts</p>
-                                        </div>
-                                        <div>
-                                            <h4 className="title-card">Submission Date</h4>
-                                            <p className="task-date">{submitted.submission ? submitted.submission.toDate().toString() : 'N/A'}</p>
+                                        <div className="flex flex-col space-y-1">
+                                            <h4 className="font-medium">Submission Date</h4>
+                                            <p className="border-b">{submitted.submission ? submitted.submission.toDate().toString() : 'N/A'}</p>
                                         </div>
                                         <div>
-                                            <h4 className="title-card">Submitted by</h4>
-                                            <p>by {submitted.assignedName}</p>
+                                            <h4 className="font-medium">Submitted by</h4>
+                                            <p>{submitted.assignedName}</p>
                                         </div>
-                                        <div className="task-buttons">
-                                            <motion.button 
+                                        <div className="w-full flex justify-between">
+                                            <Button
                                                 onClick={() => acceptTask(submitted)}
-                                                onTap={() => acceptTask(submitted)} 
-                                                className="button-xsm"
-                                                whileHover={{cursor: "pointer"}}
-                                            >Approve</motion.button>
-                                            <motion.button 
+                                                size="sm"
+                                                color="green"
+                                            >
+                                                Approve
+                                            </Button>
+                                            <Button
                                                 onClick={() => declineTask(submitted)}
-                                                onTap={() => declineTask(submitted)} 
-                                                className="button-xsm button-error"
-                                                whileHover={{cursor: "pointer"}}
-                                            >Disapprove</motion.button>
+                                                size="sm"
+                                                color="red"
+                                            >
+                                                Disapprove
+                                            </Button>
                                         </div>
                                     </motion.div>
                                 )
                             })}
                         </div>
-                    </motion.div> : ""
-                }
-                {page.match("config") ? 
+                    </motion.div> 
+                    : 
+                    page.match("config") ? 
                     <motion.div 
-                        className="role-config"
-                        initial={{x: -10}}
-                        animate={{x:0}}
+                        className="w-full flex flex-col items-center space-y-4"
                     >
-                        <h1 className="title-main">Role Config</h1>
-                        <form className="set-role-name" id="rolename" onSubmit={changeRoleName}>
-                            <input type="text" name="newName" placeholder="Change Role Name" className="input-lg" required/>
-                            <button type="submit" className="button-md">Change Role Name</button>
+                        <h1 className="text-2xl font-semibold">Role Config</h1>
+                        <form className="flex flex-col space-y-2 items-center" id="rolename" onSubmit={changeRoleName}>
+                            <Input 
+                                type="text" 
+                                name="newName" 
+                                placeholder="Change Role Name" 
+                                required={true}
+                                autocomplete="false"
+                            />
+                            <Button type="submit">
+                                Change Role Name
+                            </Button>
+                            <Alert value={phrase} setValue={setPhrase}/>
                         </form>
-                        <button className="button-md button-error" onClick={() => resetRole(role.id)}>Monthly Reset</button>
-                        <button className="button-md button-error" onClick={() => deleteRole(role.id)}>Delete Role</button>
-                    </motion.div> : ""
-                }
-                {page.match("kick") ? 
+                        <Button 
+                            onClick={() => resetRole(role.id)}
+                        >
+                            Monthly Reset
+                        </Button>
+                        <Alert value={phrase2} setValue={setPhrase2}/>
+                        <Button 
+                            onClick={() => deleteRole(role.id)}
+                            color="red"
+                        >
+                            Delete Role
+                        </Button>
+                    </motion.div> 
+                    : 
+                    page.match("rewards") ? 
                     <motion.div
+                        className="w-full flex flex-col items-center"
                         initial={{x: -10}}
                         animate={{x:0}}
                     >
-                        <h1>Member Kick</h1>
-                        <p>wip</p>
-                    </motion.div> : ""
-                }
-                {page.match("rewards") ? 
-                    <motion.div
-                        className="rewards-container"
-                        initial={{x: -10}}
-                        animate={{x:0}}
-                    >
-                        <div className="title-container title-container-stay">
-                            <h1 className="title-main">Rewards</h1>
-                        </div>
-                        <form className="set-reward-container" onSubmit={setReward}>
-                            <input type="text" name="first" placeholder="first" className="input-lg" required />
-                            <input type="text" name="second" placeholder="second" className="input-lg" required />
-                            <input type="text" name="third" placeholder="third" className="input-lg" required />
-                            <button type="submit" className="button-md">Set Reward</button>
+                        <h1 className="text-2xl font-semibold">Rewards</h1>
+                        <form className="flex flex-col items-center space-y-4 mt-4" onSubmit={setReward}>
+                            <Input 
+                                type="text" 
+                                name="first" 
+                                placeholder="first" 
+                                required={true}
+                                autocomplete="false" 
+                            />
+                            <Input 
+                                type="text" 
+                                name="second" 
+                                placeholder="second" 
+                                required={true}
+                                autocomplete="false"
+                            />
+                            <Input 
+                                type="text" 
+                                name="third" 
+                                placeholder="third" 
+                                required={true}
+                                autocomplete="false"
+                            />
+                            <Button type="submit">Set Reward</Button>
                         </form>
+                        <Alert value={phrase3} setValue={setPhrase3}/>
                     </motion.div> : ""
                 }
             </motion.div>

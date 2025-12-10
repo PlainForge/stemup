@@ -2,13 +2,14 @@ import { useContext, useEffect, useState } from "react";
 import { db } from "../lib/firebase";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { type Task, type Role, type UserData, type UserRoleData } from "../myDataTypes";
-import './styles/rolePage.css'
 import { motion } from "motion/react";
 import RoleAdminPage from "../components/RoleAdmin";
 import DoneButton from "../components/TaskDoneButton";
 import { useParams } from "react-router-dom";
 import Loading from "./Loading";
 import { MainContext } from "../context/MainContext";
+import LinkButton from "../components/LinkButton";
+import Button from "../components/Button";
 
 export default function RolePage() {
     const context = useContext(MainContext);
@@ -174,175 +175,172 @@ export default function RolePage() {
     let i = 0;
 
     return (
-        <div className="roles-page">
-            <div className="header">
-                <h1 className="title-main">{role.name}</h1>
-                <div className="user-info">
-                        {membersWithData.map((m) => {
-                            if (m.id.match(user.uid) && !admins.includes(user.uid)) {
-                                return Object.values(m.roles || {}).map((x) => {
-                                    if (x.id === role.id) {
-                                        return (
-                                            <div key={x.id} className="user">
-                                                <h3>{x.points} points</h3>
-                                                <h3>{x.taskCompleted} tasks completed</h3>
-                                            </div>
-                                        )
-                                    }
-                                    return null
-                                })
-                            } else {
-                                return null
+        <div className="w-full flex flex-col gap-2">
+            <div className="w-full flex justify-evenly">
+                <h1 className="text-2xl"><span className="font-bold">Role</span> {role.name}</h1>
+                {membersWithData.map((m) => {
+                    if (m.id.match(user.uid) && !admins.includes(user.uid)) {
+                        return Object.values(m.roles || {}).map((x) => {
+                            if (x.id === role.id) {
+                                return (
+                                    <div key={x.id} className="flex gap-4">
+                                        <h3>{x.points} points</h3>
+                                        <h3>{x.taskCompleted} tasks completed</h3>
+                                    </div>
+                                )
                             }
-                        })}
-                        {admins.includes(user.uid) ? <p>Admin View</p> : null}
-                </div>
+                            return null
+                        })
+                    } else {
+                        return null
+                    }
+                })}
+                {admins.includes(user.uid) ? <p className="font-bold">Admin View</p> : null}
             </div>
-            <div className="nav-buttons div">
-                <motion.button 
+            <div className="w-full flex items-center justify-center gap-6">
+                <LinkButton
                     onClick={() => setPageState("leaderboard")}
-                    onTap={() => setPageState("leaderboard")}
-                    whileHover={{y: -2, cursor: 'pointer'}}
-                    style={pageState === "leaderboard" ? {fontWeight: "500"} : {fontWeight: "300"}}
+                    moreClass={pageState === "leaderboard" ? "font-semibold" : "font-regular"}
                 >
                     Leaderboard
-                </motion.button>
-                <motion.button 
+                </LinkButton>
+                <LinkButton
                     onClick={() => setPageState("rewards")}
-                    onTap={() => setPageState("rewards")}
-                    whileHover={{y: -2, cursor: 'pointer'}}
-                    style={pageState === "rewards" ? {fontWeight: "500"} : {fontWeight: "300"}}
+                    moreClass={pageState === "rewards" ? "font-semibold" : "font-regular"}
                 >
                     Rewards
-                </motion.button>
+                </LinkButton>
                 {!admins.includes(user.uid) ? 
-                    <div className="tasks-container">
-                        <motion.button 
-                            onClick={() => setPageState("tasks")}
-                            onTap={() => setPageState("tasks")}
-                            whileHover={{y: -2, cursor: 'pointer'}}
-                            style={pageState === "tasks" ? {fontWeight: "bolder"} : {fontWeight: "normal"}}
-                        >
-                            Tasks
-                        </motion.button>
-                        {taskCount > 0 ? <p>{taskCount}</p> : ""}
-                    </div>
-                : null}
-                {admins.includes(user.uid) ?
-                        <motion.button 
+                    <LinkButton
+                        onClick={() => setPageState("tasks")}
+                        moreClass={pageState === "tasks" ? "font-semibold flex items-center" : "font-regular flex items-center"}
+                    >
+                        Tasks
+                        {taskCount > 0 ? <p className="ml-2 bg-green-400 px-2 py-0.5 rounded-full">{taskCount}</p> : null}
+                    </LinkButton>
+                    :
+                        <LinkButton
                         onClick={() => setPageState("admin")}
-                        onTap={() => setPageState("admin")}
-                        whileHover={{y: -2, cursor: 'pointer'}}
-                        style={pageState === "admin" ? {fontWeight: "500"} : {fontWeight: "300"}}
+                        moreClass={pageState === "admin" ? "font-semibold" : "font-regular"}
                     >
                         Admin
-                    </motion.button>
-                : null}
-                {isCurrentRole ? <motion.p whileHover={{cursor: "default"}}><strong>Your Role</strong></motion.p> : 
-                    <motion.button 
+                    </LinkButton>
+                }
+                {isCurrentRole ? 
+                    <motion.p 
+                        whileHover={{cursor: "default"}}
+                        initial={{scale:0}}
+                        animate={{scale:1}}
+                    >
+                        <strong>Your Role</strong>
+                    </motion.p> 
+                    : 
+                    <Button
+                        size="xsm"
                         onClick={() => setCurrentRole(role.id)}
-                        onTap={() => setCurrentRole(role.id)}
-                        whileHover={{y: -2, cursor: 'pointer'}}
-                    >Set Role</motion.button>
+                    >Set Role</Button>
                 }
             </div>
-            { pageState.match("leaderboard") ?
+            { 
+                pageState.match("leaderboard") ?
                 <motion.div 
-                    className="content"
-                    initial={{y:50}}
-                    animate={{y:0}}
+                    className="w-full flex flex-col items-center"
                 >
-                    <div className="leaderboard div">
-                        <div className="title-container">
-                            <h1 className="title-main">Leaderboard</h1>
-                        </div>
+                    <div className="w-full flex flex-col items-center">
+                        <h1 className="text-2xl">Leaderboard</h1>
 
-                        <div className="board">
+                        <div className="w-1/2 flex flex-col">
                             {leaders ? leaders.map((u) => {
                                 if (admins.includes(u.id)) return;
                                 i++
+                                if (i < 4) {
                                 return (
-                                    <div className={i < 4 ? "user-board top-three" : "user-board" } key={u.id}>
-                                        <div className="info">
-                                            <p><strong>{i}</strong></p>
-                                            <img src={u.photoURL} alt="" className="user-photo" />
-                                            <p>{u.name}</p>
+                                    <div className="w-full justify-between flex flex-col md:flex-row border-b py-2" key={u.id}>
+                                        <div className="flex justify-between items-center gap-4">
+                                            <p className="mr-2 text-2xl"><strong>{i}</strong></p>
+                                            <img src={u.photoURL} alt={u.name} className="size-16 object-cover rounded-full" />
+                                            <p className="text-2xl">{u.name}</p>
                                         </div>
-                                        <div className="stats">
-                                            <p>{u.points} pts</p>
-                                            <p className="tasks">{u.taskCompleted} Tasks Completed</p>
+                                        <div className="flex gap-4 items-center justify-center">
+                                            <p><span className="font-bold">{u.points}</span> pts</p>
+                                            <p><span className="font-bold">{u.taskCompleted}</span> Tasks Completed</p>
                                         </div>
                                     </div>
                                 )
-                            }) : "Loading"}
+                                } else {
+                                    return (
+                                        <div className={`w-full justify-between flex flex-col md:flex-row border-b py-2`} key={u.id}>
+                                            <div className="flex justify-between items-center gap-4">
+                                                <p className={`${i > 9 ? "mr-0" : "mr-2"}`}><strong>{i}</strong></p>
+                                                <img src={u.photoURL} alt={u.name} className="size-8 object-cover rounded-full" />
+                                                <p>{u.name}</p>
+                                            </div>
+                                            <div className="flex gap-4 items-center justify-center">
+                                                <p><span className="font-bold">{u.points}</span> pts</p>
+                                            <p><span className="font-bold">{u.taskCompleted}</span> Tasks Completed</p>
+                                            </div>
+                                        </div>
+                                    )
+                                }
+                            }) : "Loading..."}
                         </div>
                     </div>
                     
                     
-                </motion.div>
-            : "" }
-            { pageState.match("rewards") ?
+                </motion.div> 
+                :
+                pageState.match("rewards") ?
                 <motion.div 
-                    className="rewards"
-                    initial={{y:50}}
-                    animate={{y:0}}
+                    className="w-full flex flex-col items-center"
                 >
-                    <h1 className="title">{currentMonth} Rewards</h1>
+                    <h1 className="text-2xl">{currentMonth} Rewards</h1>
                     {["First", "Second", "Third"].map((label, idx) => {
                         const filteredLeaders = leaders.filter(
                             (leader) => !admins.includes(leader.uid)
                         );
                         const winners = filteredLeaders[idx];
-                        return <div className="reward" key={label}>
-                            <div>
-                                <h1>{label}</h1>
-                                <p>{winners ? winners.name : "No user"}</p>
+                        return (
+                            <div className="w-1/2 flex justify-between mb-4 border-b" key={label}>
+                                <div className="flex flex-col">
+                                    <h1 className="text-2xl font-medium">{label}</h1>
+                                    <p>{winners ? winners.name : "No user"}</p>
+                                </div>
+                                <p>{rewards[idx] ?? "No reward set"}</p>
                             </div>
-                            <p>{rewards[idx] ?? "No reward set"}</p>
-                        </div>
+                        )
                     })}
                 </motion.div>
-            : "" }
-            { pageState.match("tasks") ?
+                :
+                pageState.match("tasks") ?
                 <motion.div 
-                    className="tasks div"
-                    initial={{x:-10}}
-                    animate={{x:0}}
+                    className="w-full flex flex-col items-center"
                 >   
-                    <div className="title-container title-container-stay">
-                        <h1 className="title-main">Your {currentMonth} Tasks</h1>
-                    </div>
+                    <h1 className="text-2xl font-semibold">Your {currentMonth} Tasks</h1>
                     
-                    <div className="all-tasks">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 my-4 p-4 w-full">
                         {tasksLoading ? <p>Loading Tasks...</p> 
                         : userTasks.length > 0 && !admins.includes(user.uid) ? userTasks.map((task) => {
                             return (
                                 <motion.div
-                                    className={task.complete ? "task-completed" : "task"}
+                                    className={`${task.complete ? "border-green-500" : "border-red-500"} flex flex-col border-2 p-4 rounded-2xl`}
                                     key={task.id}
-                                    initial={{y:50}}
-                                    animate={{y:0}}
                                 >
-                                    <div className="title-container title-container-change top">
-                                        <h1 className="title-main">{task.title}</h1>
+                                    <h1 className="text-2xl text-center"><span className="font-bold">Title:</span> {task.title}</h1>
+                                    <div className="flex flex-col gap-2 mb-4">
+                                        <h4 className="font-medium">Description:</h4>
+                                        <p>{task.description || "N/A"}</p>
                                         <h4 className="sub-title">{task.points} points</h4>
                                     </div>
-                                    <div className="middle">
-                                        <p>Description:</p>
-                                        <p>{task.description || "N/A"}</p>
-                                    </div>
-                                    <div className="bottom">
-                                        <DoneButton task={task} />
-                                    </div>
+                                    <DoneButton task={task} />
                                 </motion.div>
                             )
-                        }) : <p>"No tasks assigned to you"</p>}
+                        }) : <p className="text-2xl">No tasks assigned to you</p>}
                     </div>
                 </motion.div>
-            : "" }
-            { pageState.match("admin") ?
+                :
+                pageState.match("admin") ?
                 <RoleAdminPage role={role} membersWithData={membersWithData} />
-            : "" }
+                : "" }
         </div>
     )
 }

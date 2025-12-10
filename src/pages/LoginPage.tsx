@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { GoogleAuthProvider } from "firebase/auth";
-import "./styles/loginPage.css";
 import { FirebaseError } from "firebase/app";
 import LoginCard from "../components/LoginCard.tsx";
 import { firebaseAuthService } from "../lib/firebaseService.ts";
 import { useNavigate } from "react-router-dom";
+import { MainContext } from "../context/MainContext.ts";
 
 
 export default function LoginPage() {
@@ -13,6 +13,8 @@ export default function LoginPage() {
     const [phrase, setPhrase] = useState("");
     const provider = new GoogleAuthProvider();
     const navigate = useNavigate?.();
+    const context = useContext(MainContext);
+    const user = context?.user ?? null;
 
     // Google Login/Register
     const handleGoogleLogin = async () => {
@@ -58,10 +60,11 @@ export default function LoginPage() {
         }
     };
     
+    if (user != null) navigate("/");
     return (
-        <div className="login-page">
-            <div className="content-container">
-                <h2 className="title-main">StemUp</h2>
+        <div className="w-screen h-screen bg-linear-to-r from-blue-400 to-blue-100 flex flex-col items-center justify-center">
+            <div className="h-screen w-full flex flex-col items-center justify-center gap-4">
+                <h2 className="text-8xl">StemUp</h2>
                 <LoginCard 
                     email={email} 
                     setEmail={setEmail} 

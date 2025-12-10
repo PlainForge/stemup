@@ -2,9 +2,9 @@ import { useContext, useEffect, useState } from "react";
 import { db } from "../lib/firebase";
 import { arrayUnion, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { motion } from "motion/react";
-import { Link } from "react-router-dom";
 import { MainContext } from "../context/MainContext";
-import Loading from "../pages/Loading";
+import { useNavigate } from "react-router-dom";
+import LinkButton from "./LinkButton";
 
 interface JoinProps {
     role: {name: string, id: string}
@@ -14,6 +14,7 @@ export default function JoinButton({ role } : JoinProps) {
     const context = useContext(MainContext);
     const [hasRequested, setHasRequested] = useState(false);
     const [isMember, setIsMember] = useState(false);
+    const navigate = useNavigate?.();
 
     const user = context?.user ?? null;
     const userData = context?.userData ?? null;
@@ -38,7 +39,7 @@ export default function JoinButton({ role } : JoinProps) {
     }, [role, user]);
 
     if (!user || !userData || loading) {
-        return <Loading />
+        return "Loading...";
     }
 
     const requestRole = async (roleId: string) => {
@@ -50,8 +51,6 @@ export default function JoinButton({ role } : JoinProps) {
         })
     }
 
-    
-
     if (isMember) {
         return (
             <motion.button
@@ -59,7 +58,7 @@ export default function JoinButton({ role } : JoinProps) {
                 key={role.id + role.id} 
                 className="join-button-container"
             >
-                <Link className="join-button" to={`/roles/${role.id}`}>Join</Link>
+                <LinkButton onClick={() => navigate(`/roles/${role.id}`)}>Join</LinkButton>
             </motion.button>
         )
     }
@@ -69,10 +68,10 @@ export default function JoinButton({ role } : JoinProps) {
     }
 
     return (
-        <motion.button 
-            whileHover={{cursor: 'pointer', y: -4, scale: 1.02}} 
+        <LinkButton 
             onClick={() => requestRole(role.id)}
-            onTap={() => requestRole(role.id)}
-        >Request to join</motion.button>
+        >
+            Request to join
+        </LinkButton>
     )
 }

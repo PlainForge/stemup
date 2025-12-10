@@ -3,6 +3,10 @@ import { auth } from "../lib/firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGoogle } from "@fortawesome/free-brands-svg-icons";
 import { useLocation, useNavigate } from "react-router-dom";
+import Button from "./Button";
+import LinkButton from "./LinkButton";
+import Input from "./Input";
+import ErrorMessage from "./ErrorMessage";
 
 interface LoginCardProps {
     email: string;
@@ -27,71 +31,57 @@ export default function LoginCard({email, setEmail, password, setPassword, phras
     
     return (
         <motion.div 
-            className="login-container" 
+            className="w-full flex flex-col items-center justify-center gap-3" 
             style={auth.currentUser ? {opacity: '0'} : {opacity: '1'}}
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.1 }}
         >
-            <div className="title-container title-container-stay">
-                <h2 className="title-main">Sign In</h2>
-                <motion.a
-                    onClick={handleSwitch}
-                    onTap={handleSwitch}
-                    className="link-btn" 
-                    whileHover={{ cursor: 'pointer' }}
-                >
+            <div className="w-sm flex flex-col items-center justify-center">
+                <h2 className="text-2xl text-center">Sign In</h2>
+                <LinkButton onClick={handleSwitch}>
                     Don't have an account? <span>Sign Up</span>
-                </motion.a>
+                </LinkButton>
             </div>
 
-            <form className="form-container" action={loginWithEmail} onSubmit={async (e) => {
+            <form className="w-full flex flex-col items-center justify-center gap-2" action={loginWithEmail} onSubmit={async (e) => {
                 e.preventDefault();
                 await loginWithEmail();
             }}>
-                <input 
+                <Input 
+                    size="md"
                     type="email" 
                     placeholder="Email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="input-lg"
-                    required
+                    setValue={setEmail}
+                    required={true}
+                    autocomplete="false"
                 />
 
-                <input 
+                <Input 
+                    size="md"
                     type="password" 
                     placeholder="Password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="input-lg"
+                    setValue={setPassword}
                     required
+                    autocomplete="true"
                 />
 
                 {phrase != "" && 
-                    <motion.p className="phrase-error"
-                        initial={{ y: -20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ duration: 0.2 }}
-                    >
-                        {phrase}
-                    </motion.p>
+                    <ErrorMessage>{phrase}</ErrorMessage>
                 }
 
-                <motion.button 
-                    className="button-md"
-                >
+                <Button size="md">
                     Sign In
-                </motion.button>
+                </Button>
             </form>
 
-            <p className="or">or sign in with</p>
+            <p className="w-sm text-center">or sign in with</p>
 
-            <button 
-                onClick={handleGoogleLogin} 
-                className="button-md"
-            >
-                <FontAwesomeIcon icon={faGoogle}/> Sign in with Google
-            </button>
+            <Button size="md" onClick={handleGoogleLogin}>
+                Sign in with <FontAwesomeIcon icon={faGoogle} />
+            </Button>
         </motion.div>
     )
 }

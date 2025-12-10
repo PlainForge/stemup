@@ -1,6 +1,5 @@
 import { useContext, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import "./App.css";
 import Nav from './components/Nav';
 import Loading from './pages/Loading';
 import { MainContext } from './context/MainContext';
@@ -12,7 +11,7 @@ export default function App() {
 
   const user = context?.user ?? null;
   const loading = context?.loading ?? true;
-  const needsVerification = context?.needsVerification ?? true;
+  const needsVerification = context?.needsVerification ?? false;
 
   useEffect(() => {
     if (!loading && !user) {
@@ -23,18 +22,10 @@ export default function App() {
   if (loading) return <Loading />;
   if (user && needsVerification) return <VerifyEmailPage />;
   
-  if (!user) {
-    return (
-      <div className="app">
-        <Outlet />
-      </div>
-    );
-  } else {
-    return (
-      <div className="app">
-        <Nav />
-        <Outlet />
-      </div>
-    );
-  }
+  return (
+    <div className="flex flex-col items-center min-h-screen min-w-full pt-4">
+      <Nav />
+      <Outlet />
+    </div>
+  );
 }

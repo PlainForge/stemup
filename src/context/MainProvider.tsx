@@ -12,6 +12,7 @@ export interface MainContextType {
     loading: boolean;
     setLoading: React.Dispatch<React.SetStateAction<boolean>>;
     userData: UserData | null;
+    setUserData: React.Dispatch<React.SetStateAction<UserData | null>>;
     admins: string[];
     needsVerification: boolean;
 }
@@ -56,7 +57,6 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     useEffect(() => {
         if (!user) {
             setUserData(null);
-            setLoading(false);
             return;
         }
 
@@ -83,6 +83,7 @@ export default function MainProvider({ children }: { children: React.ReactNode }
 
     // Get all admins
     useEffect(() => {
+        if (!user || needsVerification) return;
         const adminRef = doc(db, "admins", "all-perms");
 
         const unsub = onSnapshot(
@@ -91,7 +92,6 @@ export default function MainProvider({ children }: { children: React.ReactNode }
                 if (snap.exists()) {
                     const ids = snap.data().ids || [];
                     if (Array.isArray(ids)) setAdmins(ids);
-                    console.log(ids);
                 } else setAdmins([]);
             },
             (error) => {
@@ -101,7 +101,7 @@ export default function MainProvider({ children }: { children: React.ReactNode }
         );
 
         return () => unsub();
-    }, []);
+    }, [user, needsVerification]);
 
     useEffect(() => {
         if (!user || user.emailVerified) return;
@@ -120,7 +120,7 @@ export default function MainProvider({ children }: { children: React.ReactNode }
         return () => clearInterval(interval);
     }, [user]);
 
-    const val = { user, setUser, loading, setLoading, userData, admins, needsVerification };
+    const val = { user, setUser, loading, setLoading, userData, setUserData, admins, needsVerification };
 
     return (
         <MainContext.Provider value={val}>

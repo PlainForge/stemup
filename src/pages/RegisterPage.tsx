@@ -5,9 +5,10 @@ import RegisterCard from "../components/RegisterCard";
 import { motion } from "motion/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGoogle } from "@fortawesome/free-brands-svg-icons";
-import "./styles/registerPage.css"
 import { firebaseAuthService } from "../lib/firebaseService";
 import { useLocation, useNavigate } from "react-router-dom";
+import Button from "../components/Button";
+import LinkButton from "../components/LinkButton";
 
 export default function RegisterPage() {
     const [email, setEmail] = useState("");
@@ -59,19 +60,19 @@ export default function RegisterPage() {
     };
     
     return (
-        <div className="register-page">
-            <div className="left-side">
+        <div className="w-screen h-screen flex">
+            <div className="w-2/3 flex-col items-center justify-center space-y-2 hidden md:flex lg:flex">
                 <div className="top">
-                    <div className="title-container">
-                        <h1 className="title-main text-center">StemUp</h1>
-                        <p className="sub-title">Track all your tasks and gain points and rewards from your role</p>
+                    <div className="text-center">
+                        <h1 className="text-4xl md:text-6xl lg:text-8xl font-bold">StemUp</h1>
+                        <p className="">Track all your tasks and gain points and rewards from your role</p>
                     </div>
                 </div>
-                <div className="bottom">
-                    <h1 className="sub-title"><span className="umb-title">UMass Boston</span> x <span className="uma-title">UMass Amherst</span> Gamification Platform</h1>
-                    <div className="how-to-container">
-                        <h1 className="title-card text-center">HOW TO PLAY STEMUP</h1>
-                        <ul>
+                <div className="flex flex-col items-center justify-center gap-2">
+                    <h1 className=""><span className="text-blue-600 font-bold">UMass Boston</span> x <span className="text-red-600 font-bold">UMass Amherst</span> Gamification Platform</h1>
+                    <div className="bg-gray-100 p-6 rounded-lg">
+                        <h1 className="text-center font-bold">HOW TO PLAY STEMUP</h1>
+                        <ul className="list-disc">
                             <li>Regularly check and complete your tasks</li>
                             <li>Track your progress</li>
                             <li><span>Level UP</span> on the leaderboard</li>
@@ -79,7 +80,7 @@ export default function RegisterPage() {
                     </div>
                 </div>
             </div>
-            <div className="right-side">
+            <div className="w-full flex flex-col items-center justify-center bg-slate-700 text-white md:w-1/3 lg:w-1/3">
                 {signInEmail?
                     <RegisterCard 
                         email={email} 
@@ -95,33 +96,27 @@ export default function RegisterPage() {
                     />
                 :
                     <motion.div 
-                        className="register-options"
+                        className="flex flex-col gap-2 items-center justify-center"
                         initial={{ y: 50, opacity: 0}}
                         animate={{ y: 0, opacity: 1}}
                         transition={{ duration: 0.1 }}
                     >
-                        <h1 className="title-main">Create your account</h1>
-                        <button 
-                            className="button-md"
+                        <h1 className="">Create your account</h1>
+                        <Button 
+                            size="md"
                             onClick={handleGoogleLogin} 
                         >
                             Connect with <FontAwesomeIcon icon={faGoogle}/>
-                        </button>
-                        <button 
-                            className="button-md"
+                        </Button>
+                        <Button 
+                            size="md"
                             onClick={() => setSignInEmail(true)}
                         >
                             Continue with email
-                        </  button>
-                        <motion.a
-                            onClick={handleSwitch}
-                            onTap={handleSwitch}
-                            className="link-btn"
-                            id="reg-buttons" 
-                            whileHover={{ cursor: 'pointer' }}
-                        >
+                        </Button>
+                        <LinkButton onClick={handleSwitch}>
                             Already have an account? <span>Sign In</span>
-                        </motion.a>
+                        </LinkButton>
                     </motion.div>
                 }
             </div>

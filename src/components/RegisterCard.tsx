@@ -2,6 +2,10 @@ import { motion } from "motion/react";
 import { auth } from "../lib/firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
+import Input from "./Input";
+import Button from "./Button";
+import LinkButton from "./LinkButton";
+import ErrorMessage from "./ErrorMessage";
 
 interface RegisterCardProps {
     email: string;
@@ -19,72 +23,64 @@ interface RegisterCardProps {
 export default function RegisterCard({email, setEmail, password, setPassword, name, setName, phrase, registerWithEmail, setSignInEmail}: RegisterCardProps) {
     return (
         <motion.div 
-            className="register-container" 
+            className="w-full h-full flex flex-col items-center justify-center gap-2" 
             style={auth.currentUser ? {opacity: '0'} : {opacity: '1'}}
-            initial={{ y: 50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.1 }}
         >
-            <h2 className="title-main">Create your account</h2>
-            <form className="form-container" action={registerWithEmail} onSubmit={async (e) => {
+            <h2 className="text-2xl">Create your account</h2>
+            <form className="w-full flex flex-col items-center justify-center gap-2 text-black" action={registerWithEmail} onSubmit={async (e) => {
                 e.preventDefault();
                 await registerWithEmail();
             }}>
-                <input 
+                <Input 
+                    size="sm"
                     type="email" 
                     placeholder="Email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="input-lg"
-                    required
+                    setValue={setEmail}
+                    required={true}
+                    autocomplete="false"
                 />
 
-                <input 
+                <Input 
+                    size="sm"
                     type="password" 
                     placeholder="Password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="input-lg"
-                    required
+                    setValue={setPassword}
+                    required={true}
+                    autocomplete="false"
                 />
 
-                <input 
+                <Input 
+                    size="sm"
                     type="name" 
                     placeholder="Display Name"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="input-lg"
+                    setValue={setName}
                     maxLength={16} 
-                    required
+                    required={true}
+                    autocomplete="false"
                 />
 
                 {phrase != "" && 
-                    <motion.p 
-                        className="phrase-error"
-                        initial={{ y: -20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ duration: 0.2 }}
-                    >
+                    <ErrorMessage>
                         {phrase}
-                    </motion.p>
+                    </ErrorMessage>
                 }
 
-                <motion.button 
-                    className="button-md"
-                >
+                <Button size="sm">
                     Register
-                </motion.button>
+                </Button>
             </form>
 
-            <motion.button
+            <LinkButton
                 onClick={() => setSignInEmail(false)}
-                onTap={() => setSignInEmail(false)}
-                className="back-button"
-                id="reg-buttons"
-                whileHover={{y: -2, cursor: 'pointer'}}
             >
                 <FontAwesomeIcon icon={faArrowLeft}/> Go Back
-            </motion.button>
+            </LinkButton>
         </motion.div>
     )
 }

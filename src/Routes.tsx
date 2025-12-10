@@ -11,17 +11,32 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 export const router = createBrowserRouter([
   {
+    path: "/login",
+    element: <LoginPage />
+  },
+  {
+    path: "/register",
+    element: <RegisterPage />
+  },
+  {
+    path: "/loading",
+    element: <Loading />
+  },
+  {
     path: "/",
     element: <App />,
     children: [
       { index: true, element: <Home /> },
-      { path: "login", element: <LoginPage /> },
-      { path: "loading", element: <Loading />},
-      { path: "register", element: <RegisterPage /> },
-      { path: "settings", element: <Settings /> },  
+      { path: "settings", element: <Settings /> },
       { path: "roles", element: <RolesSelectorPage /> },
-      { path: "roles/:id", element: <ProtectedRoute />, children: [{ index: true, element: <RolePage /> }], },
 
+      {
+        path: "roles/:id",
+        element: <ProtectedRoute />,
+        children: [
+          { index: true, element: <RolePage /> },
+        ],
+      },
     ],
   },
 ]);

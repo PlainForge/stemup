@@ -1,10 +1,10 @@
-import { motion } from "motion/react";
 import type { Task } from "../myDataTypes";
 import { useContext, useEffect, useState } from "react";
 import { db } from "../lib/firebase";
 import { collection, doc, onSnapshot, query, setDoc, Timestamp, where } from "firebase/firestore";
 import "./styles/doneButton.css"
 import { MainContext } from "../context/MainContext";
+import Button from "./Button";
 
 interface DoneButtonProps {
     task: Task
@@ -53,19 +53,18 @@ export default function DoneButton({ task } : DoneButtonProps) {
     }
 
     if (task.complete) {
-        return <h3 className="complete">Completed</h3>
+        return <h3 className="w-full border-2 p-2 rounded-xl text-center cursor-default bg-green-500">Completed</h3>
     } else if (tasks.includes(task.id)) {
-        return <h3 className="waiting">Waiting for approval</h3>
+        return <h3 className="w-full border-2 p-2 rounded-xl text-center cursor-default">Waiting for approval...</h3>
     } else {
         return (
-            <motion.button 
-                className="done-button"
+            <Button
                 onClick={submitTask} 
-                onTap={submitTask}
                 disabled={submitting}
+                size="full"
             >
                 {submitting ? "Submitting..." : "Done"}
-            </motion.button>
+            </Button>
         );
     }
 }
