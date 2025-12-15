@@ -56,7 +56,7 @@ export default function JoinButton({ role } : JoinProps) {
             <motion.button
                 whileHover={{cursor: 'pointer', y: -4, scale: 1.02}} 
                 key={role.id + role.id} 
-                className="join-button-container"
+                className="font-medium"
             >
                 <LinkButton onClick={() => navigate(`/roles/${role.id}`)}>Join</LinkButton>
             </motion.button>

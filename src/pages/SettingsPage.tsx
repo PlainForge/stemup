@@ -116,7 +116,7 @@ export default function Settings() {
                         />
 
                         <label className="text-sm font-semibold">Current Role</label>
-                        <div className="flex items-center justify-between bg-[#f7f7f7] p-[12px_14px] rounded-[10px] text-[15px]">
+                        <div className="flex items-center justify-between bg-[#f7f7f7] p-[12px_14px] rounded-[10px]">
                             <span>{roleName || "No role selected"}</span>
                             <Button
                                 onClick={resetRole}

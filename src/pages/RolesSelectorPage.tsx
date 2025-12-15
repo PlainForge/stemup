@@ -8,6 +8,8 @@ import Loading from './Loading';
 import { MainContext } from '../context/MainContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faStar } from '@fortawesome/free-solid-svg-icons';
 
 
 export default function RolesSelectorPage() {
@@ -16,6 +18,7 @@ export default function RolesSelectorPage() {
     const [roles, setRoles] = useState<Role[]>([]);
 
     const user = context?.user ?? null;
+    const userData = context?.userData ?? null;
     const loading = context?.loading ?? true;
     const admins = context?.admins ?? [];
 
@@ -92,7 +95,7 @@ export default function RolesSelectorPage() {
                                 animate={{ x: 0, opacity: 1 }}
                                 key={role.id}
                             >
-                                <p className='title-card'>{role.name}</p>
+                                <p className='font-semibold text-2xl'>{userData?.currentRole.match(role.id) ? <FontAwesomeIcon icon={faStar}/> : ""} {role.name}</p>
                                 <JoinButton role={role} />
                             </motion.div>
                         )

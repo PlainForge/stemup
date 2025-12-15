@@ -42,7 +42,7 @@ export default function MainProvider({ children }: { children: React.ReactNode }
                     setLoading(false);
                     return;
                 }
-
+                
                 setNeedsVerification(false);
                 setUser(usr);
                 setLoading(false);

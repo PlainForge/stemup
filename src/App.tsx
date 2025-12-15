@@ -10,14 +10,17 @@ export default function App() {
   const navigate = useNavigate();
 
   const user = context?.user ?? null;
+  const userData = context?.userData ?? null;
   const loading = context?.loading ?? true;
   const needsVerification = context?.needsVerification ?? false;
 
   useEffect(() => {
     if (!loading && !user) {
       navigate("/login", { replace: true });
+    } else if (!loading && user && userData) {
+      navigate(userData.currentRole ? `/roles/${userData.currentRole}` : '/', { replace: true });
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, userData]);
 
   if (loading) return <Loading />;
   if (user && needsVerification) return <VerifyEmailPage />;
