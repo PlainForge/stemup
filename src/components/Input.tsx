@@ -3,7 +3,7 @@ interface InputProps {
     id?: string;
     name?: string;
     type: string;
-    placeholder: string;
+    placeholder?: string;
     value?: string;
     setValue?: (value: string) => void;
     required: boolean;
@@ -17,7 +17,8 @@ export default function Input({size, id, name, type, placeholder, value, setValu
     const sizeClass = {
         sm: "w-32 lg:w-52",
         md: "w-52 lg:w-72",
-        lg: "w-72 lg:2-92"
+        lg: "w-72 lg:2-92",
+        full: "w-full"
     }[size];
     return (
         <input 

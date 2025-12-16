@@ -9,6 +9,7 @@ import Button from "../components/Button";
 import { Alert } from "../components/PhraseAlert";
 import { useNavigate } from "react-router-dom";
 import ProfileImg from "../components/ProfileImg";
+import Input from "../components/Input";
 
 export default function Settings() {
     const context = useContext(MainContext);
@@ -110,13 +111,14 @@ export default function Settings() {
                 <form className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-8 md:gap-[30px]">
                     <div className="flex flex-col gap-4">
                         <label className="text-sm font-semibold">Your Name</label>
-                        <input
-                            className="p-[12px_14px] rounded-[10px] border-2 border-[#ccc] text-[15px] outline-none transition focus:border-blue-600"
+                        <Input
+                            size="full"
                             type="text"
                             maxLength={16}
                             value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            required
+                            setValue={setName}
+                            required={true}
+                            autocomplete="false"
                         />
 
                         <label className="text-sm font-semibold">Current Role</label>
@@ -163,7 +165,7 @@ export default function Settings() {
                     Delete My Account
                 </Button>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col-reverse md:flex-row items-center gap-3">
                     <Button
                         onClick={handleCancelChanges}
                         color="gray"
