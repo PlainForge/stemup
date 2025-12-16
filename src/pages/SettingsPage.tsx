@@ -8,6 +8,7 @@ import Loading from "./Loading";
 import Button from "../components/Button";
 import { Alert } from "../components/PhraseAlert";
 import { useNavigate } from "react-router-dom";
+import ProfileImg from "../components/ProfileImg";
 
 export default function Settings() {
     const context = useContext(MainContext);
@@ -73,6 +74,9 @@ export default function Settings() {
 
     const resetRole = async () => {
         await updateDoc(doc(db, "users", user.uid), { currentRole: "" });
+        context.setUserData(prev =>
+            prev ? { ...prev, currentRole: "" } : prev
+        );
     };
 
     const deleteAccount = async () => {
@@ -122,6 +126,7 @@ export default function Settings() {
                                 onClick={resetRole}
                                 color="red"
                                 size="xsm"
+                                type="button"
                             >
                                 Reset Role
                             </Button>
@@ -130,9 +135,9 @@ export default function Settings() {
                     <div className="flex flex-col items-center gap-3">
                         <div className="w-[140px] h-[140px] bg-[#f0f0f0] rounded-full overflow-hidden">
                             {preview ? (
-                                <img src={preview} className="w-full h-full object-cover" />
+                                <ProfileImg src={preview} />
                             ) : (
-                                <div className="w-full h-full bg-[#e0e0e0] rounded-full"></div>
+                                <ProfileImg />
                             )}
                         </div>
 

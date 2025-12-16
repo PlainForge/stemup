@@ -7,20 +7,37 @@ import VerifyEmailPage from './pages/EmailVerifyPage';
 
 export default function App() {
   const context = useContext(MainContext);
-  const navigate = useNavigate();
+  const navigate = useNavigate?.();
 
   const user = context?.user ?? null;
   const userData = context?.userData ?? null;
   const loading = context?.loading ?? true;
   const needsVerification = context?.needsVerification ?? false;
+  const justLoggedIn = context?.justLoggedIn ?? false;
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate("/login", { replace: true });
-    } else if (!loading && user && userData) {
-      navigate(userData.currentRole ? `/roles/${userData.currentRole}` : '/', { replace: true });
+    if (loading) return;
+    if (!user) return;
+
+    // 🔑 only right after login
+    if (!justLoggedIn) return;
+
+    const role = userData?.currentRole;
+
+    if (role) {
+      navigate(`/roles/${role}`, { replace: true });
     }
-  }, [user, loading, navigate, userData]);
+
+    // 🔥 consume the flag so it never runs again
+    context?.setJustLoggedIn(false);
+  }, [
+    loading,
+    user,
+    userData?.currentRole,
+    justLoggedIn,
+    navigate,
+    context
+  ]);
 
   if (loading) return <Loading />;
   if (user && needsVerification) return <VerifyEmailPage />;

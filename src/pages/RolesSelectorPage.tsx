@@ -23,6 +23,7 @@ export default function RolesSelectorPage() {
     const admins = context?.admins ?? [];
 
     useEffect(() => {
+        if (!user) return;
         const rolesCol = collection(db, "roles");
 
         const unsub = onSnapshot(
@@ -40,7 +41,7 @@ export default function RolesSelectorPage() {
         );
 
         return () => unsub();
-    }, []);
+    }, [user]);
 
     if (!user || loading) return <Loading />
 

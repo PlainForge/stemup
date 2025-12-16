@@ -1,4 +1,4 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { GoogleAuthProvider } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
 import LoginCard from "../components/LoginCard.tsx";
@@ -15,6 +15,12 @@ export default function LoginPage() {
     const navigate = useNavigate?.();
     const context = useContext(MainContext);
     const user = context?.user ?? null;
+
+    useEffect(() => {
+        if (user) {
+            navigate("/");
+        }
+    })
 
     // Google Login/Register
     const handleGoogleLogin = async () => {
@@ -59,8 +65,7 @@ export default function LoginPage() {
             }
         }
     };
-    
-    if (user != null) navigate("/");
+
     return (
         <div className="w-screen h-screen bg-linear-to-r from-blue-400 to-blue-100 flex flex-col items-center justify-center">
             <div className="h-screen w-full flex flex-col items-center justify-center gap-4">

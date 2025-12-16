@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { db } from "../lib/firebase";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
-import { type Task, type Role, type UserData, type UserRoleData } from "../myDataTypes";
+import { type Task, type Role, type UserData, type UserRoleData, type SubmittedTask } from "../myDataTypes";
 import { motion } from "motion/react";
 import RoleAdminPage from "../components/RoleAdmin";
 import DoneButton from "../components/TaskDoneButton";
@@ -10,6 +10,7 @@ import Loading from "./Loading";
 import { MainContext } from "../context/MainContext";
 import LinkButton from "../components/LinkButton";
 import Button from "../components/Button";
+import ProfileImg from "../components/ProfileImg";
 
 export default function RolePage() {
     const context = useContext(MainContext);
@@ -23,6 +24,9 @@ export default function RolePage() {
     const [rewards, setRewards] = useState<string[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
     const [isCurrentRole, setIsCurrentRole] = useState(false);
+
+    const [requested, setRequested] = useState<string[]>([]);
+    const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
 
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
 
@@ -162,6 +166,39 @@ export default function RolePage() {
         return () => unsub();
     }, [roleId, user]);
 
+    // Get Members to get requested user's data
+    useEffect(() => {
+        if (!role) return;
+        const roleRef = doc(db, "roles", role.id);
+        const unsub = onSnapshot(roleRef, (snap) => {
+            if (snap.exists()) {
+                setRequested(snap.data().pendingRequests || []);
+            }
+        });
+
+        return () => unsub();
+    }, [role, setRequested]);
+
+    // Getting the current role's submitted tasks
+    useEffect(() => {
+        if (!role) return;
+        const q = query(
+            collection(db, "tasksSubmitted"),
+            where("roleId", "==", role.id),
+            where("complete", "==", false)
+        )
+
+        const unsub = onSnapshot(q, (snap) => {
+            setSubmittedTasks(
+                snap.docs.map((doc) => ({
+                    id: doc.id,
+                    ...(doc.data() as Omit<SubmittedTask, "id">),
+                }))
+            )
+        })
+        return () => unsub();
+    }, [role, setSubmittedTasks]);
+
     const setCurrentRole = async (id : string) => {
         if (!user) return;
         await updateDoc(doc(db, "users", user.uid), {
@@ -219,12 +256,25 @@ export default function RolePage() {
                         {taskCount > 0 ? <p className="ml-2 bg-green-400 px-2 py-0.5 rounded-full">{taskCount}</p> : null}
                     </LinkButton>
                     :
+                    <div className="relative">
+                        {requested.length > 0 || submittedTasks.length > 0 ?
+                        <span className="absolute flex size-3 -top-2 -right-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
+                            <span className="relative inline-flex size-3 rounded-full bg-sky-500"></span>
+                        </span>
+                        : null}
                         <LinkButton
                         onClick={() => setPageState("admin")}
-                        moreClass={pageState === "admin" ? "font-semibold" : "font-regular"}
-                    >
-                        Admin
-                    </LinkButton>
+                        moreClass={
+                            `
+                            ${pageState === "admin" ? "font-semibold" : "font-regular"} 
+                            
+                            `
+                        }
+                        >
+                            Admin
+                        </LinkButton>
+                    </div>
                 }
                 {isCurrentRole ? 
                     <motion.p 
@@ -249,7 +299,7 @@ export default function RolePage() {
                     <div className="w-full flex flex-col items-center">
                         <h1 className="text-2xl">Leaderboard</h1>
 
-                        <div className="w-1/2 flex flex-col">
+                        <div className="w-11/12 md:w-1/2 flex flex-col">
                             {leaders ? leaders.map((u) => {
                                 if (admins.includes(u.id)) return;
                                 i++
@@ -258,8 +308,8 @@ export default function RolePage() {
                                     <div className="w-full justify-between flex flex-col md:flex-row border-b py-2" key={u.id}>
                                         <div className="flex justify-between items-center gap-4">
                                             <p className="mr-2 text-2xl"><strong>{i}</strong></p>
-                                            <img src={u.photoURL} alt={u.name} className="size-16 object-cover rounded-full" />
-                                            <p className="text-2xl">{u.name}</p>
+                                            <ProfileImg src={u.photoURL} alt={u.name} size="xs" />
+                                            <p className="text-2xl font-medium">{u.name}</p>
                                         </div>
                                         <div className="flex gap-4 items-center justify-center">
                                             <p><span className="font-bold">{u.points}</span> pts</p>
@@ -272,7 +322,7 @@ export default function RolePage() {
                                         <div className={`w-full justify-between flex flex-col md:flex-row border-b py-2`} key={u.id}>
                                             <div className="flex justify-between items-center gap-4">
                                                 <p className={`${i > 9 ? "mr-0" : "mr-2"}`}><strong>{i}</strong></p>
-                                                <img src={u.photoURL} alt={u.name} className="size-8 object-cover rounded-full" />
+                                                <ProfileImg src={u.photoURL} alt={u.name} size="xxs" />
                                                 <p>{u.name}</p>
                                             </div>
                                             <div className="flex gap-4 items-center justify-center">
@@ -300,7 +350,7 @@ export default function RolePage() {
                         );
                         const winners = filteredLeaders[idx];
                         return (
-                            <div className="w-1/2 flex justify-between mb-4 border-b" key={label}>
+                            <div className="w-11/12 md:w-1/2 flex justify-between mb-4 border-b" key={label}>
                                 <div className="flex flex-col">
                                     <h1 className="text-2xl font-medium">{label}</h1>
                                     <p>{winners ? winners.name : "No user"}</p>
@@ -339,7 +389,14 @@ export default function RolePage() {
                 </motion.div>
                 :
                 pageState.match("admin") ?
-                <RoleAdminPage role={role} membersWithData={membersWithData} />
+                <RoleAdminPage 
+                    role={role} 
+                    membersWithData={membersWithData} 
+                    requested={requested} 
+                    setRequested={setRequested} 
+                    submittedTasks={submittedTasks}
+                    setSubmittedTasks={setSubmittedTasks}
+                />
                 : "" }
         </div>
     )

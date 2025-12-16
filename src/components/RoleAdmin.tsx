@@ -8,35 +8,28 @@ import LinkButton from "./LinkButton";
 import Button from "./Button";
 import Input from "./Input";
 import { Alert } from "./PhraseAlert";
+import ProfileImg from "./ProfileImg";
 
 interface prop {
-    role: {name: string, id: string}
-    membersWithData: UserData[]
+    role: {name: string, id: string},
+    membersWithData: UserData[],
+    requested: string[],
+    setRequested: (ids: string[]) => void,
+    submittedTasks: SubmittedTask[],
+    setSubmittedTasks: (tasks: SubmittedTask[]) => void,
 }
 
-export default function RoleAdminPage({ role, membersWithData } : prop) {
+export default function RoleAdminPage({ role, membersWithData, requested, submittedTasks } : prop) {
     const context = useContext(MainContext);
     const [page, setPage] = useState("submitted");
-    const [requested, setRequested] = useState<string[]>([]);
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
-    const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
     const [createTaskFor, setCreateSetTaskFor] = useState<string[]>([]);
     const [phrase, setPhrase] = useState(""); // Role name change phrase
     const [phrase2, setPhrase2] = useState(""); // Role reset phrase
     const [phrase3, setPhrase3] = useState(""); // Role reward phrase
     const [phrase4, setPhrase4] = useState(""); // Sent task phrase
 
-    // Get Members to get requested user's data
-    useEffect(() => {
-        const roleRef = doc(db, "roles", role.id);
-        const unsub = onSnapshot(roleRef, (snap) => {
-            if (snap.exists()) {
-                setRequested(snap.data().pendingRequests || []);
-            }
-        });
-
-        return () => unsub();
-    }, [role.id]);
+    
 
     // Get Users that requested
     useEffect(() => {
@@ -62,27 +55,7 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
         return () => unsubs.forEach((u) => u());
     }, [requested])
 
-    // Getting the current role's submitted tasks
-    useEffect(() => {
-        const q = query(
-            collection(db, "tasksSubmitted"),
-            where("roleId", "==", role.id),
-            where("complete", "==", false)
-        )
-
-        const unsub = onSnapshot(q, (snap) => {
-            setSubmittedTasks(
-                snap.docs.map((doc) => ({
-                    id: doc.id,
-                    ...(doc.data() as Omit<SubmittedTask, "id">),
-                }))
-            )
-        })
-        return () => unsub();
-    }, [role]);
-
-    if (!context) return null;
-    const {user, userData, loading, admins} = context
+    
 
     // Sending a task to a user in the current role
     const sendTask = async (e: FormEvent<HTMLFormElement>) => {
@@ -381,6 +354,9 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
         }
     }
 
+    if (!context) return null;
+    const {user, userData, loading, admins} = context
+
     if (!user || !userData || loading) {
         return <h1>Loading...</h1>
     }
@@ -442,7 +418,10 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
                                             initial={{x: -10}}
                                             animate={{x:0}}
                                         >
-                                            <h3 className="text-2xl font-medium">{user.name}</h3>
+                                            <div className="flex items-center justify-between gap-4">
+                                                <ProfileImg src={user.photoURL} alt={user.name} size="xs" />
+                                                <h3 className="text-2xl font-medium">{user.name}</h3>
+                                            </div>
                                             <div className="flex flex-col space-y-2">
                                                 <Button
                                                     onClick={() => acceptRequest(user.uid)} 
@@ -507,7 +486,11 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
                                                     key={uid}
                                                     className="flex items-center justify-between bg-gray-100 p-2 rounded-xl w-sm"
                                                 >
-                                                    <span className="title-card">{member.name}</span>
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <ProfileImg src={member.photoURL} alt={member.name} size="xxs" />
+                                                        <span className="title-card">{member.name}</span>
+                                                    </div>
+                                                    
                                                     <LinkButton
                                                         onClick={() =>
                                                             setCreateSetTaskFor((prev) =>
@@ -590,7 +573,9 @@ export default function RoleAdminPage({ role, membersWithData } : prop) {
                                         </div>
                                         <div>
                                             <h4 className="font-medium">Submitted by</h4>
-                                            <p>{submitted.assignedName}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p>{submitted.assignedName}</p>
+                                            </div>
                                         </div>
                                         <div className="w-full flex justify-between">
                                             <Button

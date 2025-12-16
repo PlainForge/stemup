@@ -28,14 +28,14 @@ export default function Nav() {
 
     const handleLogout = async () => {
         await signOut(auth);
-        window.location.reload();
+        navigate("/login");
     };
 
     if (!user || !userData) return null;
     return (
         <div className='flex w-full justify-evenly items-center'>
             <h2 className='text-2xl font-bold'>StemUP</h2>
-            <h3 className="">{userData?.name}</h3>
+            <h3 className="hidden md:block">{userData?.name}</h3>
             <div className="roles-container">
                 <LinkButton onClick={() => navigate("roles")}>Roles</LinkButton>
             </div>

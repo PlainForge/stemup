@@ -15,6 +15,8 @@ export interface MainContextType {
     setUserData: React.Dispatch<React.SetStateAction<UserData | null>>;
     admins: string[];
     needsVerification: boolean;
+    justLoggedIn: boolean;
+    setJustLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export default function MainProvider({ children }: { children: React.ReactNode }) {
@@ -23,6 +25,7 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     const [loading, setLoading] = useState<boolean>(true);
     const [admins, setAdmins] = useState<string[]>([]);
     const [needsVerification, setNeedsVerification] = useState<boolean>(false);
+    const [justLoggedIn, setJustLoggedIn] = useState(false);
 
     // Get current logged in user
     useEffect(() => {
@@ -45,6 +48,7 @@ export default function MainProvider({ children }: { children: React.ReactNode }
                 
                 setNeedsVerification(false);
                 setUser(usr);
+                setJustLoggedIn(true);
                 setLoading(false);
             } catch (err) {
                 console.error("Error in auth listener:", err);
@@ -120,7 +124,7 @@ export default function MainProvider({ children }: { children: React.ReactNode }
         return () => clearInterval(interval);
     }, [user]);
 
-    const val = { user, setUser, loading, setLoading, userData, setUserData, admins, needsVerification };
+    const val = { user, setUser, loading, setLoading, userData, setUserData, admins, needsVerification, justLoggedIn, setJustLoggedIn };
 
     return (
         <MainContext.Provider value={val}>

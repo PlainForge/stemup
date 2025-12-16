@@ -1,6 +1,7 @@
 import { useContext } from "react";
 import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
+import ProfileImg from "./ProfileImg";
 
 const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
 
@@ -21,9 +22,9 @@ export default function Dash() {
             <h1 className="font-bold text-2xl">Your Stats</h1>
             <div className="flex flex-col items-center justify-center space-x-0 md:space-x-4 space-y-4 md:space-y-0 sm:flex-row">
                 {userData?.photoURL ? (
-                    <img src={userData.photoURL || DEFAULT_AVATAR} alt="Profile" className="size-32 object-cover rounded-full" />
+                    <ProfileImg src={userData.photoURL || DEFAULT_AVATAR} alt="Profile Picture" />
                 ) : (
-                    <div style={{ background: "#fff" }} className="size-32 rounded-full" />
+                    <ProfileImg alt="No Profile Picture" />
                 )}
                 <h3 className="text-2xl">{userData?.name ? userData.name : ""}</h3>
             </div>

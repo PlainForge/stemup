@@ -11,7 +11,7 @@ interface InputProps {
     maxLength?: number;
 }
 
-export default function Input({size, id, name, type, placeholder, value, setValue, required, maxLength}: InputProps) {
+export default function Input({size, id, name, type, placeholder, value, setValue, required, maxLength, autocomplete}: InputProps) {
     if (size === undefined || size === "") size = "md";
     if (setValue === undefined) setValue = () => {};
     const sizeClass = {
@@ -38,6 +38,7 @@ export default function Input({size, id, name, type, placeholder, value, setValu
                 transition-all duration-200`}
             required={required}
             maxLength={maxLength}
+            autoComplete={autocomplete}
         />
     )
 }
