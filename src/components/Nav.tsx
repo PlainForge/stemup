@@ -29,6 +29,7 @@ export default function Nav() {
     const handleLogout = async () => {
         await signOut(auth);
         navigate("/login");
+        window.location.reload();
     };
 
     if (!user || !userData) return null;

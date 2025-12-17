@@ -5,15 +5,17 @@ import { type Task, type Role, type UserData, type UserRoleData, type SubmittedT
 import { motion } from "motion/react";
 import RoleAdminPage from "../components/RoleAdmin";
 import DoneButton from "../components/TaskDoneButton";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Loading from "./Loading";
 import { MainContext } from "../context/MainContext";
 import LinkButton from "../components/LinkButton";
 import Button from "../components/Button";
-import ProfileImg from "../components/ProfileImg";
+import ProfileButton from "../components/ProfileButton";
 
 export default function RolePage() {
     const context = useContext(MainContext);
+    const navigate = useNavigate();
+
     const { id: roleId } = useParams<{ id: string }>();
     const [members, setMembers] = useState<string[]>([]);
     const [membersWithData, setMembersWithData] = useState<UserData[]>([]);
@@ -24,6 +26,7 @@ export default function RolePage() {
     const [rewards, setRewards] = useState<string[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
     const [isCurrentRole, setIsCurrentRole] = useState(false);
+    const [isMember, setIsMember] = useState<boolean | null>(null);
 
     const [requested, setRequested] = useState<string[]>([]);
     const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
@@ -35,22 +38,33 @@ export default function RolePage() {
     const admins = context?.admins ?? [];
 
     useEffect(() => {
-        if (!roleId) return;
+        if (!roleId || !user) return;
 
         const roleRef = doc(db, "roles", roleId);
+
         const unsub = onSnapshot(roleRef, (snap) => {
-        if (snap.exists()) {
+            if (!snap.exists()) {
+                setRole(null);
+                setMembers([]);
+                setIsMember(false);
+                return;
+            }
+
             const data = snap.data() as Omit<Role, "id"> & { members: string[] };
+
             setRole({ id: snap.id, ...data });
             setMembers(data.members || []);
-        } else {
-            setRole(null);
-            setMembers([]);
-        }
+            setIsMember((data.members || []).includes(user.uid));
         });
 
-        return () => unsub();
-    }, [roleId]);
+        return unsub;
+    }, [roleId, user]);
+
+    useEffect(() => {
+        setMembersWithData((prev) =>
+            prev.filter((m) => members.includes(m.uid))
+        );
+    }, [members]);
 
     // Get Members
     useEffect(() => {
@@ -63,26 +77,26 @@ export default function RolePage() {
             const userRef = doc(db, "users", uid);
             return onSnapshot(userRef, (snap) => {
                 if (snap.exists()) {
-                const data = snap.data();
-                setMembersWithData((prev) => {
-                    const updated = prev.filter((m) => m.id !== uid);
-                    const roleData = Array.isArray(data.roles)
-                    ? data.roles.find((r: UserRoleData) => r.id === roleId) || {}
-                    : {};
-                    return [
-                    ...updated,
-                    {
-                        id: uid,
-                        uid,
-                        name: data.name || "Unknown User",
-                        roles: data.roles || [],
-                        points: roleData.points || 0,
-                        taskCompleted: roleData.taskCompleted || 0,
-                        photoURL: data.photoURL || "",
-                        currentRole: data.currentRole || "",
-                    },
-                    ];
-                });
+                    const data = snap.data();
+                    setMembersWithData((prev) => {
+                        const updated = prev.filter((m) => m.id !== uid);
+                        const roleData = Array.isArray(data.roles)
+                        ? data.roles.find((r: UserRoleData) => r.id === roleId) || {}
+                        : {};
+                        return [
+                            ...updated,
+                            {
+                                id: uid,
+                                uid,
+                                name: data.name || "Unknown User",
+                                roles: data.roles || [],
+                                points: roleData.points || 0,
+                                taskCompleted: roleData.taskCompleted || 0,
+                                photoURL: data.photoURL || "",
+                                currentRole: data.currentRole || "",
+                            },
+                        ];
+                    });
                 }
             });
         });
@@ -127,7 +141,7 @@ export default function RolePage() {
     useEffect(() => {
         if (!membersWithData.length) return;
         const sorted = [...membersWithData].sort(
-        (a, b) => (b.points || 0) - (a.points || 0)
+            (a, b) => (b.points || 0) - (a.points || 0)
         );
         setLeaders(sorted);
     }, [membersWithData]);
@@ -199,6 +213,12 @@ export default function RolePage() {
         return () => unsub();
     }, [role, setSubmittedTasks]);
 
+    useEffect(() => {
+        if (!loading && role && !isMember) {
+            navigate("/roles", { replace: true });
+        }
+    }, [isMember, role, loading, navigate]);
+
     const setCurrentRole = async (id : string) => {
         if (!user) return;
         await updateDoc(doc(db, "users", user.uid), {
@@ -206,7 +226,8 @@ export default function RolePage() {
         })
     }
 
-    if (!user || !role || loading) return <Loading />
+    if (loading || isMember === null) return <Loading />;
+    if (!isMember || !user || !role ) return null;
 
     const taskCount = userTasks.filter(task => !task.complete).length;
     let i = 0;
@@ -268,7 +289,6 @@ export default function RolePage() {
                         moreClass={
                             `
                             ${pageState === "admin" ? "font-semibold" : "font-regular"} 
-                            
                             `
                         }
                         >
@@ -308,8 +328,7 @@ export default function RolePage() {
                                     <div className="w-full justify-between flex flex-col md:flex-row border-b py-2" key={u.id}>
                                         <div className="flex justify-between items-center gap-4">
                                             <p className="mr-2 text-2xl"><strong>{i}</strong></p>
-                                            <ProfileImg src={u.photoURL} alt={u.name} size="xs" />
-                                            <p className="text-2xl font-medium">{u.name}</p>
+                                            <ProfileButton user={u} size="xs"/>
                                         </div>
                                         <div className="flex gap-4 items-center justify-center">
                                             <p><span className="font-bold">{u.points}</span> pts</p>
@@ -322,8 +341,7 @@ export default function RolePage() {
                                         <div className={`w-full justify-between flex flex-col md:flex-row border-b py-2`} key={u.id}>
                                             <div className="flex justify-between items-center gap-4">
                                                 <p className={`${i > 9 ? "mr-0" : "mr-2"}`}><strong>{i}</strong></p>
-                                                <ProfileImg src={u.photoURL} alt={u.name} size="xxs" />
-                                                <p>{u.name}</p>
+                                                <ProfileButton user={u} size="xxs"/>
                                             </div>
                                             <div className="flex gap-4 items-center justify-center">
                                                 <p><span className="font-bold">{u.points}</span> pts</p>

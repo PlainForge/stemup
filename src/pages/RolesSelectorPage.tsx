@@ -80,15 +80,15 @@ export default function RolesSelectorPage() {
             animate={{ y: 0 }}
         >
             <h1 className='text-3xl'>Available Roles</h1>
-            <div className='flex flex-col gap-4 mt-4'>
+            <div className='w-full flex flex-col items-center gap-4 mt-4'>
                 {roles.length > 0 ? roles.map((role) => {
                     if (!role.name.match("global")) {
                         return (
                             <motion.div 
                                 className="
-                                    w-sm md:w-md flex justify-between
+                                    w-11/12 lg:w-2xl flex justify-between
                                     px-4 py-2 border border-[rgba(24,24,24,0.3)]
-                                    rounded-2xl 
+                                    rounded-2xl cursor-default
                                     hover:border-[rgba(24,24,24,0.9)]
                                     transition-all duration-300 ease-out
                                 "

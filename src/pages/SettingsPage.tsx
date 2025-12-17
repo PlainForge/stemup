@@ -165,7 +165,7 @@ export default function Settings() {
                     Delete My Account
                 </Button>
 
-                <div className="flex flex-col-reverse md:flex-row items-center gap-3">
+                <div className="flex flex-col-reverse md:flex-row md:items-center gap-3">
                     <Button
                         onClick={handleCancelChanges}
                         color="gray"

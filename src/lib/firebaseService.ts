@@ -1,10 +1,28 @@
 import { createUserWithEmailAndPassword, deleteUser, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithPopup, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
 import { auth, db, storage } from "./firebase";
-import { arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
+import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import type { UserData } from "../myDataTypes";
+import type { Role, UserData } from "../myDataTypes";
 
 const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
+
+async function removeUserRole(userId: string, roleId: string) {
+  const userRef = doc(db, "users", userId);
+  const snap = await getDoc(userRef);
+
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const roles = Array.isArray(data.roles) ? data.roles : [];
+
+  const updatedRoles = roles.filter((r: Role) => r.id !== roleId);
+
+  await updateDoc(userRef, {
+    roles: updatedRoles,
+    // Optional: clear currentRole if it matches
+    ...(data.currentRole === roleId ? { currentRole: "" } : {})
+  });
+}
 
 export const firebaseAuthService = {
     /**
@@ -194,6 +212,42 @@ export const firebaseAuthService = {
             return userSnap;
         }
         return null;
+    },
+
+    async kickUserFromRole(roleId: string, targetUid: string) {
+        const batch = writeBatch(db);
+
+        // 1. Remove from role members
+        const roleRef = doc(db, "roles", roleId);
+        batch.update(roleRef, {
+            members: arrayRemove(targetUid),
+        });
+
+        await removeUserRole(targetUid, roleId);
+
+        // 3. Delete assigned tasks
+        const tasksSnap = await getDocs(
+            query(
+            collection(db, "tasks"),
+            where("roleId", "==", roleId),
+            where("assignedTo", "==", targetUid)
+            )
+        );
+
+        tasksSnap.forEach((doc) => batch.delete(doc.ref));
+
+        // 4. Delete submitted tasks
+        const submittedSnap = await getDocs(
+            query(
+            collection(db, "tasksSubmitted"),
+            where("roleId", "==", roleId),
+            where("userId", "==", targetUid)
+            )
+        );
+
+        submittedSnap.forEach((doc) => batch.delete(doc.ref));
+
+        await batch.commit();
     },
     
     onAuthStateChanged(callback: (user: User | null) => void) {
