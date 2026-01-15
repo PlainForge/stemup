@@ -241,7 +241,7 @@ export default function RolePage() {
                         return Object.values(m.roles || {}).map((x) => {
                             if (x.id === role.id) {
                                 return (
-                                    <div key={x.id} className="flex gap-4">
+                                    <div key={x.id} className="flex gap-4 items-center">
                                         <h3>{x.points} points</h3>
                                         <h3>{x.taskCompleted} tasks completed</h3>
                                     </div>
@@ -326,11 +326,11 @@ export default function RolePage() {
                                 if (i < 4) {
                                 return (
                                     <div className="w-full justify-between flex flex-col md:flex-row border-b py-2" key={u.id}>
-                                        <div className="flex justify-between items-center gap-4">
+                                        <div className="flex md:justify-between items-center gap-4">
                                             <p className="mr-2 text-2xl"><strong>{i}</strong></p>
                                             <ProfileButton user={u} size="xs"/>
                                         </div>
-                                        <div className="flex gap-4 items-center justify-center">
+                                        <div className="flex gap-4 justify-end md:justify-center md:items-center">
                                             <p><span className="font-bold">{u.points}</span> pts</p>
                                             <p><span className="font-bold">{u.taskCompleted}</span> Tasks Completed</p>
                                         </div>
@@ -339,11 +339,11 @@ export default function RolePage() {
                                 } else {
                                     return (
                                         <div className={`w-full justify-between flex flex-col md:flex-row border-b py-2`} key={u.id}>
-                                            <div className="flex justify-between items-center gap-4">
+                                            <div className="flex md:justify-between items-center gap-4">
                                                 <p className={`${i > 9 ? "mr-0" : "mr-2"}`}><strong>{i}</strong></p>
                                                 <ProfileButton user={u} size="xxs"/>
                                             </div>
-                                            <div className="flex gap-4 items-center justify-center">
+                                            <div className="flex gap-4 justify-end items-center md:justify-center">
                                                 <p><span className="font-bold">{u.points}</span> pts</p>
                                             <p><span className="font-bold">{u.taskCompleted}</span> Tasks Completed</p>
                                             </div>

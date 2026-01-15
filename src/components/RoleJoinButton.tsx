@@ -1,7 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import { db } from "../lib/firebase";
 import { arrayUnion, doc, onSnapshot, updateDoc } from "firebase/firestore";
-import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
 import { useNavigate } from "react-router-dom";
 import LinkButton from "./LinkButton";
@@ -53,13 +52,7 @@ export default function JoinButton({ role } : JoinProps) {
 
     if (isMember) {
         return (
-            <motion.button
-                whileHover={{cursor: 'pointer', y: -4, scale: 1.02}} 
-                key={role.id + role.id} 
-                className="font-medium"
-            >
-                <LinkButton onClick={() => navigate(`/roles/${role.id}`)}>Join</LinkButton>
-            </motion.button>
+            <LinkButton onClick={() => navigate(`/roles/${role.id}`)} moreClass="font-medium">Join</LinkButton>
         )
     }
 

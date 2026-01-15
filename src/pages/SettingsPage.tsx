@@ -135,13 +135,11 @@ export default function Settings() {
                         </div>
                     </div>
                     <div className="flex flex-col items-center gap-3">
-                        <div className="w-[140px] h-[140px] bg-[#f0f0f0] rounded-full overflow-hidden">
-                            {preview ? (
-                                <ProfileImg src={preview} />
-                            ) : (
-                                <ProfileImg />
-                            )}
-                        </div>
+                        {preview ? 
+                            <ProfileImg src={preview} />
+                        :
+                            <ProfileImg />
+                        }
 
                         <label className="px-3.5 py-2.5 bg-[#222] text-white rounded-xl text-sm cursor-pointer text-center hover:bg-blue-600 hover:rounded-lg transition-all duration-200">
                             Change Photo
@@ -157,15 +155,17 @@ export default function Settings() {
 
                 </form>
 
-                <Button
-                    onClick={deleteAccount}
-                    color="red"
-                    size="sm"
-                >
-                    Delete My Account
-                </Button>
+                <div className="flex flex-col items-center md:items-start">
+                    <Button
+                        onClick={deleteAccount}
+                        color="red"
+                        size="sm"
+                    >
+                        Delete My Account
+                    </Button>
+                </div>
 
-                <div className="flex flex-col-reverse md:flex-row md:items-center gap-3">
+                <div className="flex flex-col-reverse md:flex-row items-center md:items-start gap-3">
                     <Button
                         onClick={handleCancelChanges}
                         color="gray"

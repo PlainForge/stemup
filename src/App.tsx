@@ -19,8 +19,11 @@ export default function App() {
 
   useEffect(() => {
     if (loading) return;
-    if (!user) return;
+    if (!user) {
+      navigate("login", {replace: true});
+    }
 
+    // Checks if the user just logged in - redirect to their current role at first load
     if (!justLoggedIn) return;
 
     const role = userData?.currentRole;

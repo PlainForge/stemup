@@ -17,6 +17,8 @@ export function Alert({value, setValue}:AlertProps) {
         }, 3000)
     }, [value, setValue])
 
+    if (value.length <= 0) return;
+
     return (
         <motion.div
             initial={{opacity:0}}

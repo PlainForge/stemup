@@ -76,8 +76,6 @@ export default function RolesSelectorPage() {
 
     return (
         <motion.div className='w-full flex flex-col items-center py-4 gap-4'
-            initial={{ y: 50 }}
-            animate={{ y: 0 }}
         >
             <h1 className='text-3xl'>Available Roles</h1>
             <div className='w-full flex flex-col items-center gap-4 mt-4'>

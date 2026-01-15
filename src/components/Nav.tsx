@@ -37,9 +37,7 @@ export default function Nav() {
         <div className='flex w-full justify-evenly items-center'>
             <h2 className='text-2xl font-bold'>StemUP</h2>
             <h3 className="hidden md:block">{userData?.name}</h3>
-            <div className="roles-container">
-                <LinkButton onClick={() => navigate("roles")}>Roles</LinkButton>
-            </div>
+            <LinkButton onClick={() => navigate("roles")}>Roles</LinkButton>
             <div className="flex space-x-4">
                 <LinkButton onClick={() => navigate("/")}>
                     {windowWidth > 1000 || windowHeight > 1200 ? "Home" : <FontAwesomeIcon icon={faHomeAlt}/>}
