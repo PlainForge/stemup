@@ -8,7 +8,7 @@ import ProfilePage from './components/ProfilePage';
 
 export default function App() {
   const context = useContext(MainContext);
-  const navigate = useNavigate?.();
+  const navigate = useNavigate();
 
   const user = context?.user ?? null;
   const userData = context?.userData ?? null;
@@ -20,7 +20,7 @@ export default function App() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      navigate("login", {replace: true});
+      navigate("/login", {replace: true});
     }
 
     // Checks if the user just logged in - redirect to their current role at first load
