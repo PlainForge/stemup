@@ -1,4 +1,4 @@
-import { addDoc, arrayUnion, collection, doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useContext, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
@@ -16,6 +16,8 @@ export default function RolesSelectorPage() {
     const context = useContext(MainContext);
     const [roleName, setRoleName] = useState("");
     const [roles, setRoles] = useState<Role[]>([]);
+    const [requestsPerRole, setRequestsPerRole] = useState<Record<string, number>>({});
+    const [submittedPerRole, setSubmittedPerRole] = useState<Record<string, number>>({});
 
     const user = context?.user ?? null;
     const userData = context?.userData ?? null;
@@ -26,22 +28,42 @@ export default function RolesSelectorPage() {
         if (!user) return;
         const rolesCol = collection(db, "roles");
 
-        const unsub = onSnapshot(
-            rolesCol,
-            (rolesSnap) => {
-                const rolesList: Role[] = rolesSnap.docs.map((doc) => ({
-                    id: doc.id,
-                    ...(doc.data() as { name: string }),
-                }));
+        const unsub = onSnapshot(rolesCol, (rolesSnap) => {
+            const rolesList: Role[] = rolesSnap.docs.map((d) => ({
+                id: d.id,
+                ...(d.data() as { name: string }),
+            }));
+            setRoles(rolesList);
 
-                setRoles(rolesList);
-            }, (err) => {
-                console.error("Error fetching roles:", err);
+            if (admins.includes(user.uid)) {
+                const counts: Record<string, number> = {};
+                rolesSnap.docs.forEach(d => {
+                    counts[d.id] = (d.data().pendingRequests || []).length;
+                });
+                setRequestsPerRole(counts);
             }
-        );
+        }, (err) => {
+            console.error("Error fetching roles:", err);
+        });
 
         return () => unsub();
-    }, [user]);
+    }, [user, admins]);
+
+    useEffect(() => {
+        if (!user || !admins.includes(user.uid)) return;
+
+        const q = query(collection(db, "tasksSubmitted"), where("complete", "==", false));
+        const unsub = onSnapshot(q, (snap) => {
+            const counts: Record<string, number> = {};
+            snap.docs.forEach(d => {
+                const roleId = d.data().roleId as string;
+                counts[roleId] = (counts[roleId] || 0) + 1;
+            });
+            setSubmittedPerRole(counts);
+        });
+
+        return () => unsub();
+    }, [user, admins]);
 
     if (!user || loading) return <Loading />
 
@@ -105,6 +127,12 @@ export default function RolesSelectorPage() {
                                     <FontAwesomeIcon icon={faStar} className="text-blue-500 text-sm" />
                                 )}
                                 <p className="font-semibold">{role.name}</p>
+                                {admins.includes(user.uid) && ((requestsPerRole[role.id] || 0) + (submittedPerRole[role.id] || 0)) > 0 && (
+                                    <span className="relative flex size-2.5">
+                                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
+                                        <span className="relative inline-flex size-2.5 rounded-full bg-sky-500"></span>
+                                    </span>
+                                )}
                             </div>
                             <JoinButton role={role} />
                         </motion.div>

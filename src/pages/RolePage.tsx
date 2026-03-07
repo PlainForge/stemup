@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import { db } from "../lib/firebase";
-import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, Timestamp, updateDoc, where } from "firebase/firestore";
 import { type Task, type Role, type UserData, type UserRoleData, type SubmittedTask } from "../myDataTypes";
 import { motion } from "motion/react";
 import RoleAdminPage from "../components/RoleAdmin";
@@ -25,17 +25,22 @@ export default function RolePage() {
     const [role, setRole] = useState<Role | null>(null);
     const [rewards, setRewards] = useState<string[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
-    const [isCurrentRole, setIsCurrentRole] = useState(false);
     const [isMember, setIsMember] = useState<boolean | null>(null);
 
     const [requested, setRequested] = useState<string[]>([]);
     const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
 
+    interface SnapshotEntry { uid: string; name: string; photoURL: string; points: number; taskCompleted: number; rank: number; }
+    interface LeaderboardSnapshot { id: string; roleId: string; month: string; createdAt: Timestamp; entries: SnapshotEntry[]; }
+    const [snapshots, setSnapshots] = useState<LeaderboardSnapshot[]>([]);
+
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
 
     const user = context?.user ?? null;
+    const userData = context?.userData ?? null;
     const loading = context?.loading ?? true;
     const admins = context?.admins ?? [];
+    const isCurrentRole = !!roleId && userData?.currentRole === roleId;
 
     useEffect(() => {
         if (!roleId || !user) return;
@@ -50,11 +55,12 @@ export default function RolePage() {
                 return;
             }
 
-            const data = snap.data() as Omit<Role, "id"> & { members: string[] };
+            const data = snap.data() as Omit<Role, "id"> & { members: string[]; pendingRequests: string[] };
 
             setRole({ id: snap.id, ...data });
             setMembers(data.members || []);
             setIsMember((data.members || []).includes(user.uid));
+            setRequested(data.pendingRequests || []);
         });
 
         return unsub;
@@ -103,18 +109,6 @@ export default function RolePage() {
 
         return () => unsubs.forEach((unsub) => unsub());
     }, [members, roleId]);
-
-    // Get current role
-    useEffect(() => {
-        if (!user || !roleId) return;
-        const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
-        if (snap.exists()) {
-            const data = snap.data();
-            setIsCurrentRole(data.currentRole === roleId);
-        }
-        });
-        return () => unsub();
-    }, [user, roleId]);
 
     // Get role rewards
     useEffect(() => {
@@ -180,19 +174,6 @@ export default function RolePage() {
         return () => unsub();
     }, [roleId, user]);
 
-    // Get Members to get requested user's data
-    useEffect(() => {
-        if (!role) return;
-        const roleRef = doc(db, "roles", role.id);
-        const unsub = onSnapshot(roleRef, (snap) => {
-            if (snap.exists()) {
-                setRequested(snap.data().pendingRequests || []);
-            }
-        });
-
-        return () => unsub();
-    }, [role, setRequested]);
-
     // Getting the current role's submitted tasks
     useEffect(() => {
         if (!role) return;
@@ -212,6 +193,20 @@ export default function RolePage() {
         })
         return () => unsub();
     }, [role, setSubmittedTasks]);
+
+    // Get leaderboard snapshots for this role
+    useEffect(() => {
+        if (!roleId) return;
+        const q = query(
+            collection(db, "leaderboardSnapshots"),
+            where("roleId", "==", roleId),
+            orderBy("createdAt", "desc")
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            setSnapshots(snap.docs.map(d => ({ id: d.id, ...d.data() } as LeaderboardSnapshot)));
+        });
+        return () => unsub();
+    }, [roleId]);
 
     useEffect(() => {
         if (!loading && role && !isMember) {
@@ -278,6 +273,7 @@ export default function RolePage() {
                 {[
                     { key: "leaderboard", label: "Leaderboard" },
                     { key: "rewards", label: "Rewards" },
+                    { key: "pastmonths", label: "Past Months" },
                     ...(!admins.includes(user.uid)
                         ? [{ key: "tasks", label: "Tasks" }]
                         : [{ key: "admin", label: "Admin" }]
@@ -425,6 +421,42 @@ export default function RolePage() {
                 </motion.div>
             )}
 
+            {/* Past Months */}
+            {pageState === "pastmonths" && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex flex-col gap-4"
+                >
+                    {snapshots.length === 0 ? (
+                        <p className="text-gray-400 text-sm text-center py-8">No previous leaderboards yet.</p>
+                    ) : snapshots.map(snap => (
+                        <div key={snap.id} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-400">{snap.month}</h3>
+                            {snap.entries.length === 0 ? (
+                                <p className="text-sm text-gray-400">No entries.</p>
+                            ) : snap.entries.map(entry => {
+                                const medals = ["🥇", "🥈", "🥉"];
+                                return (
+                                    <div key={entry.uid} className="flex items-center justify-between px-2 py-1.5">
+                                        <div className="flex items-center gap-3">
+                                            <span className="w-6 text-center text-sm font-bold text-gray-400">
+                                                {entry.rank <= 3 ? medals[entry.rank - 1] : entry.rank}
+                                            </span>
+                                            <span className="font-medium text-sm">{entry.name}</span>
+                                        </div>
+                                        <div className="flex gap-3 text-sm text-gray-600">
+                                            <span><strong className="text-black">{entry.points}</strong> pts</span>
+                                            <span className="hidden sm:inline"><strong className="text-black">{entry.taskCompleted}</strong> tasks</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ))}
+                </motion.div>
+            )}
+
             {/* Tasks */}
             {pageState.match("tasks") && (
                 <motion.div
@@ -468,8 +500,6 @@ export default function RolePage() {
                     membersWithData={membersWithData}
                     requested={requested}
                     setRequested={setRequested}
-                    submittedTasks={submittedTasks}
-                    setSubmittedTasks={setSubmittedTasks}
                 />
             )}
         </div>

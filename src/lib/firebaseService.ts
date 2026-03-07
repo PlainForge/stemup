@@ -1,4 +1,4 @@
-import { createUserWithEmailAndPassword, deleteUser, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithPopup, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
+import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
 import { auth, db, storage } from "./firebase";
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -149,32 +149,29 @@ export const firebaseAuthService = {
      */
     async deleteAccount(user: User, userData: UserData) {
         try {
-            const provider = new GoogleAuthProvider(); 
-            await reauthenticateWithPopup(user, provider);
+            const providerIds = user.providerData.map(p => p.providerId);
+            if (providerIds.includes("google.com")) {
+                await reauthenticateWithPopup(user, new GoogleAuthProvider());
+            } else {
+                const password = window.prompt("Please enter your password to confirm deletion:");
+                if (!password) return false;
+                await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email!, password));
+            }
 
             const batchUpdates: Promise<void>[] = [];
 
-            // Remove user from all roles
-            const rolesSnap = await getDocs(collection(db, "roles"));
-            rolesSnap.forEach((roleDoc) => {
-                const data = roleDoc.data();
-                const members: string[] = data.members || [];
-
-                if (members.includes(user.uid)) {
-                    const updatedMembers = members.filter((m) => m !== user.uid);
-                    batchUpdates.push(
-                    updateDoc(doc(db, "roles", roleDoc.id), {
-                            members: updatedMembers 
-                        })
-                    );
-                }
+            // Remove user from their roles using userData.roles (avoids scanning all roles)
+            const userRoles: { id: string }[] = Array.isArray(userData.roles) ? userData.roles : [];
+            userRoles.forEach(r => {
+                batchUpdates.push(updateDoc(doc(db, "roles", r.id), { members: arrayRemove(user.uid) }));
             });
 
-            const q = query(collection(db, "tasks"), where("assignedTo", "==", user.uid));
-            const tasksSnap = await getDocs(q);
-            tasksSnap.forEach((taskDoc) => {
-                batchUpdates.push(deleteDoc(doc(db, "tasks", taskDoc.id)));
-            });
+            const [tasksSnap, submittedSnap] = await Promise.all([
+                getDocs(query(collection(db, "tasks"), where("assignedTo", "==", user.uid))),
+                getDocs(query(collection(db, "tasksSubmitted"), where("assignedTo", "==", user.uid))),
+            ]);
+            tasksSnap.forEach(taskDoc => batchUpdates.push(deleteDoc(doc(db, "tasks", taskDoc.id))));
+            submittedSnap.forEach(taskDoc => batchUpdates.push(deleteDoc(doc(db, "tasksSubmitted", taskDoc.id))));
 
             if (userData?.photoURL && userData.photoURL !== DEFAULT_AVATAR) {
                 try {

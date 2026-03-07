@@ -2,7 +2,7 @@ import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, ge
 import { motion } from "motion/react";
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { db } from "../lib/firebase";
-import { type Role, type SubmittedTask, type UserData, type UserRoleData } from "../myDataTypes";
+import { type Role, type SubmittedTask, type Task, type UserData, type UserRoleData } from "../myDataTypes";
 import { MainContext } from "../context/MainContext";
 import LinkButton from "./LinkButton";
 import Button from "./Button";
@@ -16,13 +16,11 @@ interface prop {
     membersWithData: UserData[],
     requested: string[],
     setRequested: (ids: string[]) => void,
-    submittedTasks: SubmittedTask[],
-    setSubmittedTasks: (tasks: SubmittedTask[]) => void,
 }
 
-export default function RoleAdminPage({ role, membersWithData, requested, submittedTasks } : prop) {
+export default function RoleAdminPage({ role, membersWithData, requested } : prop) {
     const context = useContext(MainContext);
-    const [page, setPage] = useState("submitted");
+    const [page, setPage] = useState("requests");
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
     const [createTaskFor, setCreateSetTaskFor] = useState<string[]>([]);
     const [phrase, setPhrase] = useState(""); // Role name change phrase
@@ -30,6 +28,28 @@ export default function RoleAdminPage({ role, membersWithData, requested, submit
     const [phrase3, setPhrase3] = useState(""); // Role reward phrase
     const [phrase4, setPhrase4] = useState(""); // Sent task phrase
     const [showInGlobal, setShowInGlobal] = useState(false);
+    const [allTasks, setAllTasks] = useState<Task[]>([]);
+    const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "done" | "submitted">("all");
+    const [taskSearch, setTaskSearch] = useState("");
+    const [allSubmitted, setAllSubmitted] = useState<SubmittedTask[]>([]);
+
+    // Listen for all tasks in this role
+    useEffect(() => {
+        const q = query(collection(db, "tasks"), where("roleId", "==", role.id));
+        const unsub = onSnapshot(q, (snap) => {
+            setAllTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
+        });
+        return () => unsub();
+    }, [role.id]);
+
+    // Listen for all submitted tasks in this role (including approved)
+    useEffect(() => {
+        const q = query(collection(db, "tasksSubmitted"), where("roleId", "==", role.id));
+        const unsub = onSnapshot(q, (snap) => {
+            setAllSubmitted(snap.docs.map(d => ({ id: d.id, ...d.data() } as SubmittedTask)));
+        });
+        return () => unsub();
+    }, [role.id]);
 
     // Listen for global leaderboard flag
     useEffect(() => {
@@ -239,11 +259,36 @@ export default function RoleAdminPage({ role, membersWithData, requested, submit
     }
 
     const resetRole = async (roleId : string) => {
-        const confirmDelete = window.confirm("Are you sure you want to reset? This cannot be undone.");
+        const confirmDelete = window.confirm("Are you sure you want to force reset? This cannot be undone.");
 
         if (!confirmDelete) return;
 
         try {
+            // Save leaderboard snapshot before resetting
+            const snapshotAdmins = context?.admins ?? [];
+            const nonAdminMembers = membersWithData
+                .filter(m => !snapshotAdmins.includes(m.uid))
+                .sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+
+            const month = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
+            const now = Timestamp.now();
+            const deleteAt = Timestamp.fromDate(new Date(now.toMillis() + 365 * 24 * 60 * 60 * 1000));
+
+            await addDoc(collection(db, "leaderboardSnapshots"), {
+                roleId,
+                month,
+                createdAt: now,
+                deleteAt,
+                entries: nonAdminMembers.map((u, idx) => ({
+                    uid: u.uid,
+                    name: u.name,
+                    photoURL: u.photoURL ?? "",
+                    points: u.points ?? 0,
+                    taskCompleted: u.taskCompleted ?? 0,
+                    rank: idx + 1,
+                })),
+            });
+
             const updates: Promise<void>[] = [];
 
             const tasksQ = query(collection(db, "tasks"), where("roleId", "==", roleId));
@@ -308,29 +353,20 @@ export default function RoleAdminPage({ role, membersWithData, requested, submit
             const usersRef = collection(db, "users");
             const userSnaps = await getDocs(usersRef);
 
-            userSnaps.forEach(async (snap) => {
-                const data = snap.data();
-                if (data.roles) {
-                    const updatedRoles = data.roles.filter((r: Role) => r.id !== roleId);
-                    await updateDoc(doc(db, "users", snap.id), {
-                        roles: updatedRoles,
-                    });
-                }
-            });
+            const userUpdates = userSnaps.docs
+                .filter(snap => snap.data().roles)
+                .map(snap => {
+                    const updatedRoles = snap.data().roles.filter((r: Role) => r.id !== roleId);
+                    return updateDoc(doc(db, "users", snap.id), { roles: updatedRoles });
+                });
 
-            const tasksRef = collection(db, "tasks");
-            const qTasks = query(tasksRef, where("roleId", "==", roleId));
-            const taskSnaps = await getDocs(qTasks);
-            taskSnaps.forEach(async (task) => {
-                await deleteDoc(doc(db, "tasks", task.id));
-            });
+            const tasksSnap = await getDocs(query(collection(db, "tasks"), where("roleId", "==", roleId)));
+            const taskDeletes = tasksSnap.docs.map(task => deleteDoc(doc(db, "tasks", task.id)));
 
-            const submittedRef = collection(db, "tasksSubmitted");
-            const qSubmitted = query(submittedRef, where("roleId", "==", roleId));
-            const submittedSnaps = await getDocs(qSubmitted);
-            submittedSnaps.forEach(async (task) => {
-                await deleteDoc(doc(db, "tasksSubmitted", task.id));
-            });
+            const submittedSnap = await getDocs(query(collection(db, "tasksSubmitted"), where("roleId", "==", roleId)));
+            const submittedDeletes = submittedSnap.docs.map(task => deleteDoc(doc(db, "tasksSubmitted", task.id)));
+
+            await Promise.all([...userUpdates, ...taskDeletes, ...submittedDeletes]);
 
             await deleteDoc(doc(db, "roles", roleId));
 
@@ -383,9 +419,9 @@ export default function RoleAdminPage({ role, membersWithData, requested, submit
     const nonAdminMembers = membersWithData.filter((m) => !admins.includes(m.uid));
 
     const adminTabs = [
-        { key: "submitted", label: "Submitted", badge: submittedTasks.length },
         { key: "requests", label: "Requests", badge: requested.length },
         { key: "creation", label: "Assign Task", badge: 0 },
+        { key: "tasks", label: "Tasks", badge: allSubmitted.filter(t => !t.complete).length },
         { key: "members", label: "Members", badge: 0 },
         { key: "rewards", label: "Rewards", badge: 0 },
         { key: "config", label: "Config", badge: 0 },
@@ -417,45 +453,6 @@ export default function RoleAdminPage({ role, membersWithData, requested, submit
                     </div>
                 ))}
             </div>
-
-            {/* Submitted Tasks */}
-            {page.match("submitted") && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
-                    {submittedTasks.filter(t => !t.complete).length === 0 ? (
-                        <p className="text-gray-400 text-sm text-center py-8">No pending submissions.</p>
-                    ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {submittedTasks.map((submitted) => {
-                                if (submitted.complete) return null;
-                                return (
-                                    <motion.div
-                                        key={submitted.id}
-                                        className="flex flex-col bg-white border border-gray-100 rounded-2xl p-4 gap-3"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <h3 className="font-semibold leading-tight">{submitted.title}</h3>
-                                            <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
-                                                {submitted.points} pts
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-500">{submitted.description || "No description"}</p>
-                                        <div className="text-xs text-gray-400 flex flex-col gap-0.5">
-                                            <span>By <strong className="text-gray-600">{submitted.assignedName}</strong></span>
-                                            <span>{submitted.submission ? submitted.submission.toDate().toLocaleDateString() : "N/A"}</span>
-                                        </div>
-                                        <div className="flex gap-2 mt-auto">
-                                            <Button onClick={() => acceptTask(submitted)} size="full" color="green">Approve</Button>
-                                            <Button onClick={() => declineTask(submitted)} size="full" color="red">Decline</Button>
-                                        </div>
-                                    </motion.div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </motion.div>
-            )}
 
             {/* Requests */}
             {page.match("requests") && (
@@ -541,6 +538,132 @@ export default function RoleAdminPage({ role, membersWithData, requested, submit
                 </motion.div>
             )}
 
+            {/* All Tasks */}
+            {page.match("tasks") && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
+                    {/* Search + Filter */}
+                    <div className="flex flex-col gap-2">
+                        <input
+                            type="text"
+                            value={taskSearch}
+                            onChange={e => setTaskSearch(e.target.value)}
+                            placeholder="Search by title or assignee..."
+                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                        />
+                        <div className="flex gap-2">
+                            {(["all", "pending", "done", "submitted"] as const).map((f) => (
+                                <button
+                                    key={f}
+                                    onClick={() => setTaskFilter(f)}
+                                    className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-colors hover:cursor-pointer ${
+                                        taskFilter === f
+                                            ? "bg-blue-600 text-white"
+                                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                    }`}
+                                >
+                                    {f}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {taskFilter === "submitted" ? (() => {
+                        const filtered = allSubmitted.filter(t => {
+                            const q = taskSearch.toLowerCase();
+                            return !t.complete && (!q || t.title.toLowerCase().includes(q) || t.assignedName.toLowerCase().includes(q));
+                        });
+                        if (filtered.length === 0) return (
+                            <p className="text-gray-400 text-sm text-center py-8">No pending submissions.</p>
+                        );
+                        return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {filtered.map((submitted) => (
+                                    <motion.div
+                                        key={submitted.id}
+                                        className="flex flex-col gap-3 p-4 rounded-2xl border-2 border-yellow-200 bg-white"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <h3 className="font-semibold leading-tight">{submitted.title}</h3>
+                                            <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
+                                                {submitted.points} pts
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-gray-500 flex-1">{submitted.description || "No description"}</p>
+                                        <div className="text-xs text-gray-400 flex flex-col gap-0.5">
+                                            <span>By <strong className="text-gray-600">{submitted.assignedName}</strong></span>
+                                            <span>{submitted.submission ? submitted.submission.toDate().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "N/A"}</span>
+                                        </div>
+                                        <div className="flex gap-2 mt-auto">
+                                            <Button onClick={() => acceptTask(submitted)} size="full" color="green">Approve</Button>
+                                            <Button onClick={() => declineTask(submitted)} size="full" color="red">Decline</Button>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        );
+                    })() : (() => {
+                        const filtered = allTasks.filter(t => {
+                            const matchesFilter =
+                                taskFilter === "all" ? true :
+                                taskFilter === "done" ? t.complete :
+                                !t.complete;
+                            const q = taskSearch.toLowerCase();
+                            return matchesFilter && (!q || t.title.toLowerCase().includes(q) || t.assignedName.toLowerCase().includes(q));
+                        });
+                        if (filtered.length === 0) return (
+                            <p className="text-gray-400 text-sm text-center py-8">No tasks to show.</p>
+                        );
+                        return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {filtered.map((task) => {
+                                    const submission = allSubmitted.find(s => s.id === task.id && !s.complete);
+                                    return (
+                                    <motion.div
+                                        key={task.id}
+                                        className={`flex flex-col gap-3 p-4 rounded-2xl border-2 bg-white ${
+                                            task.complete ? "border-green-300" : submission ? "border-yellow-200" : "border-gray-200"
+                                        }`}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <h3 className="font-semibold leading-tight">{task.title}</h3>
+                                            <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
+                                                {task.points} pts
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-gray-500 flex-1">{task.description || "No description"}</p>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs text-gray-400">{task.assignedName}</span>
+                                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                                task.complete ? "bg-green-100 text-green-700" : submission ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-500"
+                                            }`}>
+                                                {task.complete ? "Done" : submission ? "Submitted" : "Pending"}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-300">
+                                            {task.createdOn?.toDate().toLocaleString("en-US", {
+                                                month: "short", day: "numeric", year: "numeric",
+                                                hour: "numeric", minute: "2-digit"
+                                            })}
+                                        </p>
+                                        {submission && (
+                                            <div className="flex gap-2 mt-auto">
+                                                <Button onClick={() => acceptTask(submission)} size="full" color="green">Approve</Button>
+                                                <Button onClick={() => declineTask(submission)} size="full" color="red">Decline</Button>
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
+                </motion.div>
+            )}
+
             {/* Members */}
             {page.match("members") && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
@@ -613,9 +736,9 @@ export default function RoleAdminPage({ role, membersWithData, requested, submit
                     </div>
 
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
-                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Monthly reset</h2>
-                        <p className="text-sm text-gray-500">Clears all tasks, submissions, and resets every member's points and task count for this role.</p>
-                        <Button onClick={() => resetRole(role.id)} size="sm">Monthly Reset</Button>
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Force reset</h2>
+                        <p className="text-sm text-gray-500">Saves a leaderboard snapshot, then clears all tasks, submissions, and resets every member's points and task count for this role.</p>
+                        <Button onClick={() => resetRole(role.id)} size="sm">Force Reset</Button>
                         <Alert value={phrase2} setValue={setPhrase2} />
                     </div>
 

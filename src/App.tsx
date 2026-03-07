@@ -5,6 +5,7 @@ import Loading from './pages/Loading';
 import { MainContext } from './context/MainContext';
 import VerifyEmailPage from './pages/EmailVerifyPage';
 import ProfilePage from './components/ProfilePage';
+import BugReport from './components/BugReport';
 
 export default function App() {
   const context = useContext(MainContext);
@@ -50,6 +51,7 @@ export default function App() {
     <div className="flex flex-col items-center min-h-screen min-w-full pt-4">
       <Nav />
       {showAccount ? <ProfilePage /> : null}
+      <BugReport />
       <Outlet />
     </div>
   );

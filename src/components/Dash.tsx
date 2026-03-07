@@ -72,8 +72,7 @@ export default function Dash() {
 
     if (!context || !user || !userData) return null;
 
-    const medals = ["🥇", "🥈", "🥉"];
-    const sorted = [...globalLeaders]
+    const sorted =[...globalLeaders]
         .filter(u => !admins.includes(u.uid))
         .sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
 
@@ -90,46 +89,101 @@ export default function Dash() {
             </div>
 
             {/* Stat cards */}
-            <div className="grid grid-cols-2 gap-4 w-full">
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col gap-1">
-                    <p className="text-xs text-gray-400 uppercase tracking-widest">Total Points</p>
-                    <p className="text-4xl font-bold">{userData?.points ?? 0}</p>
+            {!admins.includes(user.uid) && (
+                <div className="grid grid-cols-2 gap-4 w-full">
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col gap-1">
+                        <p className="text-xs text-gray-400 uppercase tracking-widest">Total Points</p>
+                        <p className="text-4xl font-bold">{userData?.points ?? 0}</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col gap-1">
+                        <p className="text-xs text-gray-400 uppercase tracking-widest">Tasks Done</p>
+                        <p className="text-4xl font-bold">{userData?.taskCompleted ?? 0}</p>
+                    </div>
                 </div>
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col gap-1">
-                    <p className="text-xs text-gray-400 uppercase tracking-widest">Tasks Done</p>
-                    <p className="text-4xl font-bold">{userData?.taskCompleted ?? 0}</p>
-                </div>
-            </div>
+            )}
             {/* Global Leaderboard */}
             {(showGlobal || admins.includes(user.uid)) && (
                 <div className="w-full flex flex-col gap-3">
                     <h2 className="text-lg font-semibold">Global Leaderboard</h2>
                     {sorted.length === 0 ? (
                         <p className="text-gray-400 text-sm text-center py-6">No participants yet.</p>
-                    ) : sorted.map((u, idx) => (
-                        <motion.div
-                            key={u.uid}
-                            className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
-                                u.uid === user.uid
-                                    ? "bg-blue-50 border-blue-200"
-                                    : "bg-white border-gray-100 hover:border-gray-300"
-                            }`}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: idx * 0.03 }}
-                        >
-                            <div className="flex items-center gap-3">
-                                <span className="w-6 text-center text-sm">
-                                    {idx < 3 ? medals[idx] : <span className="font-bold text-gray-400">{idx + 1}</span>}
-                                </span>
-                                <ProfileButton user={u} size="xxs" />
-                            </div>
-                            <div className="flex gap-4 text-sm text-gray-600">
-                                <span><strong className="text-black">{u.points ?? 0}</strong> pts</span>
-                                <span className="hidden sm:inline"><strong className="text-black">{u.taskCompleted ?? 0}</strong> tasks</span>
-                            </div>
-                        </motion.div>
-                    ))}
+                    ) : (
+                        <>
+                            {/* Podium for top 3 */}
+                            {(() => {
+                                const top = sorted.slice(0, 3);
+                                if (top.length === 0) return null;
+                                const podiumOrder = [top[1], top[0], top[2]];
+                                const podiumConfig = [
+                                    { rank: 2, medal: "🥈", barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8" },
+                                    { rank: 1, medal: "🥇", barH: "h-24", avatarSize: "md", textSize: "text-base", mt: "mt-0" },
+                                    { rank: 3, medal: "🥉", barH: "h-10", avatarSize: "xs", textSize: "text-xs", mt: "mt-14" },
+                                ];
+                                return (
+                                    <div className="flex items-end justify-center gap-2 sm:gap-4 mb-4 px-2">
+                                        {podiumOrder.map((u, idx) => {
+                                            if (!u) return <div key={idx} className="flex-1" />;
+                                            const cfg = podiumConfig[idx];
+                                            const isMe = u.uid === user.uid;
+                                            return (
+                                                <motion.div
+                                                    key={u.uid}
+                                                    className={`flex-1 flex flex-col items-center gap-1 ${cfg.mt}`}
+                                                    initial={{ opacity: 0, y: 20 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ delay: idx * 0.05 }}
+                                                >
+                                                    <span className="text-lg">{cfg.medal}</span>
+                                                    <motion.div
+                                                        className="flex flex-col items-center gap-1 cursor-pointer"
+                                                        whileHover={{ scale: 1.05 }}
+                                                        onClick={() => context.setShowAccount(u)}
+                                                    >
+                                                        <ProfileImg src={u.photoURL} alt={u.name} size={cfg.avatarSize} />
+                                                        <p className={`font-semibold text-center truncate w-full ${cfg.textSize}`}>{u.name}</p>
+                                                    </motion.div>
+                                                    <p className={`text-gray-500 ${cfg.textSize} pointer-events-none`}><strong className="text-black">{u.points ?? 0}</strong> pts</p>
+                                                    <div className={`w-full ${cfg.barH} rounded-t-xl flex items-center justify-center ${
+                                                        cfg.rank === 1
+                                                            ? isMe ? "bg-yellow-200 border-2 border-yellow-400" : "bg-yellow-100 border-2 border-yellow-300"
+                                                            : cfg.rank === 2
+                                                            ? isMe ? "bg-gray-200 border-2 border-gray-400" : "bg-gray-100 border-2 border-gray-200"
+                                                            : isMe ? "bg-orange-200 border-2 border-orange-400" : "bg-orange-50 border-2 border-orange-200"
+                                                    }`}>
+                                                        <span className="font-bold text-gray-500 text-sm">{cfg.rank}</span>
+                                                    </div>
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+
+                            {/* 4th+ */}
+                            {sorted.slice(3).map((u, idx) => (
+                                <motion.div
+                                    key={u.uid}
+                                    className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
+                                        u.uid === user.uid
+                                            ? "bg-blue-50 border-blue-200"
+                                            : "bg-white border-gray-100 hover:border-gray-300"
+                                    }`}
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: idx * 0.03 }}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className="w-6 text-center text-sm font-bold text-gray-400">{idx + 4}</span>
+                                        <ProfileButton user={u} size="xxs" />
+                                    </div>
+                                    <div className="flex gap-4 text-sm text-gray-600">
+                                        <span><strong className="text-black">{u.points ?? 0}</strong> pts</span>
+                                        <span className="hidden sm:inline"><strong className="text-black">{u.taskCompleted ?? 0}</strong> tasks</span>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </>
+                    )}
                 </div>
             )}
         </motion.div>
