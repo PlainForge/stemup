@@ -75,52 +75,63 @@ export default function RolesSelectorPage() {
 
 
     return (
-        <motion.div className='w-full flex flex-col items-center py-4 gap-4'
+        <motion.div
+            className="w-full max-w-2xl mx-auto flex flex-col gap-6 px-4 py-6"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
         >
-            <h1 className='text-3xl'>Available Roles</h1>
-            <div className='w-full flex flex-col items-center gap-4 mt-4'>
-                {roles.length > 0 ? roles.map((role) => {
-                    if (!role.name.match("global")) {
-                        return (
-                            <motion.div 
-                                className="
-                                    w-11/12 lg:w-2xl flex justify-between
-                                    px-4 py-2 border border-[rgba(24,24,24,0.3)]
-                                    rounded-2xl cursor-default
-                                    hover:border-[rgba(24,24,24,0.9)]
-                                    transition-all duration-300 ease-out
-                                "
-                                initial={{ x: -100, opacity: 0 }}
-                                animate={{ x: 0, opacity: 1 }}
-                                key={role.id}
-                            >
-                                <p className='font-semibold text-2xl'>{userData?.currentRole.match(role.id) ? <FontAwesomeIcon icon={faStar}/> : ""} {role.name}</p>
-                                <JoinButton role={role} />
-                            </motion.div>
-                        )
-                    }
-                }) : "Nothing at the moment"}
+            <div>
+                <h1 className="text-2xl font-bold">Available Roles</h1>
+                <p className="text-sm text-gray-500 mt-0.5">Select a role to join and start earning points.</p>
             </div>
 
-            {admins.includes(user?.uid) ? 
-                <form className='flex flex-col gap-4 items-center' onSubmit={(e) => e.preventDefault()}>
-                    <h1 className='text-2xl'>Create a Role</h1>
-                    <Input 
-                        size='md'
-                        type="text" 
-                        placeholder='Role name' 
-                        value={roleName} 
-                        setValue={setRoleName}
-                        maxLength={32}
-                        required={true}
-                        autocomplete='false'
-                    />
-                    <Button
-                        onClick={createRole}
-                    >
-                        Create
-                    </Button>
-                </form> : null}
+            <div className="flex flex-col gap-3">
+                {roles.length > 0 ? roles.map((role) => {
+                    if (role.name.match("global")) return null;
+                    const isActive = userData?.currentRole === role.id;
+                    return (
+                        <motion.div
+                            key={role.id}
+                            className={`flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-200 ${
+                                isActive
+                                    ? "border-blue-400 bg-blue-50"
+                                    : "border-gray-200 bg-white hover:border-gray-400 hover:shadow-sm"
+                            }`}
+                            initial={{ x: -30, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                        >
+                            <div className="flex items-center gap-2">
+                                {isActive && (
+                                    <FontAwesomeIcon icon={faStar} className="text-blue-500 text-sm" />
+                                )}
+                                <p className="font-semibold">{role.name}</p>
+                            </div>
+                            <JoinButton role={role} />
+                        </motion.div>
+                    );
+                }) : (
+                    <p className="text-gray-400 text-sm text-center py-8">No roles available at the moment.</p>
+                )}
+            </div>
+
+            {admins.includes(user?.uid) && (
+                <div className="border-t border-gray-100 pt-6">
+                    <h2 className="text-base font-semibold mb-3">Create a Role</h2>
+                    <form className="flex flex-col sm:flex-row gap-3" onSubmit={(e) => e.preventDefault()}>
+                        <Input
+                            size="full"
+                            type="text"
+                            placeholder="Role name"
+                            value={roleName}
+                            setValue={setRoleName}
+                            maxLength={32}
+                            required={true}
+                            autocomplete="false"
+                        />
+                        <Button onClick={createRole} size="sm">Create</Button>
+                    </form>
+                </div>
+            )}
         </motion.div>
     )
 }

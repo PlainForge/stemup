@@ -3,7 +3,7 @@ import { MainContext } from "../context/MainContext";
 import Button from "./Button";
 import ProfileImg from "./ProfileImg";
 import { motion } from "motion/react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { firebaseAuthService } from "../lib/firebaseService";
 
 
@@ -15,7 +15,7 @@ export default function ProfilePage() {
     const setShowAccount = context?.setShowAccount ?? null;
 
     const location = useLocation();
-    const roleId = location.pathname.substring(7);
+    const { id: roleId } = useParams<{ id: string }>();
 
     const swtch = () => {
         if (!setShowAccount) return;
@@ -28,32 +28,46 @@ export default function ProfilePage() {
         const confirmKick = window.confirm(
             `Remove ${selectedUser.name} from this role?`
         );
-        if (!confirmKick) return;
+        if (!confirmKick || !roleId) return;
 
         await firebaseAuthService.kickUserFromRole(roleId, selectedUser.uid);
         setShowAccount?.(null);
     }
     
     return (
-        <motion.div className="fixed w-screen h-screen bg-[rgba(24,24,24,0.75)] top-0 flex items-center justify-center z-1">
-            <motion.div className="flex flex-col items-center justify-center bg-white p-4 gap-4 rounded-2xl"
-                onClick={() => null}
+        <motion.div
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            onClick={swtch}
+        >
+            <motion.div
+                className="flex flex-col items-center bg-white rounded-2xl shadow-xl p-6 w-full max-w-xs gap-4"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.15 }}
+                onClick={(e) => e.stopPropagation()}
             >
-                <ProfileImg src={selectedUser.photoURL}/>
-                <h1>{selectedUser.name}</h1>
-                <div className="flex items-center justify-between w-full">
-                    <h2>Total Points:</h2>
-                    <h2>{selectedUser.points}</h2>
+                <ProfileImg src={selectedUser.photoURL} />
+                <h1 className="text-xl font-bold">{selectedUser.name}</h1>
+
+                <div className="w-full grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50 rounded-xl p-3 text-center">
+                        <p className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">Points</p>
+                        <p className="text-2xl font-bold">{selectedUser.points}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3 text-center">
+                        <p className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">Tasks</p>
+                        <p className="text-2xl font-bold">{selectedUser.taskCompleted}</p>
+                    </div>
                 </div>
-                <div className="flex items-center justify-between w-full">
-                    <h2>Total Tasks Completed:</h2>
-                    <h2>{selectedUser.taskCompleted}</h2>
+
+                <div className="flex gap-2 w-full">
+                    {admins.includes(user.uid) && location.pathname.includes("/roles") &&
+                        <Button color="red" size="full" onClick={kick}>Kick</Button>
+                    }
+                    <Button color="gray" size="full" onClick={swtch}>Close</Button>
                 </div>
-                {admins.includes(user.uid) && location.pathname.includes("/roles") ? 
-                    <Button color="red" onClick={kick}>Kick</Button>
-                    : null
-                }
-                <Button onClick={() => swtch()}>Return</Button>
             </motion.div>
         </motion.div>
     )

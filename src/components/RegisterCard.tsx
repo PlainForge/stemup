@@ -22,65 +22,56 @@ interface RegisterCardProps {
 
 export default function RegisterCard({email, setEmail, password, setPassword, name, setName, phrase, registerWithEmail, setSignInEmail}: RegisterCardProps) {
     return (
-        <motion.div 
-            className="w-full h-full flex flex-col items-center justify-center gap-2" 
+        <motion.div
+            className="w-full flex flex-col gap-5 bg-white rounded-2xl shadow-md p-8"
             style={auth.currentUser ? {opacity: '0'} : {opacity: '1'}}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.1 }}
+            initial={{ y: 30, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.15 }}
         >
-            <h2 className="text-2xl">Create your account</h2>
-            <form className="w-full flex flex-col items-center justify-center gap-2 text-black" action={registerWithEmail} onSubmit={async (e) => {
+            <div>
+                <h2 className="text-2xl font-bold">Create your account</h2>
+                <LinkButton onClick={() => setSignInEmail(false)}>
+                    <FontAwesomeIcon icon={faArrowLeft} className="mr-1" /> Back
+                </LinkButton>
+            </div>
+            <form className="flex flex-col gap-3 text-black" action={registerWithEmail} onSubmit={async (e) => {
                 e.preventDefault();
                 await registerWithEmail();
             }}>
-                <Input 
-                    size="sm"
-                    type="email" 
+                <Input
+                    size="full"
+                    type="email"
                     placeholder="Email"
                     value={email}
                     setValue={setEmail}
                     required={true}
                     autocomplete="false"
                 />
-
-                <Input 
-                    size="sm"
-                    type="password" 
+                <Input
+                    size="full"
+                    type="password"
                     placeholder="Password"
                     value={password}
                     setValue={setPassword}
                     required={true}
                     autocomplete="false"
                 />
-
-                <Input 
-                    size="sm"
-                    type="name" 
+                <Input
+                    size="full"
+                    type="text"
                     placeholder="Display Name"
                     value={name}
                     setValue={setName}
-                    maxLength={16} 
+                    maxLength={16}
                     required={true}
                     autocomplete="false"
                 />
-
-                {phrase != "" && 
-                    <ErrorMessage>
-                        {phrase}
-                    </ErrorMessage>
+                {phrase !== "" &&
+                    <ErrorMessage>{phrase}</ErrorMessage>
                 }
-
-                <Button size="sm">
-                    Register
-                </Button>
+                <Button size="full">Register</Button>
             </form>
-
-            <LinkButton
-                onClick={() => setSignInEmail(false)}
-            >
-                <FontAwesomeIcon icon={faArrowLeft}/> Go Back
-            </LinkButton>
         </motion.div>
     )
 }

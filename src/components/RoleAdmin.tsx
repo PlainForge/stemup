@@ -9,6 +9,7 @@ import Button from "./Button";
 import Input from "./Input";
 import { Alert } from "./PhraseAlert";
 import ProfileImg from "./ProfileImg";
+import { firebaseAuthService } from "../lib/firebaseService";
 
 interface prop {
     role: {name: string, id: string},
@@ -28,26 +29,34 @@ export default function RoleAdminPage({ role, membersWithData, requested, submit
     const [phrase2, setPhrase2] = useState(""); // Role reset phrase
     const [phrase3, setPhrase3] = useState(""); // Role reward phrase
     const [phrase4, setPhrase4] = useState(""); // Sent task phrase
+    const [showInGlobal, setShowInGlobal] = useState(false);
 
-    
+    // Listen for global leaderboard flag
+    useEffect(() => {
+        const unsub = onSnapshot(doc(db, "roles", role.id), (snap) => {
+            if (snap.exists()) setShowInGlobal(snap.data().showInGlobalLeaderboard ?? false);
+        });
+        return () => unsub();
+    }, [role.id]);
 
     // Get Users that requested
     useEffect(() => {
-        if (requested.length < 1) {
-            setUserRequested([]);
-            return;
-        }
+        // Always prune users no longer in the requested list
+        setUserRequested((prev) => prev.filter((u) => requested.includes(u.uid)));
+
+        if (requested.length < 1) return;
+
         const unsubs: (() => void)[] = [];
 
         requested.forEach((uid) => {
             const ref = doc(db, "users", uid);
             const unsub = onSnapshot(ref, (snap) => {
-            if (snap.exists()) {
-                setUserRequested((prev) => {
-                    const others = prev.filter((u) => u.uid !== uid);
-                    return [...others, { uid, ...(snap.data() as Omit<UserData, "uid">) }];
-                });
-            }
+                if (snap.exists()) {
+                    setUserRequested((prev) => {
+                        const others = prev.filter((u) => u.uid !== uid);
+                        return [...others, { uid, ...(snap.data() as Omit<UserData, "uid">) }];
+                    });
+                }
             });
             unsubs.push(unsub);
         });
@@ -361,311 +370,263 @@ export default function RoleAdminPage({ role, membersWithData, requested, submit
         return <h1>Loading...</h1>
     }
 
+    const toggleGlobalLeaderboard = async () => {
+        await updateDoc(doc(db, "roles", role.id), { showInGlobalLeaderboard: !showInGlobal });
+    };
+
+    const kickMember = async (uid: string, name: string) => {
+        const confirm = window.confirm(`Remove ${name} from this role?`);
+        if (!confirm) return;
+        await firebaseAuthService.kickUserFromRole(role.id, uid);
+    };
+
+    const nonAdminMembers = membersWithData.filter((m) => !admins.includes(m.uid));
+
+    const adminTabs = [
+        { key: "submitted", label: "Submitted", badge: submittedTasks.length },
+        { key: "requests", label: "Requests", badge: requested.length },
+        { key: "creation", label: "Assign Task", badge: 0 },
+        { key: "members", label: "Members", badge: 0 },
+        { key: "rewards", label: "Rewards", badge: 0 },
+        { key: "config", label: "Config", badge: 0 },
+    ];
+
     return (
-        <motion.div
-            className="w-full"
-        >
-            <motion.div 
-                className="w-full flex gap-4 px-8 flex-col items-center justify-center md:flex-row"
-            >
-                <LinkButton
-                    onClick={() => setPage("requests")} 
-                    moreClass={page === "requests" ? "font-semibold" : "font-regular"}
-                >
-                    Requests <span className="bg-blue-300 px-1 py-0.5 rounded-full">{requested.length}</span>
-                </LinkButton>
-                <LinkButton
-                    onClick={() => setPage("creation")}
-                    moreClass={page === "creation" ? "font-semibold" : "font-regular"}
-                >
-                    Task Creation
-                </LinkButton>
-                <LinkButton
-                    onClick={() => setPage("submitted")}
-                    moreClass={page === "submitted" ? "font-semibold" : "font-regular"}
-                >
-                    Submitted Tasks <span className="bg-blue-300 px-1 py-0.5 rounded-full">{submittedTasks.length}</span>
-                </LinkButton>
-                <LinkButton
-                    onClick={() => setPage("config")}
-                    moreClass={page === "config" ? "font-semibold" : "font-regular"}
-                >
-                    Role Config
-                </LinkButton>
-                <LinkButton
-                    onClick={() => setPage("rewards")}
-                    moreClass={page === "rewards" ? "font-semibold" : "font-regular"}
-                >
-                    Rewards
-                </LinkButton>
-            </motion.div>
-            <motion.div className="w-full px-4 mt-4">
-                {page.match("requests") ? 
-                    <motion.div 
-                        className="w-full flex flex-col items-center"
-                    >
-                        <h1 className="text-2xl font-semibold">Requests</h1>
-                        <div className="flex flex-col space-y-4 mt-4">
-                            {
-                                userRequested.length <= 0 ?
-                                <p>No pending requests</p>
-                            : 
-                                userRequested.map((user) => {
-                                    return (
-                                        <motion.div 
-                                            key={user.name} 
-                                            className="flex flex-col items-center bg-gray-100 p-4 rounded-xl gap-4"
-                                            initial={{x: -10}}
-                                            animate={{x:0}}
-                                        >
-                                            <div className="flex items-center justify-between gap-4">
-                                                <ProfileImg src={user.photoURL} alt={user.name} size="xs" />
-                                                <h3 className="text-2xl font-medium">{user.name}</h3>
-                                            </div>
-                                            <div className="flex flex-col space-y-2">
-                                                <Button
-                                                    onClick={() => acceptRequest(user.uid)} 
-                                                >
-                                                    accept
-                                                </Button>
-                                                <Button
-                                                    onClick={() => declineRequest(user.uid)}
-                                                    color="red"
-                                                >
-                                                    decline
-                                                </Button>
-                                            </div>
-                                            
-                                        </motion.div>
-                                    )
-                                })
-                            }
-                        </div>
-                    </motion.div> 
-                    : 
-                    page.match("creation") ? 
-                    <motion.div 
-                        className="w-full flex flex-col items-center"
-                    >
-                        <h1 className="text-2xl font-semibold">Task Creation</h1>
-                        <form className="flex flex-col gap-4 mt-4 w-full items-center" 
-                            id="create" 
-                            onSubmit={sendTask}
+        <motion.div className="w-full flex flex-col gap-4">
+
+            {/* Admin sub-tab bar */}
+            <div className="flex flex-wrap items-center gap-1 border-b border-gray-200">
+                {adminTabs.map((tab) => (
+                    <div key={tab.key} className="relative shrink-0">
+                        <button
+                            onClick={() => setPage(tab.key)}
+                            className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap hover:cursor-pointer ${
+                                page === tab.key ? "text-blue-600" : "text-gray-500 hover:text-gray-800"
+                            }`}
                         >
-                            <select 
-                                name="user" 
-                                defaultValue=""
-                                onChange={(e) => {
-                                    const uid = e.target.value;
-                                    if (uid && !createTaskFor.includes(uid)) {
-                                        setCreateSetTaskFor((prev) => [...prev, uid]);
-                                    }
-                                }}
-                                className="w-sm bg-gray-100 p-2 rounded-xl focus:rounded-none transition-all duration-200"
-                            >
-                                <option value="" disabled>Select a member</option>
-                                {membersWithData.map((member) => {  
-                                    if (!member.uid) return
-                                    if (admins.includes(member.uid)) return null
-                                    return (
-                                        <option key={member.uid} value={member.uid}>
-                                            {member.name}
-                                        </option>
-                                    )
-                                })}
-                            </select>
-                            {createTaskFor.length > 0 && (
-                                <div className="flex flex-col w-full items-center">
-                                    <h4 className="text-2xl">Selected Members:</h4>
-                                    <div className="flex flex-col space-y-2 my-2">
-                                        {createTaskFor.map((uid) => {
-                                            const member = membersWithData.find((m) => m.uid === uid);
-                                            if (!member) return null;
-                                            return (
-                                                <motion.div
-                                                    key={uid}
-                                                    className="flex items-center justify-between bg-gray-100 p-2 rounded-xl w-sm"
-                                                >
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <ProfileImg src={member.photoURL} alt={member.name} size="xxs" />
-                                                        <span className="title-card">{member.name}</span>
-                                                    </div>
-                                                    
-                                                    <LinkButton
-                                                        onClick={() =>
-                                                            setCreateSetTaskFor((prev) =>
-                                                                prev.filter((id) => id !== uid)
-                                                            )
-                                                        }
-                                                    >
-                                                        Remove
-                                                    </LinkButton>
-                                                </motion.div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <Button
-                                        onClick={() => setCreateSetTaskFor([])}
-                                        size="sm"
-                                    >
-                                        Clear All
-                                    </Button>
-                                </div>
+                            {tab.label}
+                            {tab.badge > 0 && (
+                                <span className="ml-1.5 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                                    {tab.badge}
+                                </span>
                             )}
+                        </button>
+                        {page === tab.key && (
+                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
+                        )}
+                    </div>
+                ))}
+            </div>
 
-                            <Input 
-                                type="text" 
-                                name="title" 
-                                placeholder="Title" 
-                                required={true}
-                                autocomplete="false"
-                            />
-                            <Input 
-                                type="text" 
-                                name="desc" 
-                                placeholder="Description"
-                                required={false}
-                                autocomplete="false"
-                            />
-                            <Input 
-                                type="number" 
-                                id="pts" 
-                                name="pts" 
-                                placeholder="Points" 
-                                required={true}
-                                autocomplete="false"
-                            />
-                            <Button
-                                type="submit" 
-                                size="sm"
-                                color="green"
-                            >
-                                Create
-                            </Button>
-                        </form>
-                        <Alert value={phrase4} setValue={setPhrase4}/>
-                    </motion.div> 
-                    :
-                    page.match("submitted") ? 
-                    <motion.div 
-                        className="w-full flex flex-col items-center"
-                    >
-                        <h1 className="text-2xl font-semibold">Tasks Submitted</h1>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 my-4 w-full">
+            {/* Submitted Tasks */}
+            {page.match("submitted") && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
+                    {submittedTasks.filter(t => !t.complete).length === 0 ? (
+                        <p className="text-gray-400 text-sm text-center py-8">No pending submissions.</p>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {submittedTasks.map((submitted) => {
-                                if (submitted.complete) return null
+                                if (submitted.complete) return null;
                                 return (
-                                    <motion.div 
-                                        className="flex flex-col bg-gray-100 p-4 rounded-xl space-y-2" 
+                                    <motion.div
                                         key={submitted.id}
+                                        className="flex flex-col bg-white border border-gray-100 rounded-2xl p-4 gap-3"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
                                     >
-                                        <h1 className="w-full text-2xl font-medium text-center">{submitted.title}</h1>
-                                        <div className="flex flex-col space-y-1">
-                                            <h4 className="font-medium">Description:</h4>
-                                            <p className="border-b">{submitted.description}</p>
-                                            <h4 className="font-medium">Points:</h4>
-                                            <p className="border-b">{submitted.points} pts</p>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <h3 className="font-semibold leading-tight">{submitted.title}</h3>
+                                            <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
+                                                {submitted.points} pts
+                                            </span>
                                         </div>
-                                        <div className="flex flex-col space-y-1">
-                                            <h4 className="font-medium">Submission Date</h4>
-                                            <p className="border-b">{submitted.submission ? submitted.submission.toDate().toString() : 'N/A'}</p>
+                                        <p className="text-sm text-gray-500">{submitted.description || "No description"}</p>
+                                        <div className="text-xs text-gray-400 flex flex-col gap-0.5">
+                                            <span>By <strong className="text-gray-600">{submitted.assignedName}</strong></span>
+                                            <span>{submitted.submission ? submitted.submission.toDate().toLocaleDateString() : "N/A"}</span>
                                         </div>
-                                        <div>
-                                            <h4 className="font-medium">Submitted by</h4>
-                                            <div className="flex items-center gap-2">
-                                                <p>{submitted.assignedName}</p>
-                                            </div>
-                                        </div>
-                                        <div className="w-full flex justify-between">
-                                            <Button
-                                                onClick={() => acceptTask(submitted)}
-                                                size="sm"
-                                                color="green"
-                                            >
-                                                Approve
-                                            </Button>
-                                            <Button
-                                                onClick={() => declineTask(submitted)}
-                                                size="sm"
-                                                color="red"
-                                            >
-                                                Disapprove
-                                            </Button>
+                                        <div className="flex gap-2 mt-auto">
+                                            <Button onClick={() => acceptTask(submitted)} size="full" color="green">Approve</Button>
+                                            <Button onClick={() => declineTask(submitted)} size="full" color="red">Decline</Button>
                                         </div>
                                     </motion.div>
-                                )
+                                );
                             })}
                         </div>
-                    </motion.div> 
-                    : 
-                    page.match("config") ? 
-                    <motion.div 
-                        className="w-full flex flex-col items-center space-y-4"
-                    >
-                        <h1 className="text-2xl font-semibold">Role Config</h1>
-                        <form className="flex flex-col space-y-2 items-center" id="rolename" onSubmit={changeRoleName}>
-                            <Input 
-                                type="text" 
-                                name="newName" 
-                                placeholder="Change Role Name" 
-                                required={true}
-                                autocomplete="false"
-                            />
-                            <Button type="submit">
-                                Change Role Name
+                    )}
+                </motion.div>
+            )}
+
+            {/* Requests */}
+            {page.match("requests") && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
+                    {userRequested.length === 0 ? (
+                        <p className="text-gray-400 text-sm text-center py-8">No pending requests.</p>
+                    ) : userRequested.map((u) => (
+                        <motion.div
+                            key={u.uid}
+                            className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-4 py-3 gap-4"
+                            initial={{ x: -10, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                        >
+                            <div className="flex items-center gap-3">
+                                <ProfileImg src={u.photoURL} alt={u.name} size="xs" />
+                                <span className="font-medium">{u.name}</span>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                                <Button onClick={() => acceptRequest(u.uid)} size="xsm" color="green">Accept</Button>
+                                <Button onClick={() => declineRequest(u.uid)} size="xsm" color="red">Decline</Button>
+                            </div>
+                        </motion.div>
+                    ))}
+                </motion.div>
+            )}
+
+            {/* Task Creation */}
+            {page.match("creation") && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Assign to</h2>
+                        <select
+                            name="user"
+                            defaultValue=""
+                            onChange={(e) => {
+                                const uid = e.target.value;
+                                if (uid && !createTaskFor.includes(uid)) {
+                                    setCreateSetTaskFor((prev) => [...prev, uid]);
+                                }
+                            }}
+                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                        >
+                            <option value="" disabled>Select a member</option>
+                            {membersWithData.map((member) => {
+                                if (!member.uid || admins.includes(member.uid)) return null;
+                                return <option key={member.uid} value={member.uid}>{member.name}</option>;
+                            })}
+                        </select>
+
+                        {createTaskFor.length > 0 && (
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs text-gray-400 uppercase tracking-widest">Selected</p>
+                                    <LinkButton onClick={() => setCreateSetTaskFor([])}>Clear all</LinkButton>
+                                </div>
+                                {createTaskFor.map((uid) => {
+                                    const member = membersWithData.find((m) => m.uid === uid);
+                                    if (!member) return null;
+                                    return (
+                                        <div key={uid} className="flex items-center justify-between bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl">
+                                            <div className="flex items-center gap-2">
+                                                <ProfileImg src={member.photoURL} alt={member.name} size="xxs" />
+                                                <span className="text-sm font-medium">{member.name}</span>
+                                            </div>
+                                            <LinkButton onClick={() => setCreateSetTaskFor((prev) => prev.filter((id) => id !== uid))}>
+                                                Remove
+                                            </LinkButton>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    <form id="create" onSubmit={sendTask} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Task details</h2>
+                        <Input type="text" name="title" placeholder="Title" required={true} autocomplete="false" size="full" />
+                        <Input type="text" name="desc" placeholder="Description (optional)" required={false} autocomplete="false" size="full" />
+                        <Input type="number" id="pts" name="pts" placeholder="Points" required={true} autocomplete="false" size="full" />
+                        <Button type="submit" size="sm" color="green">Assign Task</Button>
+                        <Alert value={phrase4} setValue={setPhrase4} />
+                    </form>
+                </motion.div>
+            )}
+
+            {/* Members */}
+            {page.match("members") && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
+                    {nonAdminMembers.length === 0 ? (
+                        <p className="text-gray-400 text-sm text-center py-8">No members in this role.</p>
+                    ) : nonAdminMembers.map((m) => (
+                        <motion.div
+                            key={m.uid}
+                            className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-4 py-3 gap-4"
+                            initial={{ x: -10, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                        >
+                            <div className="flex items-center gap-3">
+                                <ProfileImg src={m.photoURL} alt={m.name} size="xs" />
+                                <div>
+                                    <p className="font-medium">{m.name}</p>
+                                    <p className="text-xs text-gray-400">{m.points ?? 0} pts · {m.taskCompleted ?? 0} tasks</p>
+                                </div>
+                            </div>
+                            <Button onClick={() => kickMember(m.uid, m.name)} size="xsm" color="red">Kick</Button>
+                        </motion.div>
+                    ))}
+                </motion.div>
+            )}
+
+            {/* Rewards */}
+            {page.match("rewards") && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <form onSubmit={setReward} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Set monthly rewards</h2>
+                        {[
+                            { name: "first", label: "🥇 1st Place" },
+                            { name: "second", label: "🥈 2nd Place" },
+                            { name: "third", label: "🥉 3rd Place" },
+                        ].map((r) => (
+                            <div key={r.name} className="flex flex-col gap-1.5">
+                                <label className="text-sm font-medium text-gray-600">{r.label}</label>
+                                <Input type="text" name={r.name} placeholder="Reward description" required={true} autocomplete="false" size="full" />
+                            </div>
+                        ))}
+                        <Button type="submit" size="sm">Save Rewards</Button>
+                        <Alert value={phrase3} setValue={setPhrase3} />
+                    </form>
+                </motion.div>
+            )}
+
+            {/* Config */}
+            {page.match("config") && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Rename role</h2>
+                        <form id="rolename" onSubmit={changeRoleName} className="flex flex-col gap-3">
+                            <Input type="text" name="newName" placeholder="New role name" required={true} autocomplete="false" size="full" />
+                            <Button type="submit" size="sm">Save Name</Button>
+                            <Alert value={phrase} setValue={setPhrase} />
+                        </form>
+                    </div>
+
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Global Leaderboard</h2>
+                        <p className="text-sm text-gray-500">When enabled, members of this role can see the global leaderboard on the home page.</p>
+                        <div className="flex items-center justify-between">
+                            <span className={`text-sm font-medium ${showInGlobal ? "text-green-600" : "text-gray-400"}`}>
+                                {showInGlobal ? "Enabled" : "Disabled"}
+                            </span>
+                            <Button onClick={toggleGlobalLeaderboard} size="xsm" color={showInGlobal ? "red" : "green"}>
+                                {showInGlobal ? "Disable" : "Enable"}
                             </Button>
-                            <Alert value={phrase} setValue={setPhrase}/>
-                        </form>
-                        <Button 
-                            onClick={() => resetRole(role.id)}
-                        >
-                            Monthly Reset
-                        </Button>
-                        <Alert value={phrase2} setValue={setPhrase2}/>
-                        <Button 
-                            onClick={() => deleteRole(role.id)}
-                            color="red"
-                        >
-                            Delete Role
-                        </Button>
-                    </motion.div> 
-                    : 
-                    page.match("rewards") ? 
-                    <motion.div
-                        className="w-full flex flex-col items-center"
-                        initial={{x: -10}}
-                        animate={{x:0}}
-                    >
-                        <h1 className="text-2xl font-semibold">Rewards</h1>
-                        <form className="flex flex-col items-center space-y-4 mt-4" onSubmit={setReward}>
-                            <Input 
-                                type="text" 
-                                name="first" 
-                                placeholder="first" 
-                                required={true}
-                                autocomplete="false" 
-                            />
-                            <Input 
-                                type="text" 
-                                name="second" 
-                                placeholder="second" 
-                                required={true}
-                                autocomplete="false"
-                            />
-                            <Input 
-                                type="text" 
-                                name="third" 
-                                placeholder="third" 
-                                required={true}
-                                autocomplete="false"
-                            />
-                            <Button type="submit">Set Reward</Button>
-                        </form>
-                        <Alert value={phrase3} setValue={setPhrase3}/>
-                    </motion.div> : ""
-                }
-            </motion.div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Monthly reset</h2>
+                        <p className="text-sm text-gray-500">Clears all tasks, submissions, and resets every member's points and task count for this role.</p>
+                        <Button onClick={() => resetRole(role.id)} size="sm">Monthly Reset</Button>
+                        <Alert value={phrase2} setValue={setPhrase2} />
+                    </div>
+
+                    <div className="bg-white border border-red-100 rounded-2xl p-5 flex flex-col gap-3">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-red-400">Danger Zone</h2>
+                        <p className="text-sm text-gray-500">Permanently deletes this role and all associated data.</p>
+                        <Button onClick={() => deleteRole(role.id)} color="red" size="sm">Delete Role</Button>
+                    </div>
+                </motion.div>
+            )}
+
         </motion.div>
-    )
+    );
 }

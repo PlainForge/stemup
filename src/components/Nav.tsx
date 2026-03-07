@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -9,22 +9,10 @@ import LinkButton from "./LinkButton";
 
 export default function Nav() {
     const context = useContext(MainContext);
-    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-    const [windowHeight, setWindowHeight] = useState(window.innerHeight);
     const navigate = useNavigate?.();
 
-    useEffect(() => {
-        const handleResize = () => {
-            setWindowWidth(window.innerWidth);
-            setWindowHeight(window.innerHeight);
-        };
-
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
     if (!context) return null;
-    const {user, userData} = context
+    const {user, userData} = context;
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -34,21 +22,28 @@ export default function Nav() {
 
     if (!user || !userData) return null;
     return (
-        <div className='flex w-full justify-evenly items-center'>
-            <h2 className='text-2xl font-bold'>StemUP</h2>
-            <h3 className="hidden md:block">{userData?.name}</h3>
-            <LinkButton onClick={() => navigate("roles")}>Roles</LinkButton>
-            <div className="flex space-x-4">
-                <LinkButton onClick={() => navigate("/")}>
-                    {windowWidth > 1000 || windowHeight > 1200 ? "Home" : <FontAwesomeIcon icon={faHomeAlt}/>}
-                </LinkButton>
-                <LinkButton onClick={() => navigate("/settings")}>
-                    {windowWidth > 1000 || windowHeight > 1200 ? "Settings" : <FontAwesomeIcon icon={faGears}/>}
-                </LinkButton>
-                <LinkButton onClick={handleLogout}>
-                    {windowWidth > 1000 || windowHeight > 1200 ? "Logout" : <FontAwesomeIcon icon={faPowerOff}/>}
-                </LinkButton>
+        <nav className="sticky top-0 z-20 w-full bg-white border-b border-gray-200 shadow-sm">
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+                <h2 className="text-lg font-bold tracking-tight">StemUP</h2>
+                <div className="flex items-center gap-4 sm:gap-6">
+                    <span className="hidden sm:block text-sm text-gray-400">{userData?.name}</span>
+                    <LinkButton onClick={() => navigate("roles")}>
+                        <span className="text-sm">Roles</span>
+                    </LinkButton>
+                    <LinkButton onClick={() => navigate("/")}>
+                        <span className="hidden sm:inline text-sm">Home</span>
+                        <FontAwesomeIcon icon={faHomeAlt} className="sm:hidden" />
+                    </LinkButton>
+                    <LinkButton onClick={() => navigate("/settings")}>
+                        <span className="hidden sm:inline text-sm">Settings</span>
+                        <FontAwesomeIcon icon={faGears} className="sm:hidden" />
+                    </LinkButton>
+                    <LinkButton onClick={handleLogout}>
+                        <span className="hidden sm:inline text-sm">Logout</span>
+                        <FontAwesomeIcon icon={faPowerOff} className="sm:hidden" />
+                    </LinkButton>
+                </div>
             </div>
-        </div>
-    )
+        </nav>
+    );
 }

@@ -97,91 +97,82 @@ export default function Settings() {
 
     return (
         <motion.div
-            className="w-full mx-auto px-5 py-10"
+            className="w-full max-w-2xl mx-auto px-4 py-8"
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
         >
-            <h1 className="text-[32px] font-bold mb-1 pl-5">Account Settings</h1>
-            <p className="text-[#666] mb-5 pl-5">
-                Account ID: <span className="text-black font-semibold">{user.uid}</span>
-            </p>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold">Account Settings</h1>
+                <p className="text-xs text-gray-400 mt-1 font-mono break-all">{user.uid}</p>
+            </div>
 
-            <div className="bg-white rounded-[18px] p-8 shadow-[0_4px_16px_rgba(0,0,0,0.08)] flex flex-col gap-6">
+            <div className="flex flex-col gap-4">
 
-                <form className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-8 md:gap-[30px]">
-                    <div className="flex flex-col gap-4">
-                        <label className="text-sm font-semibold">Your Name</label>
-                        <Input
-                            size="full"
-                            type="text"
-                            maxLength={16}
-                            value={name}
-                            setValue={setName}
-                            required={true}
-                            autocomplete="false"
-                        />
-
-                        <label className="text-sm font-semibold">Current Role</label>
-                        <div className="flex items-center justify-between bg-[#f7f7f7] p-[12px_14px] rounded-[10px]">
-                            <span>{roleName || "No role selected"}</span>
-                            <Button
-                                onClick={resetRole}
-                                color="red"
-                                size="xsm"
-                                type="button"
-                            >
-                                Reset Role
-                            </Button>
+                {/* Profile card */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">Profile</h2>
+                    <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
+                        {/* Avatar */}
+                        <div className="flex flex-col items-center gap-2 shrink-0">
+                            <ProfileImg src={preview ?? undefined} />
+                            <label className="px-3 py-1.5 bg-gray-900 text-white rounded-xl text-xs cursor-pointer hover:bg-blue-600 transition-all duration-200">
+                                Change Photo
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    ref={fileRef}
+                                    className="hidden"
+                                    onChange={handleFile}
+                                />
+                            </label>
                         </div>
+
+                        {/* Fields */}
+                        <form className="flex flex-col gap-4 flex-1 w-full">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-sm font-medium text-gray-600">Display Name</label>
+                                <Input
+                                    size="full"
+                                    type="text"
+                                    maxLength={16}
+                                    value={name}
+                                    setValue={setName}
+                                    required={true}
+                                    autocomplete="false"
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-sm font-medium text-gray-600">Current Role</label>
+                                <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
+                                    <span className="text-sm">{roleName || <span className="text-gray-400">No role selected</span>}</span>
+                                    <Button onClick={resetRole} color="red" size="xsm" type="button">
+                                        Reset
+                                    </Button>
+                                </div>
+                            </div>
+                        </form>
                     </div>
-                    <div className="flex flex-col items-center gap-3">
-                        {preview ? 
-                            <ProfileImg src={preview} />
-                        :
-                            <ProfileImg />
-                        }
-
-                        <label className="px-3.5 py-2.5 bg-[#222] text-white rounded-xl text-sm cursor-pointer text-center hover:bg-blue-600 hover:rounded-lg transition-all duration-200">
-                            Change Photo
-                            <input
-                                type="file"
-                                accept="image/*"
-                                ref={fileRef}
-                                className="hidden"
-                                onChange={handleFile}
-                            />
-                        </label>
-                    </div>
-
-                </form>
-
-                <div className="flex flex-col items-center md:items-start">
-                    <Button
-                        onClick={deleteAccount}
-                        color="red"
-                        size="sm"
-                    >
-                        Delete My Account
-                    </Button>
                 </div>
 
-                <div className="flex flex-col-reverse md:flex-row items-center md:items-start gap-3">
-                    <Button
-                        onClick={handleCancelChanges}
-                        color="gray"
-                        size="xsm"
-                    >
-                        Cancel
-                    </Button>
-
-                    <Button
-                        onClick={handleSave}
-                        color="blue"
-                        size="sm"
-                    >
+                {/* Save / Cancel */}
+                <div className="flex flex-wrap items-center gap-3">
+                    <Button onClick={handleSave} color="blue" size="sm">
                         Save Changes
                     </Button>
+                    <Button onClick={handleCancelChanges} color="gray" size="xsm">
+                        Cancel
+                    </Button>
                     <Alert value={phrase} setValue={setPhrase} />
+                </div>
+
+                {/* Danger zone */}
+                <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-6 mt-2">
+                    <h2 className="text-sm font-semibold uppercase tracking-widest text-red-400 mb-1">Danger Zone</h2>
+                    <p className="text-sm text-gray-500 mb-4">Once you delete your account, there is no going back.</p>
+                    <Button onClick={deleteAccount} color="red" size="sm">
+                        Delete My Account
+                    </Button>
                 </div>
 
             </div>

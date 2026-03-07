@@ -8,9 +8,9 @@ import DoneButton from "../components/TaskDoneButton";
 import { useNavigate, useParams } from "react-router-dom";
 import Loading from "./Loading";
 import { MainContext } from "../context/MainContext";
-import LinkButton from "../components/LinkButton";
 import Button from "../components/Button";
 import ProfileButton from "../components/ProfileButton";
+import ProfileImg from "../components/ProfileImg";
 
 export default function RolePage() {
     const context = useContext(MainContext);
@@ -230,192 +230,248 @@ export default function RolePage() {
     if (!isMember || !user || !role ) return null;
 
     const taskCount = userTasks.filter(task => !task.complete).length;
-    let i = 0;
 
     return (
-        <div className="w-full flex flex-col gap-2">
-            <div className="w-full flex justify-evenly">
-                <h1 className="text-2xl"><span className="font-bold">Role</span> {role.name}</h1>
-                {membersWithData.map((m) => {
-                    if (m.id.match(user.uid) && !admins.includes(user.uid)) {
-                        return Object.values(m.roles || {}).map((x) => {
-                            if (x.id === role.id) {
-                                return (
-                                    <div key={x.id} className="flex gap-4 items-center">
-                                        <h3>{x.points} points</h3>
-                                        <h3>{x.taskCompleted} tasks completed</h3>
-                                    </div>
-                                )
-                            }
-                            return null
-                        })
-                    } else {
-                        return null
-                    }
-                })}
-                {admins.includes(user.uid) ? <p className="font-bold">Admin View</p> : null}
-            </div>
-            <div className="w-full flex items-center justify-center gap-6">
-                <LinkButton
-                    onClick={() => setPageState("leaderboard")}
-                    moreClass={pageState === "leaderboard" ? "font-semibold" : "font-regular"}
-                >
-                    Leaderboard
-                </LinkButton>
-                <LinkButton
-                    onClick={() => setPageState("rewards")}
-                    moreClass={pageState === "rewards" ? "font-semibold" : "font-regular"}
-                >
-                    Rewards
-                </LinkButton>
-                {!admins.includes(user.uid) ? 
-                    <LinkButton
-                        onClick={() => setPageState("tasks")}
-                        moreClass={pageState === "tasks" ? "font-semibold flex items-center" : "font-regular flex items-center"}
-                    >
-                        Tasks
-                        {taskCount > 0 ? <p className="ml-2 bg-green-400 px-2 py-0.5 rounded-full">{taskCount}</p> : null}
-                    </LinkButton>
-                    :
-                    <div className="relative">
-                        {requested.length > 0 || submittedTasks.length > 0 ?
-                        <span className="absolute flex size-3 -top-2 -right-2">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
-                            <span className="relative inline-flex size-3 rounded-full bg-sky-500"></span>
-                        </span>
-                        : null}
-                        <LinkButton
-                        onClick={() => setPageState("admin")}
-                        moreClass={
-                            `
-                            ${pageState === "admin" ? "font-semibold" : "font-regular"} 
-                            `
-                        }
-                        >
-                            Admin
-                        </LinkButton>
-                    </div>
-                }
-                {isCurrentRole ? 
-                    <motion.p 
-                        whileHover={{cursor: "default"}}
-                        initial={{scale:0}}
-                        animate={{scale:1}}
-                    >
-                        <strong>Your Role</strong>
-                    </motion.p> 
-                    : 
-                    <Button
-                        size="xsm"
-                        onClick={() => setCurrentRole(role.id)}
-                    >Set Role</Button>
-                }
-            </div>
-            { 
-                pageState.match("leaderboard") ?
-                <motion.div 
-                    className="w-full flex flex-col items-center"
-                >
-                    <div className="w-full flex flex-col items-center">
-                        <h1 className="text-2xl">Leaderboard</h1>
-
-                        <div className="w-11/12 md:w-1/2 flex flex-col">
-                            {leaders ? leaders.map((u) => {
-                                if (admins.includes(u.id)) return;
-                                i++
-                                if (i < 4) {
-                                return (
-                                    <div className="w-full justify-between flex flex-col md:flex-row border-b py-2" key={u.id}>
-                                        <div className="flex md:justify-between items-center gap-4">
-                                            <p className="mr-2 text-2xl"><strong>{i}</strong></p>
-                                            <ProfileButton user={u} size="xs"/>
-                                        </div>
-                                        <div className="flex gap-4 justify-end md:justify-center md:items-center">
-                                            <p><span className="font-bold">{u.points}</span> pts</p>
-                                            <p><span className="font-bold">{u.taskCompleted}</span> Tasks Completed</p>
-                                        </div>
-                                    </div>
-                                )
-                                } else {
+        <div className="w-full max-w-3xl mx-auto flex flex-col gap-4 px-4 pb-10">
+            {/* Role header */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                <div>
+                    <p className="text-xs text-gray-400 uppercase tracking-widest">Role</p>
+                    <h1 className="text-2xl font-bold">{role.name}</h1>
+                </div>
+                <div className="flex items-center gap-3">
+                    {membersWithData.map((m) => {
+                        if (m.id === user.uid && !admins.includes(user.uid)) {
+                            return Object.values(m.roles || {}).map((x) => {
+                                if (x.id === role.id) {
                                     return (
-                                        <div className={`w-full justify-between flex flex-col md:flex-row border-b py-2`} key={u.id}>
-                                            <div className="flex md:justify-between items-center gap-4">
-                                                <p className={`${i > 9 ? "mr-0" : "mr-2"}`}><strong>{i}</strong></p>
-                                                <ProfileButton user={u} size="xxs"/>
-                                            </div>
-                                            <div className="flex gap-4 justify-end items-center md:justify-center">
-                                                <p><span className="font-bold">{u.points}</span> pts</p>
-                                            <p><span className="font-bold">{u.taskCompleted}</span> Tasks Completed</p>
-                                            </div>
+                                        <div key={x.id} className="flex gap-3 text-sm text-gray-600">
+                                            <span><strong className="text-black">{x.points}</strong> pts</span>
+                                            <span><strong className="text-black">{x.taskCompleted}</strong> tasks</span>
                                         </div>
-                                    )
+                                    );
                                 }
-                            }) : "Loading..."}
-                        </div>
+                                return null;
+                            });
+                        }
+                        return null;
+                    })}
+                    {admins.includes(user.uid) && (
+                        <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Admin View</span>
+                    )}
+                    {isCurrentRole ?
+                        <motion.span
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-full"
+                        >
+                            Your Role
+                        </motion.span>
+                        :
+                        <Button size="xsm" onClick={() => setCurrentRole(role.id)}>Set Role</Button>
+                    }
+                </div>
+            </div>
+
+            {/* Tab bar */}
+            <div className="flex items-center gap-1 border-b border-gray-200">
+                {[
+                    { key: "leaderboard", label: "Leaderboard" },
+                    { key: "rewards", label: "Rewards" },
+                    ...(!admins.includes(user.uid)
+                        ? [{ key: "tasks", label: "Tasks" }]
+                        : [{ key: "admin", label: "Admin" }]
+                    ),
+                ].map((tab) => (
+                    <div key={tab.key} className="relative">
+                        <button
+                            onClick={() => setPageState(tab.key)}
+                            className={`px-4 py-2.5 text-sm font-medium transition-colors hover:cursor-pointer ${
+                                pageState === tab.key
+                                    ? "text-blue-600"
+                                    : "text-gray-500 hover:text-gray-800"
+                            }`}
+                        >
+                            {tab.label}
+                            {tab.key === "tasks" && taskCount > 0 && (
+                                <span className="ml-1.5 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">{taskCount}</span>
+                            )}
+                            {tab.key === "admin" && (requested.length > 0 || submittedTasks.length > 0) && (
+                                <span className="absolute -top-1 -right-1 flex size-2.5">
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
+                                    <span className="relative inline-flex size-2.5 rounded-full bg-sky-500"></span>
+                                </span>
+                            )}
+                        </button>
+                        {pageState === tab.key && (
+                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
+                        )}
                     </div>
-                    
-                    
-                </motion.div> 
-                :
-                pageState.match("rewards") ?
-                <motion.div 
-                    className="w-full flex flex-col items-center"
+                ))}
+            </div>
+
+            {/* Leaderboard */}
+            {pageState.match("leaderboard") && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex flex-col gap-2"
                 >
-                    <h1 className="text-2xl">{currentMonth} Rewards</h1>
-                    {["First", "Second", "Third"].map((label, idx) => {
-                        const filteredLeaders = leaders.filter(
-                            (leader) => !admins.includes(leader.uid)
-                        );
-                        const winners = filteredLeaders[idx];
+                    {leaders.length === 0 && <p className="text-gray-400 text-sm text-center py-8">No members yet.</p>}
+
+                    {/* Podium for top 3 */}
+                    {(() => {
+                        const top = leaders.filter(u => !admins.includes(u.id)).slice(0, 3);
+                        if (top.length === 0) return null;
+
+                        const podiumOrder = [top[1], top[0], top[2]]; // 2nd, 1st, 3rd
+                        const podiumConfig = [
+                            { rank: 2, medal: "🥈", barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8" },
+                            { rank: 1, medal: "🥇", barH: "h-24", avatarSize: "md", textSize: "text-base", mt: "mt-0" },
+                            { rank: 3, medal: "🥉", barH: "h-10", avatarSize: "xs", textSize: "text-xs", mt: "mt-14" },
+                        ];
+
                         return (
-                            <div className="w-11/12 md:w-1/2 flex justify-between mb-4 border-b" key={label}>
-                                <div className="flex flex-col">
-                                    <h1 className="text-2xl font-medium">{label}</h1>
-                                    <p>{winners ? winners.name : "No user"}</p>
-                                </div>
-                                <p>{rewards[idx] ?? "No reward set"}</p>
+                            <div className="flex items-end justify-center gap-2 sm:gap-4 mb-4 px-2">
+                                {podiumOrder.map((u, idx) => {
+                                    if (!u) return <div key={idx} className="flex-1" />;
+                                    const cfg = podiumConfig[idx];
+                                    const isMe = u.id === user.uid;
+                                    return (
+                                        <motion.div
+                                            key={u.id}
+                                            className={`flex-1 flex flex-col items-center gap-1 ${cfg.mt}`}
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: idx * 0.05 }}
+                                        >
+                                            <span className="text-lg">{cfg.medal}</span>
+                                            <motion.div
+                                                className="flex flex-col items-center gap-1 cursor-pointer"
+                                                whileHover={{ scale: 1.05 }}
+                                                onClick={() => context?.setShowAccount(u)}
+                                            >
+                                            <ProfileImg src={u.photoURL} alt={u.name} size={cfg.avatarSize} />
+                                            <p className={`font-semibold text-center truncate w-full ${cfg.textSize}`}>{u.name}</p>
+                                            </motion.div>
+                                            <p className={`text-gray-500 ${cfg.textSize} pointer-events-none`}><strong className="text-black">{u.points}</strong> pts</p>
+                                            <div className={`w-full ${cfg.barH} rounded-t-xl flex items-center justify-center ${
+                                                cfg.rank === 1
+                                                    ? isMe ? "bg-yellow-200 border-2 border-yellow-400" : "bg-yellow-100 border-2 border-yellow-300"
+                                                    : cfg.rank === 2
+                                                    ? isMe ? "bg-gray-200 border-2 border-gray-400" : "bg-gray-100 border-2 border-gray-200"
+                                                    : isMe ? "bg-orange-200 border-2 border-orange-400" : "bg-orange-50 border-2 border-orange-200"
+                                            }`}>
+                                                <span className="font-bold text-gray-500 text-sm">{cfg.rank}</span>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
                             </div>
-                        )
+                        );
+                    })()}
+
+                    {/* Rest of the list (4th+) */}
+                    {leaders.filter(u => !admins.includes(u.id)).slice(3).map((u, idx) => {
+                        const rank = idx + 4;
+                        return (
+                            <div
+                                key={u.id}
+                                className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
+                                    u.id === user.uid
+                                        ? "bg-blue-50 border-blue-200"
+                                        : "bg-white border-gray-100 hover:border-gray-300"
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="w-6 text-sm font-bold text-center text-gray-400">{rank}</span>
+                                    <ProfileButton user={u} size="xxs" />
+                                </div>
+                                <div className="flex gap-4 text-sm text-gray-600">
+                                    <span><strong className="text-black">{u.points}</strong> pts</span>
+                                    <span className="hidden sm:inline"><strong className="text-black">{u.taskCompleted}</strong> tasks</span>
+                                </div>
+                            </div>
+                        );
                     })}
                 </motion.div>
-                :
-                pageState.match("tasks") ?
-                <motion.div 
-                    className="w-full flex flex-col items-center"
-                >   
-                    <h1 className="text-2xl font-semibold">Your {currentMonth} Tasks</h1>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 my-4 p-4 w-full">
-                        {tasksLoading ? <p>Loading Tasks...</p> 
-                        : userTasks.length > 0 && !admins.includes(user.uid) ? userTasks.map((task) => {
-                            return (
-                                <motion.div
-                                    className={`${task.complete ? "border-green-500" : "border-red-500"} flex flex-col border-2 p-4 rounded-2xl`}
-                                    key={task.id}
-                                >
-                                    <h1 className="text-2xl text-center"><span className="font-bold">Title:</span> {task.title}</h1>
-                                    <div className="flex flex-col gap-2 mb-4">
-                                        <h4 className="font-medium">Description:</h4>
-                                        <p>{task.description || "N/A"}</p>
-                                        <h4 className="sub-title">{task.points} points</h4>
+            )}
+
+            {/* Rewards */}
+            {pageState.match("rewards") && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex flex-col gap-3"
+                >
+                    <h2 className="text-lg font-semibold">{currentMonth} Rewards</h2>
+                    {["First", "Second", "Third"].map((label, idx) => {
+                        const filteredLeaders = leaders.filter((l) => !admins.includes(l.uid));
+                        const winner = filteredLeaders[idx];
+                        const medals = ["🥇", "🥈", "🥉"];
+                        return (
+                            <div key={label} className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-5 py-4">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-2xl">{medals[idx]}</span>
+                                    <div>
+                                        <p className="font-semibold">{label} Place</p>
+                                        <p className="text-sm text-gray-500">{winner ? winner.name : "No user yet"}</p>
                                     </div>
+                                </div>
+                                <p className="text-sm font-medium text-gray-700">{rewards[idx] ?? "No reward set"}</p>
+                            </div>
+                        );
+                    })}
+                </motion.div>
+            )}
+
+            {/* Tasks */}
+            {pageState.match("tasks") && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex flex-col gap-3"
+                >
+                    <h2 className="text-lg font-semibold">Your {currentMonth} Tasks</h2>
+                    {tasksLoading ? (
+                        <p className="text-gray-400 text-sm">Loading tasks...</p>
+                    ) : userTasks.length > 0 && !admins.includes(user.uid) ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {userTasks.map((task) => (
+                                <motion.div
+                                    key={task.id}
+                                    className={`flex flex-col gap-3 p-4 rounded-2xl border-2 bg-white ${
+                                        task.complete ? "border-green-400" : "border-gray-200"
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <h3 className="font-semibold leading-tight">{task.title}</h3>
+                                        <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                            {task.points} pts
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-gray-500 flex-1">{task.description || "No description"}</p>
                                     <DoneButton task={task} />
                                 </motion.div>
-                            )
-                        }) : <p className="text-2xl">No tasks assigned to you</p>}
-                    </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-gray-400 text-sm py-8 text-center">No tasks assigned to you yet.</p>
+                    )}
                 </motion.div>
-                :
-                pageState.match("admin") ?
-                <RoleAdminPage 
-                    role={role} 
-                    membersWithData={membersWithData} 
-                    requested={requested} 
-                    setRequested={setRequested} 
+            )}
+
+            {/* Admin */}
+            {pageState.match("admin") && (
+                <RoleAdminPage
+                    role={role}
+                    membersWithData={membersWithData}
+                    requested={requested}
+                    setRequested={setRequested}
                     submittedTasks={submittedTasks}
                     setSubmittedTasks={setSubmittedTasks}
                 />
-                : "" }
+            )}
         </div>
     )
 }
