@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "firebase": "firebase deploy --only hosting"
   },
   "dependencies": {
     "@fortawesome/free-brands-svg-icons": "^7.0.0",

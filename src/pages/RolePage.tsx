@@ -216,10 +216,12 @@ export default function RolePage() {
 
     const setCurrentRole = async (id : string) => {
         if (!user) return;
-        await updateDoc(doc(db, "users", user.uid), {
-            currentRole: id
-        })
+        await updateDoc(doc(db, "users", user.uid), { currentRole: id });
     }
+
+    const setTaskStatus = async (taskId: string, status: string) => {
+        await updateDoc(doc(db, "tasks", taskId), { status });
+    };
 
     if (loading || isMember === null) return <Loading />;
     if (!isMember || !user || !role ) return null;
@@ -483,6 +485,17 @@ export default function RolePage() {
                                         </span>
                                     </div>
                                     <p className="text-sm text-gray-500 flex-1">{task.description || "No description"}</p>
+                                    {!task.complete && (
+                                        <select
+                                            value={task.status ?? ""}
+                                            onChange={e => setTaskStatus(task.id, e.target.value)}
+                                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                                        >
+                                            <option value="">Set status...</option>
+                                            <option value="In Progress">In Progress</option>
+                                            <option value="Almost Done">Almost Done</option>
+                                        </select>
+                                    )}
                                     <DoneButton task={task} />
                                 </motion.div>
                             ))}

@@ -13,16 +13,10 @@ export default function ProfileImg({ src, alt, size} : ProfileImgProps) {
         "lg": "size-44"
     }[size || "md"]
     return (
-        <img 
+        <img
             src={src}
             alt={alt}
-            className={
-                `
-                    ${imgSize} 
-                    ${!src ? 'bg-[#e0e0e0]' : ''} 
-                    object-cover rounded-full border
-                `
-            }
+            className={`${imgSize} shrink-0 ${!src ? 'bg-[#e0e0e0]' : ''} object-cover rounded-full border`}
         />
     )
 }

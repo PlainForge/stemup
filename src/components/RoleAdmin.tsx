@@ -605,9 +605,11 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                         );
                     })() : (() => {
                         const filtered = allTasks.filter(t => {
+                            const hasSubmission = allSubmitted.some(s => s.id === t.id && !s.complete);
                             const matchesFilter =
                                 taskFilter === "all" ? true :
                                 taskFilter === "done" ? t.complete :
+                                taskFilter === "pending" ? !t.complete && !hasSubmission :
                                 !t.complete;
                             const q = taskSearch.toLowerCase();
                             return matchesFilter && (!q || t.title.toLowerCase().includes(q) || t.assignedName.toLowerCase().includes(q));
@@ -635,13 +637,22 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             </span>
                                         </div>
                                         <p className="text-sm text-gray-500 flex-1">{task.description || "No description"}</p>
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between gap-2 flex-wrap">
                                             <span className="text-xs text-gray-400">{task.assignedName}</span>
-                                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                                task.complete ? "bg-green-100 text-green-700" : submission ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-500"
-                                            }`}>
-                                                {task.complete ? "Done" : submission ? "Submitted" : "Pending"}
-                                            </span>
+                                            <div className="flex gap-1 flex-wrap">
+                                                {task.status && (
+                                                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                                        task.status === "In Progress" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
+                                                    }`}>
+                                                        {task.status}
+                                                    </span>
+                                                )}
+                                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                                    task.complete ? "bg-green-100 text-green-700" : submission ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-500"
+                                                }`}>
+                                                    {task.complete ? "Done" : submission ? "Submitted" : "Pending"}
+                                                </span>
+                                            </div>
                                         </div>
                                         <p className="text-xs text-gray-300">
                                             {task.createdOn?.toDate().toLocaleString("en-US", {
