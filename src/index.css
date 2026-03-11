@@ -24,7 +24,8 @@
   --button-border: 150,150,150;
 }
 
-/* For dark mode support
+@variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 [data-theme="dark"] {
   --background: 10,10,10;
   --foreground: 255,255,255;
@@ -33,7 +34,6 @@
   --button-transparent: 1;
   --button-border: 255,255,255;
 }
-*/
 
 body {
   color: rgb(var(--foreground));
@@ -41,3 +41,38 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* ── Dark mode: neutral color overrides ── */
+[data-theme="dark"] .bg-white       { background-color: rgb(17 24 39); }   /* gray-900 */
+[data-theme="dark"] .bg-gray-50     { background-color: rgb(31 41 55); }   /* gray-800 */
+[data-theme="dark"] .bg-gray-100    { background-color: rgb(55 65 81); }   /* gray-700 */
+[data-theme="dark"] .bg-gray-200    { background-color: rgb(75 85 99); }   /* gray-600 */
+
+[data-theme="dark"] .border-gray-50  { border-color: rgb(31 41 55); }
+[data-theme="dark"] .border-gray-100 { border-color: rgb(55 65 81); }
+[data-theme="dark"] .border-gray-200 { border-color: rgb(75 85 99); }
+
+[data-theme="dark"] .text-black     { color: rgb(243 244 246); }           /* gray-100 */
+[data-theme="dark"] .text-gray-900  { color: rgb(243 244 246); }
+[data-theme="dark"] .text-gray-800  { color: rgb(229 231 235); }           /* gray-200 */
+[data-theme="dark"] .text-gray-700  { color: rgb(209 213 219); }           /* gray-300 */
+[data-theme="dark"] .text-gray-600  { color: rgb(209 213 219); }
+[data-theme="dark"] .text-gray-500  { color: rgb(156 163 175); }           /* gray-400 */
+[data-theme="dark"] .text-gray-400  { color: rgb(107 114 128); }           /* gray-500 */
+[data-theme="dark"] .text-gray-300  { color: rgb(75 85 99); }
+
+[data-theme="dark"] .divide-gray-100 > * + * { border-color: rgb(55 65 81); }
+[data-theme="dark"] .divide-gray-200 > * + * { border-color: rgb(75 85 99); }
+
+/* Inputs & selects */
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  background-color: rgb(31 41 55);
+  border-color: rgb(75 85 99);
+  color: rgb(229 231 235);
+  color-scheme: dark;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder { color: rgb(107 114 128); }

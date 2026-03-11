@@ -37,7 +37,11 @@ export type Task = {
   id: string,
   title: string,
   createdOn: Timestamp,
-  status?: "In Progress" | "Almost Done"
+  status?: "In Progress" | "Almost Done",
+  dueDate?: Timestamp,
+  deleteAt?: Timestamp,
+  extensionRequested?: boolean,
+  extensionDeclined?: boolean,
 }
 
 export type SubmittedTask = {

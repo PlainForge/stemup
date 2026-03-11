@@ -10,6 +10,46 @@ import Input from "./Input";
 import { Alert } from "./PhraseAlert";
 import ProfileImg from "./ProfileImg";
 import { firebaseAuthService } from "../lib/firebaseService";
+import ErrorMessage from "./ErrorMessage";
+
+function taskIsOverdue(task: Task): boolean {
+    return !task.complete && !!task.dueDate && task.dueDate.toDate() < new Date();
+}
+
+function daysUntilDeleteAt(task: Task): number | null {
+    if (!task.deleteAt) return null;
+    return Math.ceil((task.deleteAt.toDate().getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function applySortTasks<T extends { title: string; createdOn?: { toDate(): Date } }>(tasks: T[], sort: string): T[] {
+    return [...tasks].sort((a, b) => {
+        if (sort === "title-asc") return a.title.localeCompare(b.title);
+        if (sort === "title-desc") return b.title.localeCompare(a.title);
+        const aMs = a.createdOn?.toDate().getTime() ?? 0;
+        const bMs = b.createdOn?.toDate().getTime() ?? 0;
+        return sort === "date-asc" ? aMs - bMs : bMs - aMs;
+    });
+}
+
+function applySortSubmitted<T extends { title: string; submission?: { toDate(): Date } }>(tasks: T[], sort: string): T[] {
+    return [...tasks].sort((a, b) => {
+        if (sort === "title-asc") return a.title.localeCompare(b.title);
+        if (sort === "title-desc") return b.title.localeCompare(a.title);
+        const aMs = a.submission?.toDate().getTime() ?? 0;
+        const bMs = b.submission?.toDate().getTime() ?? 0;
+        return sort === "date-asc" ? aMs - bMs : bMs - aMs;
+    });
+}
+
+const MONTH_OPTIONS = Array.from({ length: 13 }, (_, i) => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
+    return {
+        label: d.toLocaleString("en-US", { month: "long", year: "numeric" }),
+        key: `${d.getFullYear()}-${d.getMonth()}`,
+    };
+});
 
 interface prop {
     role: {name: string, id: string},
@@ -23,6 +63,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [page, setPage] = useState("requests");
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
     const [createTaskFor, setCreateSetTaskFor] = useState<string[]>([]);
+    const [assignError, setAssignError] = useState("");
     const [phrase, setPhrase] = useState(""); // Role name change phrase
     const [phrase2, setPhrase2] = useState(""); // Role reset phrase
     const [phrase3, setPhrase3] = useState(""); // Role reward phrase
@@ -31,6 +72,8 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [allTasks, setAllTasks] = useState<Task[]>([]);
     const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "done" | "submitted">("all");
     const [taskSearch, setTaskSearch] = useState("");
+    const [taskMonthFilter, setTaskMonthFilter] = useState("all");
+    const [taskSort, setTaskSort] = useState("date-desc");
     const [allSubmitted, setAllSubmitted] = useState<SubmittedTask[]>([]);
 
     // Listen for all tasks in this role
@@ -102,12 +145,23 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         }
 
         if (createTaskFor.length === 0) {
-            console.error("No users selected");
+            setAssignError("Please select at least one member.");
             return;
+        }
+        setAssignError("");
+
+        const dueDateStr = formData.get("dueDate") as string;
+        let dueDate: Timestamp | null = null;
+        let deleteAt: Timestamp | null = null;
+        if (dueDateStr) {
+            const [y, m, d] = dueDateStr.split("-").map(Number);
+            const dueDateObj = new Date(y, m - 1, d, 23, 59, 59);
+            dueDate = Timestamp.fromDate(dueDateObj);
+            deleteAt = Timestamp.fromDate(new Date(dueDateObj.getTime() + 7 * 24 * 60 * 60 * 1000));
         }
 
         try {
-            
+
             for (const uid of createTaskFor) {
                 const selectedUser = membersWithData.find((m) => m.uid === uid);
                 if (!selectedUser) continue;
@@ -121,6 +175,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                     createdOn: Timestamp.now(),
                     complete: false,
                     title,
+                    ...(dueDate ? { dueDate, deleteAt } : {}),
                 });
             }
 
@@ -212,8 +267,10 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         const thisUser = submitted.assignedTo;
 
         try {
+            const oneYear = Timestamp.fromDate(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000));
             await updateDoc(doc(db, "tasks", submitted.id), {
-                complete: true
+                complete: true,
+                deleteAt: oneYear,
             });
             await updateDoc(doc(db, "tasksSubmitted", submitted.id), {
                 complete: true
@@ -257,6 +314,23 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
             console.log(err)
         }
     }
+
+    const acceptExtension = async (taskId: string) => {
+        const newDueDate = Timestamp.fromDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000));
+        const newDeleteAt = Timestamp.fromDate(new Date(Date.now() + 10 * 24 * 60 * 60 * 1000));
+        await updateDoc(doc(db, "tasks", taskId), {
+            dueDate: newDueDate,
+            deleteAt: newDeleteAt,
+            extensionRequested: false,
+        });
+    };
+
+    const declineExtension = async (taskId: string) => {
+        await updateDoc(doc(db, "tasks", taskId), {
+            extensionDeclined: true,
+            extensionRequested: false,
+        });
+    };
 
     const resetRole = async (roleId : string) => {
         const confirmDelete = window.confirm("Are you sure you want to force reset? This cannot be undone.");
@@ -483,7 +557,15 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
             {page.match("creation") && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
-                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Assign to</h2>
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Assign to</h2>
+                            <LinkButton onClick={() => {
+                                const allUids = membersWithData
+                                    .filter(m => m.uid && !admins.includes(m.uid))
+                                    .map(m => m.uid as string);
+                                setCreateSetTaskFor(allUids);
+                            }}>Select all</LinkButton>
+                        </div>
                         <select
                             name="user"
                             defaultValue=""
@@ -532,7 +614,17 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                         <Input type="text" name="title" placeholder="Title" required={true} autocomplete="false" size="full" />
                         <Input type="text" name="desc" placeholder="Description (optional)" required={false} autocomplete="false" size="full" />
                         <Input type="number" id="pts" name="pts" placeholder="Points" required={true} autocomplete="false" size="full" />
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-gray-400">Due Date (optional)</label>
+                            <input
+                                type="date"
+                                name="dueDate"
+                                min={new Date().toISOString().split("T")[0]}
+                                className="w-full px-2 py-2 rounded-xl bg-white border-2 border-transparent hover:border-black/30 focus:border-black/30 focus:outline-none text-sm transition-all duration-200"
+                            />
+                        </div>
                         <Button type="submit" size="sm" color="green">Assign Task</Button>
+                        {assignError && <ErrorMessage>{assignError}</ErrorMessage>}
                         <Alert value={phrase4} setValue={setPhrase4} />
                     </form>
                 </motion.div>
@@ -550,7 +642,17 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                             placeholder="Search by title or assignee..."
                             className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
                         />
-                        <div className="flex gap-2">
+                        <select
+                            value={taskMonthFilter}
+                            onChange={e => setTaskMonthFilter(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                        >
+                            <option value="all">All months</option>
+                            {MONTH_OPTIONS.map(opt => (
+                                <option key={opt.key} value={opt.key}>{opt.label}</option>
+                            ))}
+                        </select>
+                        <div className="flex gap-2 flex-wrap">
                             {(["all", "pending", "done", "submitted"] as const).map((f) => (
                                 <button
                                     key={f}
@@ -565,19 +667,46 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                 </button>
                             ))}
                         </div>
+                        <div className="flex gap-2 flex-wrap">
+                            {([
+                                { key: "date-desc", label: "Newest" },
+                                { key: "date-asc",  label: "Oldest" },
+                                { key: "title-asc", label: "A → Z" },
+                                { key: "title-desc",label: "Z → A" },
+                            ]).map(s => (
+                                <button
+                                    key={s.key}
+                                    onClick={() => setTaskSort(s.key)}
+                                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors hover:cursor-pointer ${
+                                        taskSort === s.key
+                                            ? "bg-gray-700 text-white"
+                                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                    }`}
+                                >
+                                    {s.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {taskFilter === "submitted" ? (() => {
                         const filtered = allSubmitted.filter(t => {
+                            if (!t.complete === false) return false;
+                            if (taskMonthFilter !== "all") {
+                                const [y, m] = taskMonthFilter.split("-").map(Number);
+                                const d = t.submission?.toDate();
+                                if (!d || d.getFullYear() !== y || d.getMonth() !== m) return false;
+                            }
                             const q = taskSearch.toLowerCase();
                             return !t.complete && (!q || t.title.toLowerCase().includes(q) || t.assignedName.toLowerCase().includes(q));
                         });
-                        if (filtered.length === 0) return (
+                        const sorted = applySortSubmitted(filtered, taskSort);
+                        if (sorted.length === 0) return (
                             <p className="text-gray-400 text-sm text-center py-8">No pending submissions.</p>
                         );
                         return (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {filtered.map((submitted) => (
+                                {sorted.map((submitted) => (
                                     <motion.div
                                         key={submitted.id}
                                         className="flex flex-col gap-3 p-4 rounded-2xl border-2 border-yellow-200 bg-white"
@@ -611,21 +740,30 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                 taskFilter === "done" ? t.complete :
                                 taskFilter === "pending" ? !t.complete && !hasSubmission :
                                 !t.complete;
+                            if (!matchesFilter) return false;
+                            if (taskMonthFilter !== "all") {
+                                const [y, m] = taskMonthFilter.split("-").map(Number);
+                                const d = t.createdOn?.toDate();
+                                if (!d || d.getFullYear() !== y || d.getMonth() !== m) return false;
+                            }
                             const q = taskSearch.toLowerCase();
-                            return matchesFilter && (!q || t.title.toLowerCase().includes(q) || t.assignedName.toLowerCase().includes(q));
+                            return !q || t.title.toLowerCase().includes(q) || t.assignedName.toLowerCase().includes(q);
                         });
-                        if (filtered.length === 0) return (
+                        const sorted = applySortTasks(filtered, taskSort);
+                        if (sorted.length === 0) return (
                             <p className="text-gray-400 text-sm text-center py-8">No tasks to show.</p>
                         );
                         return (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {filtered.map((task) => {
+                                {sorted.map((task) => {
                                     const submission = allSubmitted.find(s => s.id === task.id && !s.complete);
+                                    const overdue = taskIsOverdue(task);
+                                    const daysLeft = daysUntilDeleteAt(task);
                                     return (
                                     <motion.div
                                         key={task.id}
                                         className={`flex flex-col gap-3 p-4 rounded-2xl border-2 bg-white ${
-                                            task.complete ? "border-green-300" : submission ? "border-yellow-200" : "border-gray-200"
+                                            task.complete ? "border-green-300" : overdue ? "border-red-300" : submission ? "border-yellow-200" : "border-gray-200"
                                         }`}
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
@@ -640,6 +778,15 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                         <div className="flex items-center justify-between gap-2 flex-wrap">
                                             <span className="text-xs text-gray-400">{task.assignedName}</span>
                                             <div className="flex gap-1 flex-wrap">
+                                                {overdue && (
+                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Overdue</span>
+                                                )}
+                                                {task.extensionRequested && (
+                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">Extension Requested</span>
+                                                )}
+                                                {task.extensionDeclined && (
+                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Extension Declined</span>
+                                                )}
                                                 {task.status && (
                                                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                                         task.status === "In Progress" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
@@ -654,12 +801,26 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                 </span>
                                             </div>
                                         </div>
+                                        {task.dueDate && !task.complete && (
+                                            <p className={`text-xs ${overdue ? "text-red-400" : "text-gray-400"}`}>
+                                                Due: {task.dueDate.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                                {overdue && daysLeft !== null && (
+                                                    <span className="ml-1">· {daysLeft > 0 ? `Deletes in ${daysLeft}d` : "Deleting soon"}</span>
+                                                )}
+                                            </p>
+                                        )}
                                         <p className="text-xs text-gray-300">
                                             {task.createdOn?.toDate().toLocaleString("en-US", {
                                                 month: "short", day: "numeric", year: "numeric",
                                                 hour: "numeric", minute: "2-digit"
                                             })}
                                         </p>
+                                        {task.extensionRequested && (
+                                            <div className="flex gap-2">
+                                                <Button onClick={() => acceptExtension(task.id)} size="full" color="green">Accept Extension</Button>
+                                                <Button onClick={() => declineExtension(task.id)} size="full" color="red">Decline Extension</Button>
+                                            </div>
+                                        )}
                                         {submission && (
                                             <div className="flex gap-2 mt-auto">
                                                 <Button onClick={() => acceptTask(submission)} size="full" color="green">Approve</Button>

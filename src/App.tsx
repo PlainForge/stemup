@@ -48,7 +48,7 @@ export default function App() {
   if (user && needsVerification) return <VerifyEmailPage />;
   
   return (
-    <div className="flex flex-col items-center min-h-screen min-w-full pt-4">
+    <div className="flex flex-col items-center min-h-screen min-w-full pt-20">
       <Nav />
       {showAccount ? <ProfilePage /> : null}
       <BugReport />

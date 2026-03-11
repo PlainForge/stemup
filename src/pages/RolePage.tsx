@@ -29,6 +29,11 @@ export default function RolePage() {
 
     const [requested, setRequested] = useState<string[]>([]);
     const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
+    const [taskSearch, setTaskSearch] = useState("");
+    const [taskMonthFilter, setTaskMonthFilter] = useState("all");
+    const [taskSort, setTaskSort] = useState("date-desc");
+    const [taskStatusFilter, setTaskStatusFilter] = useState<"all" | "complete" | "incomplete">("all");
+    const [seenTaskIds, setSeenTaskIds] = useState<Set<string>>(new Set());
 
     interface SnapshotEntry { uid: string; name: string; photoURL: string; points: number; taskCompleted: number; rank: number; }
     interface LeaderboardSnapshot { id: string; roleId: string; month: string; createdAt: Timestamp; entries: SnapshotEntry[]; }
@@ -214,6 +219,12 @@ export default function RolePage() {
         }
     }, [isMember, role, loading, navigate]);
 
+    useEffect(() => {
+        if (!user) return;
+        const stored = localStorage.getItem(`stemup_seen_tasks_${user.uid}`);
+        if (stored) setSeenTaskIds(new Set(JSON.parse(stored)));
+    }, [user]);
+
     const setCurrentRole = async (id : string) => {
         if (!user) return;
         await updateDoc(doc(db, "users", user.uid), { currentRole: id });
@@ -223,10 +234,41 @@ export default function RolePage() {
         await updateDoc(doc(db, "tasks", taskId), { status });
     };
 
+    const requestExtension = async (taskId: string) => {
+        await updateDoc(doc(db, "tasks", taskId), { extensionRequested: true });
+    };
+
+    const markTaskSeen = (taskId: string) => {
+        if (!user || seenTaskIds.has(taskId)) return;
+        const updated = new Set(seenTaskIds);
+        updated.add(taskId);
+        setSeenTaskIds(updated);
+        localStorage.setItem(`stemup_seen_tasks_${user.uid}`, JSON.stringify([...updated]));
+    };
+
+    const MONTH_OPTIONS = Array.from({ length: 13 }, (_, i) => {
+        const d = new Date();
+        d.setDate(1);
+        d.setMonth(d.getMonth() - i);
+        return {
+            label: d.toLocaleString("en-US", { month: "long", year: "numeric" }),
+            key: `${d.getFullYear()}-${d.getMonth()}`,
+        };
+    });
+
+    const isTaskOverdue = (task: Task) =>
+        !task.complete && !!task.dueDate && task.dueDate.toDate() < new Date();
+
+    const daysUntilDeletion = (task: Task): number | null => {
+        if (!task.deleteAt) return null;
+        return Math.ceil((task.deleteAt.toDate().getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    };
+
     if (loading || isMember === null) return <Loading />;
     if (!isMember || !user || !role ) return null;
 
     const taskCount = userTasks.filter(task => !task.complete).length;
+    const hasNewTasks = !admins.includes(user.uid) && userTasks.some(t => !t.complete && !seenTaskIds.has(t.id));
 
     return (
         <div className="w-full max-w-3xl mx-auto flex flex-col gap-4 px-4 pb-10">
@@ -291,8 +333,12 @@ export default function RolePage() {
                             }`}
                         >
                             {tab.label}
-                            {tab.key === "tasks" && taskCount > 0 && (
-                                <span className="ml-1.5 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">{taskCount}</span>
+                            {tab.key === "tasks" && (
+                                hasNewTasks
+                                    ? <span className="ml-1.5 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">NEW</span>
+                                    : taskCount > 0
+                                    ? <span className="ml-1.5 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">{taskCount}</span>
+                                    : null
                             )}
                             {tab.key === "admin" && (requested.length > 0 || submittedTasks.length > 0) && (
                                 <span className="absolute -top-1 -right-1 flex size-2.5">
@@ -466,43 +512,162 @@ export default function RolePage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="flex flex-col gap-3"
                 >
-                    <h2 className="text-lg font-semibold">Your {currentMonth} Tasks</h2>
-                    {tasksLoading ? (
-                        <p className="text-gray-400 text-sm">Loading tasks...</p>
-                    ) : userTasks.length > 0 && !admins.includes(user.uid) ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {userTasks.map((task) => (
-                                <motion.div
-                                    key={task.id}
-                                    className={`flex flex-col gap-3 p-4 rounded-2xl border-2 bg-white ${
-                                        task.complete ? "border-green-400" : "border-gray-200"
+                    <h2 className="text-lg font-semibold">Your Tasks</h2>
+                    {/* Search + Month filter */}
+                    <div className="flex flex-col gap-2">
+                        <input
+                            type="text"
+                            value={taskSearch}
+                            onChange={e => setTaskSearch(e.target.value)}
+                            placeholder="Search tasks..."
+                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                        />
+                        <select
+                            value={taskMonthFilter}
+                            onChange={e => setTaskMonthFilter(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                        >
+                            <option value="all">All months</option>
+                            {MONTH_OPTIONS.map(opt => (
+                                <option key={opt.key} value={opt.key}>{opt.label}</option>
+                            ))}
+                        </select>
+                        <div className="flex gap-2 flex-wrap">
+                            {([
+                                { key: "date-desc", label: "Newest" },
+                                { key: "date-asc",  label: "Oldest" },
+                                { key: "title-asc", label: "A → Z" },
+                                { key: "title-desc", label: "Z → A" },
+                            ]).map(s => (
+                                <button
+                                    key={s.key}
+                                    onClick={() => setTaskSort(s.key)}
+                                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors hover:cursor-pointer ${
+                                        taskSort === s.key
+                                            ? "bg-gray-700 text-white"
+                                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                                     }`}
                                 >
-                                    <div className="flex items-start justify-between gap-2">
-                                        <h3 className="font-semibold leading-tight">{task.title}</h3>
-                                        <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full whitespace-nowrap">
-                                            {task.points} pts
-                                        </span>
-                                    </div>
-                                    <p className="text-sm text-gray-500 flex-1">{task.description || "No description"}</p>
-                                    {!task.complete && (
-                                        <select
-                                            value={task.status ?? ""}
-                                            onChange={e => setTaskStatus(task.id, e.target.value)}
-                                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
-                                        >
-                                            <option value="">Set status...</option>
-                                            <option value="In Progress">In Progress</option>
-                                            <option value="Almost Done">Almost Done</option>
-                                        </select>
-                                    )}
-                                    <DoneButton task={task} />
-                                </motion.div>
+                                    {s.label}
+                                </button>
                             ))}
                         </div>
-                    ) : (
-                        <p className="text-gray-400 text-sm py-8 text-center">No tasks assigned to you yet.</p>
-                    )}
+                        <div className="flex gap-2 flex-wrap">
+                            {([
+                                { key: "all", label: "All" },
+                                { key: "incomplete", label: "Not Completed" },
+                                { key: "complete", label: "Completed" },
+                            ] as const).map(f => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => setTaskStatusFilter(f.key)}
+                                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors hover:cursor-pointer ${
+                                        taskStatusFilter === f.key
+                                            ? "bg-blue-600 text-white"
+                                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                    }`}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    {tasksLoading ? (
+                        <p className="text-gray-400 text-sm">Loading tasks...</p>
+                    ) : (() => {
+                        const filtered = userTasks.filter(task => {
+                            if (taskStatusFilter === "complete" && !task.complete) return false;
+                            if (taskStatusFilter === "incomplete" && task.complete) return false;
+                            if (taskMonthFilter !== "all") {
+                                const [y, m] = taskMonthFilter.split("-").map(Number);
+                                const d = task.createdOn?.toDate();
+                                if (!d || d.getFullYear() !== y || d.getMonth() !== m) return false;
+                            }
+                            if (taskSearch) {
+                                const q = taskSearch.toLowerCase();
+                                if (!task.title.toLowerCase().includes(q) && !(task.description || "").toLowerCase().includes(q)) return false;
+                            }
+                            return true;
+                        });
+                        const sorted = [...filtered].sort((a, b) => {
+                            if (taskSort === "title-asc") return a.title.localeCompare(b.title);
+                            if (taskSort === "title-desc") return b.title.localeCompare(a.title);
+                            const aMs = a.createdOn?.toDate().getTime() ?? 0;
+                            const bMs = b.createdOn?.toDate().getTime() ?? 0;
+                            return taskSort === "date-asc" ? aMs - bMs : bMs - aMs;
+                        });
+                        if (sorted.length === 0 || admins.includes(user.uid)) return (
+                            <p className="text-gray-400 text-sm py-8 text-center">No tasks assigned to you yet.</p>
+                        );
+                        return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {sorted.map((task) => {
+                                    const overdue = isTaskOverdue(task);
+                                    const daysLeft = daysUntilDeletion(task);
+                                    return (
+                                        <motion.div
+                                            key={task.id}
+                                            onMouseEnter={() => markTaskSeen(task.id)}
+                                            className={`flex flex-col gap-3 p-4 rounded-2xl border-2 bg-white ${
+                                                task.complete ? "border-green-400" : overdue ? "border-red-300" : "border-gray-200"
+                                            }`}
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                    <h3 className="font-semibold leading-tight truncate">{task.title}</h3>
+                                                    {!task.complete && !seenTaskIds.has(task.id) && (
+                                                        <span className="text-xs font-bold text-red-500 shrink-0">NEW</span>
+                                                    )}
+                                                </div>
+                                                <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
+                                                    {task.points} pts
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-gray-500 flex-1">{task.description || "No description"}</p>
+                                            {overdue && (
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="text-xs font-semibold text-red-500">
+                                                        Overdue{daysLeft !== null && ` · ${daysLeft > 0 ? `Expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}` : "Expiring soon"}`}
+                                                    </span>
+                                                    {!task.extensionRequested && !task.extensionDeclined && (
+                                                        <button
+                                                            onClick={() => requestExtension(task.id)}
+                                                            className="text-xs text-blue-500 hover:text-blue-700 font-medium text-left hover:cursor-pointer"
+                                                        >
+                                                            Request Extension
+                                                        </button>
+                                                    )}
+                                                    {task.extensionRequested && (
+                                                        <span className="text-xs text-yellow-600 font-medium">Requested Extension</span>
+                                                    )}
+                                                    {task.extensionDeclined && (
+                                                        <span className="text-xs text-gray-400 font-medium">Extension Declined</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {task.dueDate && !task.complete && !overdue && (
+                                                <p className="text-xs text-gray-400">
+                                                    Due: {task.dueDate.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                                </p>
+                                            )}
+                                            {!task.complete && (
+                                                <select
+                                                    value={task.status ?? ""}
+                                                    onChange={e => setTaskStatus(task.id, e.target.value)}
+                                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                                                >
+                                                    <option value="">Set status...</option>
+                                                    <option value="In Progress">In Progress</option>
+                                                    <option value="Almost Done">Almost Done</option>
+                                                </select>
+                                            )}
+                                            <DoneButton task={task} />
+                                        </motion.div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
                 </motion.div>
             )}
 

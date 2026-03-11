@@ -2,17 +2,43 @@ import { useContext } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGears, faHomeAlt, faPowerOff } from "@fortawesome/free-solid-svg-icons";
-import { useNavigate } from "react-router-dom";
+import { faGears, faHomeAlt, faPowerOff, faUsers } from "@fortawesome/free-solid-svg-icons";
+import { useNavigate, useLocation } from "react-router-dom";
 import { MainContext } from "../context/MainContext";
-import LinkButton from "./LinkButton";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+
+function NavItem({ icon, label, onClick, active, danger }: {
+    icon: IconDefinition;
+    label: string;
+    onClick: () => void;
+    active?: boolean;
+    danger?: boolean;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            title={label}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors hover:cursor-pointer ${
+                danger
+                    ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                    : active
+                    ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
+                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10"
+            }`}
+        >
+            <FontAwesomeIcon icon={icon} className="text-xs" />
+            <span className="hidden sm:inline">{label}</span>
+        </button>
+    );
+}
 
 export default function Nav() {
     const context = useContext(MainContext);
-    const navigate = useNavigate?.();
+    const navigate = useNavigate();
+    const location = useLocation();
 
     if (!context) return null;
-    const {user, userData} = context;
+    const { user, userData } = context;
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -21,28 +47,29 @@ export default function Nav() {
     };
 
     if (!user || !userData) return null;
+
+    const path = location.pathname;
+
     return (
-        <nav className="sticky top-0 z-20 w-full bg-white border-b border-gray-200 shadow-sm">
-            <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-                <h2 className="text-lg font-bold tracking-tight">StemUP</h2>
-                <div className="flex items-center gap-4 sm:gap-6">
-                    <span className="hidden sm:block text-sm text-gray-400">{userData?.name}</span>
-                    <LinkButton onClick={() => navigate("roles")}>
-                        <span className="text-sm">Roles</span>
-                    </LinkButton>
-                    <LinkButton onClick={() => navigate("/")}>
-                        <span className="hidden sm:inline text-sm">Home</span>
-                        <FontAwesomeIcon icon={faHomeAlt} className="sm:hidden" />
-                    </LinkButton>
-                    <LinkButton onClick={() => navigate("/settings")}>
-                        <span className="hidden sm:inline text-sm">Settings</span>
-                        <FontAwesomeIcon icon={faGears} className="sm:hidden" />
-                    </LinkButton>
-                    <LinkButton onClick={handleLogout}>
-                        <span className="hidden sm:inline text-sm">Logout</span>
-                        <FontAwesomeIcon icon={faPowerOff} className="sm:hidden" />
-                    </LinkButton>
-                </div>
+        <nav className="fixed top-4 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+            <div className="pointer-events-auto flex items-center gap-0.5 px-2 py-1.5 rounded-full backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-white/10 shadow-lg shadow-black/5">
+                {/* Logo */}
+                <span className="font-bold text-sm px-3 tracking-tight select-none">StemUP</span>
+
+                {/* Divider */}
+                <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
+
+                <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
+                <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} />
+                <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
+
+                {/* Divider */}
+                <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
+
+                {/* User name */}
+                <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 px-2 max-w-32 truncate">{userData.name}</span>
+
+                <NavItem icon={faPowerOff} label="Logout" onClick={handleLogout} danger />
             </div>
         </nav>
     );

@@ -14,16 +14,34 @@ interface Bug {
     createdAt?: Timestamp;
 }
 
+function getInitialDark() {
+    if (typeof window === "undefined") return false;
+    const stored = localStorage.getItem("theme");
+    if (stored) return stored === "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
 export default function BugReport() {
     const context = useContext(MainContext);
     const [open, setOpen] = useState(false);
     const [bugs, setBugs] = useState<Bug[]>([]);
     const [submitted, setSubmitted] = useState(false);
+    const [dark, setDark] = useState(getInitialDark);
 
     const user = context?.user ?? null;
     const admins = context?.admins ?? [];
 
     const isAdmin = user && admins.includes(user.uid);
+
+    useEffect(() => {
+        if (dark) {
+            document.documentElement.setAttribute("data-theme", "dark");
+            localStorage.setItem("theme", "dark");
+        } else {
+            document.documentElement.removeAttribute("data-theme");
+            localStorage.setItem("theme", "light");
+        }
+    }, [dark]);
 
     // Admins: listen to all bugs
     useEffect(() => {
@@ -64,7 +82,16 @@ export default function BugReport() {
 
     return (
         <>
-            {/* Floating button */}
+            {/* Theme toggle button */}
+            <button
+                onClick={() => setDark(d => !d)}
+                className="fixed bottom-20 right-6 z-40 size-12 rounded-full shadow-lg flex items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
+                title={dark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+                {dark ? "☀️" : "🌙"}
+            </button>
+
+            {/* Bug report floating button */}
             <button
                 onClick={() => setOpen(true)}
                 className="fixed bottom-6 right-6 z-40 size-12 rounded-full shadow-lg flex items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
@@ -86,7 +113,7 @@ export default function BugReport() {
                         />
 
                         <motion.div
-                            className="fixed bottom-20 right-6 z-50 w-full max-w-sm bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden"
+                            className="fixed bottom-36 right-6 z-50 w-full max-w-sm bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden"
                             initial={{ opacity: 0, y: 20, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 20, scale: 0.95 }}
