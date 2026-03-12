@@ -272,6 +272,26 @@ export default function RolePage() {
 
     return (
         <div className="w-full max-w-3xl mx-auto flex flex-col gap-4 px-4 pb-10">
+            {/* Breadcrumb / back nav */}
+            <div className="flex items-center justify-between pt-1">
+                <button
+                    onClick={() => navigate("/roles")}
+                    className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition-colors hover:cursor-pointer group"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Roles
+                </button>
+                <span
+                    title="Role ID (click to copy)"
+                    onClick={() => navigator.clipboard.writeText(roleId ?? "")}
+                    className="text-xs text-gray-300 font-mono bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 select-all cursor-pointer hover:border-gray-300 hover:text-gray-400 transition-colors"
+                >
+                    {roleId}
+                </span>
+            </div>
+
             {/* Role header */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
                 <div>
@@ -370,16 +390,32 @@ export default function RolePage() {
 
                         const podiumOrder = [top[1], top[0], top[2]]; // 2nd, 1st, 3rd
                         const podiumConfig = [
-                            { rank: 2, medal: "🥈", barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8" },
-                            { rank: 1, medal: "🥇", barH: "h-24", avatarSize: "md", textSize: "text-base", mt: "mt-0" },
-                            { rank: 3, medal: "🥉", barH: "h-10", avatarSize: "xs", textSize: "text-xs", mt: "mt-14" },
+                            { rank: 2, medal: "🥈", barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8", avatarClass: "size-24" },
+                            { rank: 1, medal: "🥇", barH: "h-24", avatarSize: "md", textSize: "text-base", mt: "mt-0", avatarClass: "size-34" },
+                            { rank: 3, medal: "🥉", barH: "h-10", avatarSize: "xs", textSize: "text-xs", mt: "mt-14", avatarClass: "size-14" },
                         ];
 
                         return (
                             <div className="flex items-end justify-center gap-2 sm:gap-4 mb-4 px-2">
                                 {podiumOrder.map((u, idx) => {
-                                    if (!u) return <div key={idx} className="flex-1" />;
                                     const cfg = podiumConfig[idx];
+                                    if (!u) return (
+                                        <motion.div
+                                            key={`ghost-${idx}`}
+                                            className={`flex-1 flex flex-col items-center gap-1 ${cfg.mt}`}
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: idx * 0.05 }}
+                                        >
+                                            <span className="text-lg opacity-0">{cfg.medal}</span>
+                                            <div className={`${cfg.avatarClass} shrink-0 aspect-square rounded-full bg-gray-100 border-2 border-dashed border-gray-300`} />
+                                            <p className={`font-semibold text-center ${cfg.textSize} text-gray-300`}>—</p>
+                                            <p className={`${cfg.textSize} text-gray-200`}>— pts</p>
+                                            <div className={`w-full ${cfg.barH} rounded-t-xl flex items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200`}>
+                                                <span className="font-bold text-gray-300 text-sm">{cfg.rank}</span>
+                                            </div>
+                                        </motion.div>
+                                    );
                                     const isMe = u.id === user.uid;
                                     return (
                                         <motion.div

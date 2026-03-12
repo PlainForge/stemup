@@ -115,15 +115,31 @@ export default function Dash() {
                                 if (top.length === 0) return null;
                                 const podiumOrder = [top[1], top[0], top[2]];
                                 const podiumConfig = [
-                                    { rank: 2, medal: "🥈", barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8" },
-                                    { rank: 1, medal: "🥇", barH: "h-24", avatarSize: "md", textSize: "text-base", mt: "mt-0" },
-                                    { rank: 3, medal: "🥉", barH: "h-10", avatarSize: "xs", textSize: "text-xs", mt: "mt-14" },
+                                    { rank: 2, medal: "🥈", barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8", avatarClass: "size-24" },
+                                    { rank: 1, medal: "🥇", barH: "h-24", avatarSize: "md", textSize: "text-base", mt: "mt-0", avatarClass: "size-34" },
+                                    { rank: 3, medal: "🥉", barH: "h-10", avatarSize: "xs", textSize: "text-xs", mt: "mt-14", avatarClass: "size-14" },
                                 ];
                                 return (
                                     <div className="flex items-end justify-center gap-2 sm:gap-4 mb-4 px-2">
                                         {podiumOrder.map((u, idx) => {
-                                            if (!u) return <div key={idx} className="flex-1" />;
                                             const cfg = podiumConfig[idx];
+                                            if (!u) return (
+                                                <motion.div
+                                                    key={`ghost-${idx}`}
+                                                    className={`flex-1 flex flex-col items-center gap-1 ${cfg.mt}`}
+                                                    initial={{ opacity: 0, y: 20 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ delay: idx * 0.05 }}
+                                                >
+                                                    <span className="text-lg opacity-0">{cfg.medal}</span>
+                                                    <div className={`${cfg.avatarClass} shrink-0 aspect-square rounded-full bg-gray-100 border-2 border-dashed border-gray-300`} />
+                                                    <p className={`font-semibold text-center ${cfg.textSize} text-gray-300`}>—</p>
+                                                    <p className={`${cfg.textSize} text-gray-200`}>— pts</p>
+                                                    <div className={`w-full ${cfg.barH} rounded-t-xl flex items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200`}>
+                                                        <span className="font-bold text-gray-300 text-sm">{cfg.rank}</span>
+                                                    </div>
+                                                </motion.div>
+                                            );
                                             const isMe = u.uid === user.uid;
                                             return (
                                                 <motion.div

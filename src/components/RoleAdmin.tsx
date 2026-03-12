@@ -1,5 +1,5 @@
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { db } from "../lib/firebase";
 import { type Role, type SubmittedTask, type Task, type UserData, type UserRoleData } from "../myDataTypes";
@@ -75,6 +75,9 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [taskMonthFilter, setTaskMonthFilter] = useState("all");
     const [taskSort, setTaskSort] = useState("date-desc");
     const [allSubmitted, setAllSubmitted] = useState<SubmittedTask[]>([]);
+    const [editingMember, setEditingMember] = useState<string | null>(null);
+    const [editPoints, setEditPoints] = useState(0);
+    const [editTaskCount, setEditTaskCount] = useState(0);
 
     // Listen for all tasks in this role
     useEffect(() => {
@@ -490,6 +493,22 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         await firebaseAuthService.kickUserFromRole(role.id, uid);
     };
 
+    const openEditMember = (m: UserData) => {
+        setEditingMember(m.uid);
+        setEditPoints(m.points ?? 0);
+        setEditTaskCount(m.taskCompleted ?? 0);
+    };
+
+    const saveEditMember = async (uid: string) => {
+        const member = membersWithData.find(m => m.uid === uid);
+        if (!member) return;
+        const updatedRoles = (member.roles || []).map((r: UserRoleData) =>
+            r.id === role.id ? { ...r, points: editPoints, taskCompleted: editTaskCount } : r
+        );
+        await updateDoc(doc(db, "users", uid), { roles: updatedRoles });
+        setEditingMember(null);
+    };
+
     const nonAdminMembers = membersWithData.filter((m) => !admins.includes(m.uid));
 
     const adminTabs = [
@@ -653,7 +672,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                             ))}
                         </select>
                         <div className="flex gap-2 flex-wrap">
-                            {(["all", "pending", "done", "submitted"] as const).map((f) => (
+                            {(["all", "submitted", "pending", "done"] as const).map((f) => (
                                 <button
                                     key={f}
                                     onClick={() => setTaskFilter(f)}
@@ -844,20 +863,88 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                     ) : nonAdminMembers.map((m) => (
                         <motion.div
                             key={m.uid}
-                            className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-4 py-3 gap-4"
+                            className="bg-white border border-gray-100 rounded-2xl"
                             initial={{ x: -10, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                         >
-                            <div className="flex items-center gap-3">
-                                <ProfileImg src={m.photoURL} alt={m.name} size="xs" />
-                                <div>
-                                    <p className="font-medium">{m.name}</p>
-                                    <p className="text-xs text-gray-400">{m.points ?? 0} pts · {m.taskCompleted ?? 0} tasks</p>
+                            <div className="flex items-center justify-between px-4 py-3 gap-4">
+                                <div className="flex items-center gap-3">
+                                    <ProfileImg src={m.photoURL} alt={m.name} size="xs" />
+                                    <div>
+                                        <p className="font-medium">{m.name}</p>
+                                        <p className="text-xs text-gray-400">{m.points ?? 0} pts · {m.taskCompleted ?? 0} tasks</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button onClick={() => openEditMember(m)} size="xsm" color="gray">Edit</Button>
+                                    <Button onClick={() => kickMember(m.uid, m.name)} size="xsm" color="red">Kick</Button>
                                 </div>
                             </div>
-                            <Button onClick={() => kickMember(m.uid, m.name)} size="xsm" color="red">Kick</Button>
                         </motion.div>
                     ))}
+
+                    {/* Edit member modal */}
+                    <AnimatePresence>
+                        {editingMember && (() => {
+                            const m = membersWithData.find(x => x.uid === editingMember);
+                            if (!m) return null;
+                            return (
+                                <motion.div
+                                    key="edit-overlay"
+                                    className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0.25, ease: "easeOut" }}
+                                    onClick={() => setEditingMember(null)}
+                                >
+                                    {/* Card */}
+                                    <motion.div
+                                        className="relative z-10 bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm flex flex-col gap-5"
+                                        initial={{ scale: 0.92, y: 20, opacity: 0 }}
+                                        animate={{ scale: 1, y: 0, opacity: 1 }}
+                                        exit={{ scale: 0.95, y: 10, opacity: 0 }}
+                                        transition={{ type: "spring", stiffness: 380, damping: 30, mass: 0.8 }}
+                                        onClick={e => e.stopPropagation()}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <ProfileImg src={m.photoURL} alt={m.name} size="xs" />
+                                            <div>
+                                                <p className="font-semibold">{m.name}</p>
+                                                <p className="text-xs text-gray-400">Edit stats for this role</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <div className="flex flex-col gap-1.5 flex-1">
+                                                <label className="text-xs text-gray-400 uppercase tracking-widest">Points</label>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    value={editPoints}
+                                                    onChange={e => setEditPoints(Math.max(0, +e.target.value))}
+                                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col gap-1.5 flex-1">
+                                                <label className="text-xs text-gray-400 uppercase tracking-widest">Tasks Completed</label>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    value={editTaskCount}
+                                                    onChange={e => setEditTaskCount(Math.max(0, +e.target.value))}
+                                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button size="full" onClick={() => saveEditMember(m.uid)}>Save</Button>
+                                            <Button size="full" color="gray" onClick={() => setEditingMember(null)}>Cancel</Button>
+                                        </div>
+                                    </motion.div>
+                                </motion.div>
+                            );
+                        })()}
+                    </AnimatePresence>
                 </motion.div>
             )}
 
