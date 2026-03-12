@@ -78,6 +78,8 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [editingMember, setEditingMember] = useState<string | null>(null);
     const [editPoints, setEditPoints] = useState(0);
     const [editTaskCount, setEditTaskCount] = useState(0);
+    const [origEditPoints, setOrigEditPoints] = useState(0);
+    const [origEditTaskCount, setOrigEditTaskCount] = useState(0);
 
     // Listen for all tasks in this role
     useEffect(() => {
@@ -494,18 +496,39 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     };
 
     const openEditMember = (m: UserData) => {
+        const roleData = m.roles?.find((r: UserRoleData) => r.id === role.id);
+        const rp = roleData?.points ?? 0;
+        const rt = roleData?.taskCompleted ?? 0;
         setEditingMember(m.uid);
-        setEditPoints(m.points ?? 0);
-        setEditTaskCount(m.taskCompleted ?? 0);
+        setEditPoints(rp);
+        setEditTaskCount(rt);
+        setOrigEditPoints(rp);
+        setOrigEditTaskCount(rt);
     };
 
-    const saveEditMember = async (uid: string) => {
+    const saveRoleOnly = async (uid: string) => {
         const member = membersWithData.find(m => m.uid === uid);
         if (!member) return;
         const updatedRoles = (member.roles || []).map((r: UserRoleData) =>
             r.id === role.id ? { ...r, points: editPoints, taskCompleted: editTaskCount } : r
         );
         await updateDoc(doc(db, "users", uid), { roles: updatedRoles });
+        setEditingMember(null);
+    };
+
+    const saveRoleAndGlobal = async (uid: string) => {
+        const member = membersWithData.find(m => m.uid === uid);
+        if (!member) return;
+        const deltaPoints = editPoints - origEditPoints;
+        const deltaTaskCount = editTaskCount - origEditTaskCount;
+        const updatedRoles = (member.roles || []).map((r: UserRoleData) =>
+            r.id === role.id ? { ...r, points: editPoints, taskCompleted: editTaskCount } : r
+        );
+        await updateDoc(doc(db, "users", uid), {
+            roles: updatedRoles,
+            points: Math.max(0, (member.points ?? 0) + deltaPoints),
+            taskCompleted: Math.max(0, (member.taskCompleted ?? 0) + deltaTaskCount),
+        });
         setEditingMember(null);
     };
 
@@ -911,7 +934,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             <ProfileImg src={m.photoURL} alt={m.name} size="xs" />
                                             <div>
                                                 <p className="font-semibold">{m.name}</p>
-                                                <p className="text-xs text-gray-400">Edit stats for this role</p>
+                                                <p className="text-xs text-gray-400">Role stats · Global: {m.points ?? 0} pts, {m.taskCompleted ?? 0} tasks</p>
                                             </div>
                                         </div>
                                         <div className="flex gap-4">
@@ -936,9 +959,20 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                 />
                                             </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <Button size="full" onClick={() => saveEditMember(m.uid)}>Save</Button>
-                                            <Button size="full" color="gray" onClick={() => setEditingMember(null)}>Cancel</Button>
+                                        {(editPoints !== origEditPoints || editTaskCount !== origEditTaskCount) && (
+                                            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
+                                                <p className="font-semibold mb-0.5">Global impact if saved with global:</p>
+                                                <p>
+                                                    Points: {m.points ?? 0} → {Math.max(0, (m.points ?? 0) + (editPoints - origEditPoints))}
+                                                    {" · "}
+                                                    Tasks: {m.taskCompleted ?? 0} → {Math.max(0, (m.taskCompleted ?? 0) + (editTaskCount - origEditTaskCount))}
+                                                </p>
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col gap-2">
+                                            <Button size="full" onClick={() => saveRoleOnly(m.uid)}>Save to Role Only</Button>
+                                            <Button size="full" color="gray" onClick={() => saveRoleAndGlobal(m.uid)}>Save to Role + Global</Button>
+                                            <button onClick={() => setEditingMember(null)} className="text-xs text-gray-400 hover:text-gray-600 transition-colors py-1 hover:cursor-pointer">Cancel</button>
                                         </div>
                                     </motion.div>
                                 </motion.div>
