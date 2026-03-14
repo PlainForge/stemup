@@ -19,6 +19,8 @@ export interface MainContextType {
     setJustLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
     showAccount: UserData | null;
     setShowAccount: React.Dispatch<React.SetStateAction<UserData | null>>;
+    roleNotification: boolean;
+    setRoleNotification: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export default function MainProvider({ children }: { children: React.ReactNode }) {
@@ -29,6 +31,7 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     const [needsVerification, setNeedsVerification] = useState<boolean>(false);
     const [justLoggedIn, setJustLoggedIn] = useState(false);
     const [showAccount, setShowAccount] = useState<UserData | null>(null);
+    const [roleNotification, setRoleNotification] = useState(false);
 
     // Get current logged in user
     useEffect(() => {
@@ -127,7 +130,7 @@ export default function MainProvider({ children }: { children: React.ReactNode }
         return () => clearInterval(interval);
     }, [user]);
 
-    const val = { user, setUser, loading, setLoading, userData, setUserData, admins, needsVerification, justLoggedIn, setJustLoggedIn, showAccount, setShowAccount };
+    const val = { user, setUser, loading, setLoading, userData, setUserData, admins, needsVerification, justLoggedIn, setJustLoggedIn, showAccount, setShowAccount, roleNotification, setRoleNotification };
 
     return (
         <MainContext.Provider value={val}>

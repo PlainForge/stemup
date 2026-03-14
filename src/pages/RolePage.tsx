@@ -45,6 +45,7 @@ export default function RolePage() {
     const userData = context?.userData ?? null;
     const loading = context?.loading ?? true;
     const admins = context?.admins ?? [];
+    const setRoleNotification = context?.setRoleNotification ?? null;
     const isCurrentRole = !!roleId && userData?.currentRole === roleId;
 
     useEffect(() => {
@@ -224,6 +225,21 @@ export default function RolePage() {
         const stored = localStorage.getItem(`stemup_seen_tasks_${user.uid}`);
         if (stored) setSeenTaskIds(new Set(JSON.parse(stored)));
     }, [user]);
+
+    useEffect(() => {
+        if (!user || !setRoleNotification) return;
+        const isAdmin = admins.includes(user.uid);
+        if (isAdmin) {
+            setRoleNotification(requested.length > 0 || submittedTasks.length > 0);
+        } else {
+            setRoleNotification(userTasks.some(t => !t.complete && !seenTaskIds.has(t.id)));
+        }
+    }, [user, admins, requested, submittedTasks, userTasks, seenTaskIds, setRoleNotification]);
+
+    useEffect(() => {
+        return () => { setRoleNotification?.(false); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const setCurrentRole = async (id : string) => {
         if (!user) return;
@@ -686,7 +702,7 @@ export default function RolePage() {
                                                     Due: {task.dueDate.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                                 </p>
                                             )}
-                                            {!task.complete && (
+                                            {!task.complete && !overdue && (
                                                 <select
                                                     value={task.status ?? ""}
                                                     onChange={e => setTaskStatus(task.id, e.target.value)}
@@ -697,7 +713,7 @@ export default function RolePage() {
                                                     <option value="Almost Done">Almost Done</option>
                                                 </select>
                                             )}
-                                            <DoneButton task={task} />
+                                            {!overdue && <DoneButton task={task} />}
                                         </motion.div>
                                     );
                                 })}

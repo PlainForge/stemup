@@ -18,6 +18,7 @@ export default function RolesSelectorPage() {
     const [roles, setRoles] = useState<Role[]>([]);
     const [requestsPerRole, setRequestsPerRole] = useState<Record<string, number>>({});
     const [submittedPerRole, setSubmittedPerRole] = useState<Record<string, number>>({});
+    const [incompletePerRole, setIncompletePerRole] = useState<Record<string, number>>({});
 
     const user = context?.user ?? null;
     const userData = context?.userData ?? null;
@@ -46,6 +47,25 @@ export default function RolesSelectorPage() {
             console.error("Error fetching roles:", err);
         });
 
+        return () => unsub();
+    }, [user, admins]);
+
+    useEffect(() => {
+        if (!user || admins.includes(user.uid)) return;
+
+        const q = query(
+            collection(db, "tasks"),
+            where("assignedTo", "==", user.uid),
+            where("complete", "==", false)
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            const counts: Record<string, number> = {};
+            snap.docs.forEach(d => {
+                const roleId = d.data().roleId as string;
+                if (roleId) counts[roleId] = (counts[roleId] || 0) + 1;
+            });
+            setIncompletePerRole(counts);
+        });
         return () => unsub();
     }, [user, admins]);
 
@@ -114,7 +134,7 @@ export default function RolesSelectorPage() {
                     return (
                         <motion.div
                             key={role.id}
-                            className={`flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-200 ${
+                            className={`relative flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-200 ${
                                 isActive
                                     ? "border-blue-400 bg-blue-50"
                                     : "border-gray-200 bg-white hover:border-gray-400 hover:shadow-sm"
@@ -122,6 +142,11 @@ export default function RolesSelectorPage() {
                             initial={{ x: -30, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                         >
+                            {!admins.includes(user.uid) && userData?.roles?.some(r => r.id === role.id) && (incompletePerRole[role.id] || 0) > 0 && (
+                                <span className="absolute -top-2 -right-2 min-w-5 h-5 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1 shadow">
+                                    {incompletePerRole[role.id]}
+                                </span>
+                            )}
                             <div className="flex items-center gap-2">
                                 {isActive && (
                                     <FontAwesomeIcon icon={faStar} className="text-blue-500 text-sm" />

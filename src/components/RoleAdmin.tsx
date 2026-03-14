@@ -320,13 +320,14 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         }
     }
 
-    const acceptExtension = async (taskId: string) => {
+    const acceptExtension = async (taskId: string, currentPoints: number) => {
         const newDueDate = Timestamp.fromDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000));
         const newDeleteAt = Timestamp.fromDate(new Date(Date.now() + 10 * 24 * 60 * 60 * 1000));
         await updateDoc(doc(db, "tasks", taskId), {
             dueDate: newDueDate,
             deleteAt: newDeleteAt,
             extensionRequested: false,
+            points: Math.round(currentPoints * 0.6),
         });
     };
 
@@ -859,7 +860,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                         </p>
                                         {task.extensionRequested && (
                                             <div className="flex gap-2">
-                                                <Button onClick={() => acceptExtension(task.id)} size="full" color="green">Accept Extension</Button>
+                                                <Button onClick={() => acceptExtension(task.id, task.points)} size="full" color="green">Accept Extension</Button>
                                                 <Button onClick={() => declineExtension(task.id)} size="full" color="red">Decline Extension</Button>
                                             </div>
                                         )}

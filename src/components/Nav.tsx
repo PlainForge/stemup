@@ -7,18 +7,19 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MainContext } from "../context/MainContext";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 
-function NavItem({ icon, label, onClick, active, danger }: {
+function NavItem({ icon, label, onClick, active, danger, ping }: {
     icon: IconDefinition;
     label: string;
     onClick: () => void;
     active?: boolean;
     danger?: boolean;
+    ping?: boolean;
 }) {
     return (
         <button
             onClick={onClick}
             title={label}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors hover:cursor-pointer ${
+            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors hover:cursor-pointer ${
                 danger
                     ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
                     : active
@@ -28,6 +29,12 @@ function NavItem({ icon, label, onClick, active, danger }: {
         >
             <FontAwesomeIcon icon={icon} className="text-xs" />
             <span className="hidden sm:inline">{label}</span>
+            {ping && (
+                <span className="absolute top-0.5 right-0.5 flex size-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+                    <span className="relative inline-flex size-2 rounded-full bg-sky-500" />
+                </span>
+            )}
         </button>
     );
 }
@@ -38,7 +45,7 @@ export default function Nav() {
     const location = useLocation();
 
     if (!context) return null;
-    const { user, userData } = context;
+    const { user, userData, roleNotification } = context;
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -60,7 +67,7 @@ export default function Nav() {
                 <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
 
                 <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
-                <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} />
+                <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
                 <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
 
                 {/* Divider */}
