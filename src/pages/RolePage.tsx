@@ -695,6 +695,12 @@ export default function RolePage() {
                                                     {task.extensionDeclined && (
                                                         <span className="text-xs text-gray-400 font-medium">Extension Declined</span>
                                                     )}
+                                                    {(task.declineCount ?? 0) > 0 && (
+                                                        <span className="text-xs text-red-400 font-medium">
+                                                            Declined {task.declineCount} time{task.declineCount === 1 ? "" : "s"}
+                                                            {task.declineCount === 3 ? " · Task closed" : ""}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             )}
                                             {task.dueDate && !task.complete && !overdue && (

@@ -310,13 +310,28 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         }
     }
 
-    const declineTask = async (submitted : SubmittedTask) => {
-        if (!submitted) return
-
+    const declineTask = async (submitted: SubmittedTask) => {
+        if (!submitted) return;
         try {
-            await deleteDoc(doc(db, "tasksSubmitted", submitted.id));
+            const taskSnap = await getDoc(doc(db, "tasks", submitted.id));
+            const currentCount: number = (taskSnap.data()?.declineCount ?? 0);
+            const newCount = currentCount + 1;
+
+            if (newCount >= 3) {
+                const oneYear = Timestamp.fromDate(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000));
+                await updateDoc(doc(db, "tasks", submitted.id), {
+                    complete: true,
+                    declineCount: newCount,
+                    deleteAt: oneYear,
+                    extensionRequested: false,
+                });
+                await deleteDoc(doc(db, "tasksSubmitted", submitted.id));
+            } else {
+                await updateDoc(doc(db, "tasks", submitted.id), { declineCount: newCount });
+                await deleteDoc(doc(db, "tasksSubmitted", submitted.id));
+            }
         } catch (err) {
-            console.log(err)
+            console.log(err);
         }
     }
 
@@ -829,6 +844,11 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                 )}
                                                 {task.extensionDeclined && (
                                                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Extension Declined</span>
+                                                )}
+                                                {(task.declineCount ?? 0) > 0 && (
+                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                                                        Declined {task.declineCount}×{task.declineCount === 3 ? " · Closed" : ""}
+                                                    </span>
                                                 )}
                                                 {task.status && (
                                                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${

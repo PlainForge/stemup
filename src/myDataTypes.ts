@@ -42,6 +42,7 @@ export type Task = {
   deleteAt?: Timestamp,
   extensionRequested?: boolean,
   extensionDeclined?: boolean,
+  declineCount?: number,
 }
 
 export type SubmittedTask = {
