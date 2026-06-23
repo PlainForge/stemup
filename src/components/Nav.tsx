@@ -39,6 +39,37 @@ function NavItem({ icon, label, onClick, active, danger, ping }: {
     );
 }
 
+function MobileNavItem({ icon, label, onClick, active, danger, ping }: {
+    icon: IconDefinition;
+    label: string;
+    onClick: () => void;
+    active?: boolean;
+    danger?: boolean;
+    ping?: boolean;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className={`relative flex flex-col items-center gap-0.5 px-5 py-1.5 rounded-xl text-xs font-medium transition-colors hover:cursor-pointer ${
+                danger
+                    ? "text-red-500"
+                    : active
+                    ? "text-gray-900 dark:text-white"
+                    : "text-gray-400 dark:text-gray-500"
+            }`}
+        >
+            <FontAwesomeIcon icon={icon} className="text-xl" />
+            <span>{label}</span>
+            {ping && (
+                <span className="absolute top-1 right-3 flex size-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+                    <span className="relative inline-flex size-2 rounded-full bg-sky-500" />
+                </span>
+            )}
+        </button>
+    );
+}
+
 export default function Nav() {
     const context = useContext(MainContext);
     const navigate = useNavigate();
@@ -58,26 +89,37 @@ export default function Nav() {
     const path = location.pathname;
 
     return (
-        <nav className="fixed top-4 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
-            <div className="pointer-events-auto flex items-center gap-0.5 px-2 py-1.5 rounded-full backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-white/10 shadow-lg shadow-black/5">
-                {/* Logo */}
-                <span className="font-bold text-sm px-3 tracking-tight select-none">StemUP</span>
+        <>
+            {/* Desktop top nav */}
+            <nav className="hidden sm:flex fixed top-4 left-0 right-0 z-50 justify-center px-4 pointer-events-none">
+                <div className="pointer-events-auto flex items-center gap-0.5 px-2 py-1.5 rounded-full backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-white/10 shadow-lg shadow-black/5">
+                    {/* Logo */}
+                    <span className="font-bold text-sm px-3 tracking-tight select-none">StemUP</span>
 
-                {/* Divider */}
-                <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
+                    {/* Divider */}
+                    <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
 
-                <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
-                <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
-                <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
+                    <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
+                    <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
+                    <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
 
-                {/* Divider */}
-                <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
+                    {/* Divider */}
+                    <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
 
-                {/* User name */}
-                <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 px-2 max-w-32 truncate">{userData.name}</span>
+                    {/* User name */}
+                    <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 px-2 max-w-32 truncate">{userData.name}</span>
 
-                <NavItem icon={faPowerOff} label="Logout" onClick={handleLogout} danger />
-            </div>
-        </nav>
+                    <NavItem icon={faPowerOff} label="Logout" onClick={handleLogout} danger />
+                </div>
+            </nav>
+
+            {/* Mobile bottom nav */}
+            <nav className="fixed bottom-0 left-0 right-0 z-50 flex sm:hidden items-center justify-around px-2 py-2 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-t border-gray-200/60 dark:border-white/10">
+                <MobileNavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
+                <MobileNavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
+                <MobileNavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
+                <MobileNavItem icon={faPowerOff} label="Logout" onClick={handleLogout} danger />
+            </nav>
+        </>
     );
 }

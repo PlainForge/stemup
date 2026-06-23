@@ -85,7 +85,7 @@ export default function BugReport() {
             {/* Theme toggle button */}
             <button
                 onClick={() => setDark(d => !d)}
-                className="fixed bottom-20 right-6 z-40 size-12 rounded-full shadow-lg flex items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
+                className="fixed top-4 sm:top-auto sm:bottom-20 right-6 z-40 size-12 rounded-full shadow-lg flex items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
                 title={dark ? "Switch to light mode" : "Switch to dark mode"}
             >
                 {dark ? "☀️" : "🌙"}
@@ -94,7 +94,7 @@ export default function BugReport() {
             {/* Bug report floating button */}
             <button
                 onClick={() => setOpen(true)}
-                className="fixed bottom-6 right-6 z-40 size-12 rounded-full shadow-lg flex items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
+                className="fixed top-18 sm:top-auto sm:bottom-6 right-6 z-40 size-12 rounded-full shadow-lg flex items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
                 title={isAdmin ? "View bug reports" : "Report a bug"}
             >
                 {isAdmin ? "🛠" : "🐛"}
@@ -113,7 +113,7 @@ export default function BugReport() {
                         />
 
                         <motion.div
-                            className="fixed bottom-36 right-6 z-50 w-full max-w-sm bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden"
+                            className="fixed z-50 w-[calc(100%-2rem)] max-w-sm bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:top-auto sm:left-auto sm:right-6 sm:bottom-36 sm:translate-x-0 sm:translate-y-0"
                             initial={{ opacity: 0, y: 20, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 20, scale: 0.95 }}
