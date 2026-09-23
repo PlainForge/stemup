@@ -660,6 +660,7 @@ export default function RolePage() {
                                 {sorted.map((task) => {
                                     const overdue = isTaskOverdue(task);
                                     const daysLeft = daysUntilDeletion(task);
+                                    const isSubmitted = submittedTasks.some(s => s.id === task.id);
                                     return (
                                         <motion.div
                                             key={task.id}
@@ -712,7 +713,7 @@ export default function RolePage() {
                                                     Due: {task.dueDate.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                                 </p>
                                             )}
-                                            {!task.complete && !overdue && (
+                                            {!task.complete && !overdue && !isSubmitted && (
                                                 <select
                                                     value={task.status ?? ""}
                                                     onChange={e => setTaskStatus(task.id, e.target.value)}

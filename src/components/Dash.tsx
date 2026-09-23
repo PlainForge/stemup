@@ -3,9 +3,16 @@ import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
 import ProfileButton from "./ProfileButton";
 import ProfileImg from "./ProfileImg";
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import type { UserData } from "../myDataTypes";
+import type { UserData, UserRoleData } from "../myDataTypes";
+
+interface RoleLeaderboard {
+    roleId: string;
+    roleName: string;
+    top3: UserData[];
+    rewards: string[];
+}
 
 export default function Dash() {
     const context = useContext(MainContext);
@@ -70,7 +77,80 @@ export default function Dash() {
         return () => unsub();
     }, [user]);
 
+    const [roleLeaderboards, setRoleLeaderboards] = useState<RoleLeaderboard[]>([]);
+    const [roleLeaderboardsLoading, setRoleLeaderboardsLoading] = useState(false);
+    const isAdmin = user ? admins.includes(user.uid) : false;
+
+    // For users who don't see the global leaderboard: load a top-3 leaderboard
+    // (with each role's rewards) for every role they're in, excluding global
+    useEffect(() => {
+        if (!user || !userData || showGlobal || isAdmin) {
+            setRoleLeaderboards([]);
+            return;
+        }
+
+        const myRoles = (userData.roles ?? []).filter(r => r.id !== GLOBAL_ROLE_ID);
+        if (myRoles.length === 0) {
+            setRoleLeaderboards([]);
+            return;
+        }
+
+        let cancelled = false;
+        setRoleLeaderboardsLoading(true);
+
+        (async () => {
+            const results = await Promise.all(myRoles.map(async (myRole): Promise<RoleLeaderboard> => {
+                const [roleSnap, rewardSnap] = await Promise.all([
+                    getDoc(doc(db, "roles", myRole.id)),
+                    getDoc(doc(db, "rewards", myRole.id)),
+                ]);
+                const memberIds: string[] = roleSnap.exists() ? (roleSnap.data().members ?? []) : [];
+
+                const memberDocs = await Promise.all(memberIds.map(uid => getDoc(doc(db, "users", uid))));
+                const ranked = memberDocs
+                    .filter(d => d.exists() && !admins.includes(d.id))
+                    .map(d => {
+                        const data = d.data()!;
+                        const roles: UserRoleData[] = Array.isArray(data.roles) ? data.roles : [];
+                        const roleData = roles.find(r => r.id === myRole.id);
+                        return {
+                            uid: d.id,
+                            id: d.id,
+                            name: data.name ?? "Unknown User",
+                            photoURL: data.photoURL ?? "",
+                            points: data.points ?? 0,
+                            taskCompleted: data.taskCompleted ?? 0,
+                            roles,
+                            currentRole: data.currentRole ?? "",
+                            rolePoints: roleData?.points ?? 0,
+                        } as UserData & { rolePoints: number };
+                    })
+                    .sort((a, b) => b.rolePoints - a.rolePoints);
+
+                const rewardData = rewardSnap.exists() ? rewardSnap.data() : {};
+                return {
+                    roleId: myRole.id,
+                    roleName: myRole.name,
+                    top3: ranked.slice(0, 3),
+                    rewards: [
+                        rewardData.first ?? "No reward set",
+                        rewardData.second ?? "No reward set",
+                        rewardData.third ?? "No reward set",
+                    ],
+                };
+            }));
+
+            if (!cancelled) setRoleLeaderboards(results);
+        })().finally(() => {
+            if (!cancelled) setRoleLeaderboardsLoading(false);
+        });
+
+        return () => { cancelled = true; };
+    }, [user, userData, showGlobal, isAdmin, admins]);
+
     if (!context || !user || !userData) return null;
+
+    const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
     const sorted =[...globalLeaders]
         .filter(u => !admins.includes(u.uid))
@@ -86,6 +166,7 @@ export default function Dash() {
             <div className="flex flex-col items-center gap-3">
                 <ProfileImg src={userData.photoURL} alt={userData.name} />
                 <h2 className="text-2xl font-bold">{userData.name}</h2>
+                <p className="text-sm text-gray-400 -mt-2">{today}</p>
             </div>
 
             {/* Stat cards */}
@@ -200,6 +281,39 @@ export default function Dash() {
                             ))}
                         </>
                     )}
+                </div>
+            )}
+
+            {/* Per-role leaderboards, for users who don't have a global leaderboard */}
+            {!showGlobal && !isAdmin && (roleLeaderboardsLoading || roleLeaderboards.length > 0) && (
+                <div className="w-full flex flex-col gap-6">
+                    {roleLeaderboardsLoading ? (
+                        <p className="text-gray-400 text-sm text-center py-4">Loading leaderboards...</p>
+                    ) : roleLeaderboards.map(rl => (
+                        <div key={rl.roleId} className="w-full flex flex-col gap-2">
+                            <h2 className="text-lg font-semibold">{rl.roleName} Leaderboard</h2>
+                            {rl.top3.length === 0 ? (
+                                <p className="text-gray-400 text-sm text-center py-4">No participants yet.</p>
+                            ) : (
+                                <div className="flex flex-col gap-2">
+                                    {rl.top3.map((m, idx) => (
+                                        <div
+                                            key={m.uid}
+                                            className={`flex items-center justify-between bg-white border rounded-xl px-4 py-3 ${
+                                                m.uid === user.uid ? "border-blue-200 bg-blue-50" : "border-gray-100"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-lg">{["🥇", "🥈", "🥉"][idx]}</span>
+                                                <ProfileButton user={m} size="xxs" />
+                                            </div>
+                                            <p className="text-sm font-medium text-gray-700">{rl.rewards[idx]}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
                 </div>
             )}
         </motion.div>

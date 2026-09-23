@@ -106,6 +106,25 @@ export default function ProfilePage() {
                                 </div>
                             </div>
 
+                            {(() => {
+                                const roleNames = (selectedUser.roles ?? [])
+                                    .filter(r => r.id !== GLOBAL_ROLE_ID)
+                                    .map(r => r.name);
+                                if (roleNames.length === 0) return null;
+                                return (
+                                    <div className="w-full bg-gray-50 rounded-xl p-3">
+                                        <p className="text-xs text-gray-400 uppercase tracking-widest mb-2">Roles</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {roleNames.map(name => (
+                                                <span key={name} className="text-xs font-medium bg-white border border-gray-200 px-2.5 py-1 rounded-full">
+                                                    {name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
                             <div className="flex gap-2 w-full">
                                 {isAdmin && <Button color="gray" size="full" onClick={openEdit}>Edit</Button>}
                                 {isAdmin && location.pathname.includes("/roles") &&
