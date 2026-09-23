@@ -35,13 +35,14 @@ export default function App() {
 
     // 🔥 consume the flag so it never runs again
     context?.setJustLoggedIn(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally not depending on the whole `context` object, which gets a new reference on every provider render
   }, [
     loading,
     user,
     userData?.currentRole,
     justLoggedIn,
     navigate,
-    context
+    context?.setJustLoggedIn
   ]);
 
   if (loading) return <Loading />;

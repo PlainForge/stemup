@@ -8,6 +8,9 @@ import RegisterPage from "./pages/RegisterPage";
 import Home from "./pages/Home";
 import Loading from "./pages/Loading";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AlumniPage from "./pages/AlumniPage";
+import AlumniBatchPage from "./pages/AlumniBatchPage";
+import OldUsersPage from "./pages/OldUsersPage";
 
 export const router = createBrowserRouter([
   {
@@ -29,6 +32,9 @@ export const router = createBrowserRouter([
       { index: true, element: <Home /> },
       { path: "settings", element: <Settings /> },
       { path: "roles", element: <RolesSelectorPage /> },
+      { path: "alumni", element: <AlumniPage /> },
+      { path: "alumni/:id", element: <AlumniBatchPage /> },
+      { path: "old-users", element: <OldUsersPage /> },
 
       {
         path: "roles/:id",

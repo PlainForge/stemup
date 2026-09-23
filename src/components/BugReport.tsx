@@ -14,34 +14,19 @@ interface Bug {
     createdAt?: Timestamp;
 }
 
-function getInitialDark() {
-    if (typeof window === "undefined") return false;
-    const stored = localStorage.getItem("theme");
-    if (stored) return stored === "dark";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
-
 export default function BugReport() {
     const context = useContext(MainContext);
-    const [open, setOpen] = useState(false);
     const [bugs, setBugs] = useState<Bug[]>([]);
     const [submitted, setSubmitted] = useState(false);
-    const [dark, setDark] = useState(getInitialDark);
 
     const user = context?.user ?? null;
     const admins = context?.admins ?? [];
+    const dark = context?.dark ?? false;
+    const setDark = context?.setDark ?? (() => {});
+    const open = context?.bugReportOpen ?? false;
+    const setOpen = context?.setBugReportOpen ?? (() => {});
 
     const isAdmin = user && admins.includes(user.uid);
-
-    useEffect(() => {
-        if (dark) {
-            document.documentElement.setAttribute("data-theme", "dark");
-            localStorage.setItem("theme", "dark");
-        } else {
-            document.documentElement.removeAttribute("data-theme");
-            localStorage.setItem("theme", "light");
-        }
-    }, [dark]);
 
     // Admins: listen to all bugs
     useEffect(() => {
@@ -82,19 +67,19 @@ export default function BugReport() {
 
     return (
         <>
-            {/* Theme toggle button */}
+            {/* Theme toggle button (desktop only — mobile users toggle this from Settings) */}
             <button
                 onClick={() => setDark(d => !d)}
-                className="fixed top-4 sm:top-auto sm:bottom-20 right-6 z-40 size-12 rounded-full shadow-lg flex items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
+                className="hidden sm:flex fixed bottom-20 right-6 z-40 size-12 rounded-full shadow-lg items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
                 title={dark ? "Switch to light mode" : "Switch to dark mode"}
             >
                 {dark ? "☀️" : "🌙"}
             </button>
 
-            {/* Bug report floating button */}
+            {/* Bug report floating button (desktop only — mobile users open this from Settings) */}
             <button
                 onClick={() => setOpen(true)}
-                className="fixed top-18 sm:top-auto sm:bottom-6 right-6 z-40 size-12 rounded-full shadow-lg flex items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
+                className="hidden sm:flex fixed bottom-6 right-6 z-40 size-12 rounded-full shadow-lg items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
                 title={isAdmin ? "View bug reports" : "Report a bug"}
             >
                 {isAdmin ? "🛠" : "🐛"}

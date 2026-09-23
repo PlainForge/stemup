@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import { db } from "../lib/firebase";
-import { collection, doc, onSnapshot, orderBy, query, Timestamp, updateDoc, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, Timestamp, updateDoc, where } from "firebase/firestore";
 import { type Task, type Role, type UserData, type UserRoleData, type SubmittedTask } from "../myDataTypes";
 import { motion } from "motion/react";
 import RoleAdminPage from "../components/RoleAdmin";
@@ -203,13 +203,17 @@ export default function RolePage() {
     // Get leaderboard snapshots for this role
     useEffect(() => {
         if (!roleId) return;
+        // Sorted client-side (rather than via orderBy) so this doesn't need a composite index on roleId+createdAt
         const q = query(
             collection(db, "leaderboardSnapshots"),
-            where("roleId", "==", roleId),
-            orderBy("createdAt", "desc")
+            where("roleId", "==", roleId)
         );
         const unsub = onSnapshot(q, (snap) => {
-            setSnapshots(snap.docs.map(d => ({ id: d.id, ...d.data() } as LeaderboardSnapshot)));
+            const results = snap.docs.map(d => ({ id: d.id, ...d.data() } as LeaderboardSnapshot));
+            results.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+            setSnapshots(results);
+        }, (error) => {
+            console.error("Error loading leaderboard snapshots:", error);
         });
         return () => unsub();
     }, [roleId]);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { MainContext } from './MainContext';
 import { firebaseAuthService } from '../lib/firebaseService';
 import type { User } from 'firebase/auth';
@@ -21,6 +21,17 @@ export interface MainContextType {
     setShowAccount: React.Dispatch<React.SetStateAction<UserData | null>>;
     roleNotification: boolean;
     setRoleNotification: React.Dispatch<React.SetStateAction<boolean>>;
+    dark: boolean;
+    setDark: React.Dispatch<React.SetStateAction<boolean>>;
+    bugReportOpen: boolean;
+    setBugReportOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+function getInitialDark() {
+    if (typeof window === "undefined") return false;
+    const stored = localStorage.getItem("theme");
+    if (stored) return stored === "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
 export default function MainProvider({ children }: { children: React.ReactNode }) {
@@ -32,6 +43,18 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     const [justLoggedIn, setJustLoggedIn] = useState(false);
     const [showAccount, setShowAccount] = useState<UserData | null>(null);
     const [roleNotification, setRoleNotification] = useState(false);
+    const [dark, setDark] = useState<boolean>(getInitialDark);
+    const [bugReportOpen, setBugReportOpen] = useState(false);
+
+    useEffect(() => {
+        if (dark) {
+            document.documentElement.setAttribute("data-theme", "dark");
+            localStorage.setItem("theme", "dark");
+        } else {
+            document.documentElement.removeAttribute("data-theme");
+            localStorage.setItem("theme", "light");
+        }
+    }, [dark]);
 
     // Get current logged in user
     useEffect(() => {
@@ -130,7 +153,10 @@ export default function MainProvider({ children }: { children: React.ReactNode }
         return () => clearInterval(interval);
     }, [user]);
 
-    const val = { user, setUser, loading, setLoading, userData, setUserData, admins, needsVerification, justLoggedIn, setJustLoggedIn, showAccount, setShowAccount, roleNotification, setRoleNotification };
+    const val = useMemo(
+        () => ({ user, setUser, loading, setLoading, userData, setUserData, admins, needsVerification, justLoggedIn, setJustLoggedIn, showAccount, setShowAccount, roleNotification, setRoleNotification, dark, setDark, bugReportOpen, setBugReportOpen }),
+        [user, loading, userData, admins, needsVerification, justLoggedIn, showAccount, roleNotification, dark, bugReportOpen]
+    );
 
     return (
         <MainContext.Provider value={val}>

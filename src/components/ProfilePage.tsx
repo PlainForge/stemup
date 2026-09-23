@@ -1,10 +1,9 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { MainContext } from "../context/MainContext";
 import Button from "./Button";
 import ProfileImg from "./ProfileImg";
-import { motion, AnimatePresence } from "motion/react";
 import { useLocation, useParams } from "react-router-dom";
-import { firebaseAuthService } from "../lib/firebaseService";
+import { firebaseAuthService, GLOBAL_ROLE_ID } from "../lib/firebaseService";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
@@ -19,6 +18,14 @@ export default function ProfilePage() {
     const [isEditing, setIsEditing] = useState(false);
     const [editGlobalPoints, setEditGlobalPoints] = useState(0);
     const [editGlobalTasks, setEditGlobalTasks] = useState(0);
+
+    // Plain CSS entrance transition (Framer Motion's initial/animate on this
+    // component caused a visible double-flicker on mount, see conversation history)
+    const [entered, setEntered] = useState(false);
+    useEffect(() => {
+        const frame = requestAnimationFrame(() => setEntered(true));
+        return () => cancelAnimationFrame(frame);
+    }, []);
 
     const location = useLocation();
     const { id: roleId } = useParams<{ id: string }>();
@@ -43,6 +50,18 @@ export default function ProfilePage() {
         setShowAccount?.(null);
     }
 
+    const isInGlobal = selectedUser.roles?.some(r => r.id === GLOBAL_ROLE_ID) ?? false;
+
+    const removeFromGlobal = async () => {
+        const confirmRemove = window.confirm(
+            `Remove ${selectedUser.name} from the global leaderboard? They can be restored later from Old Users.`
+        );
+        if (!confirmRemove) return;
+
+        await firebaseAuthService.removeFromGlobalRole(selectedUser.uid);
+        setShowAccount?.(null);
+    }
+
     const openEdit = () => {
         setEditGlobalPoints(selectedUser.points ?? 0);
         setEditGlobalTasks(selectedUser.taskCompleted ?? 0);
@@ -61,31 +80,20 @@ export default function ProfilePage() {
     };
 
     return (
-        <motion.div
-            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+        <div
+            className={`fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4 transition-opacity duration-150 ${entered ? "opacity-100" : "opacity-0"}`}
             onClick={swtch}
         >
-            <motion.div
-                className="flex flex-col items-center bg-white rounded-2xl shadow-xl p-6 w-full max-w-xs gap-4"
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.15 }}
+            <div
+                className={`flex flex-col items-center bg-white rounded-2xl shadow-xl p-6 w-full max-w-xs gap-4 transition-all duration-150 ${entered ? "opacity-100 scale-100" : "opacity-0 scale-90"}`}
                 onClick={(e) => e.stopPropagation()}
             >
                 <ProfileImg src={selectedUser.photoURL} />
                 <h1 className="text-xl font-bold">{selectedUser.name}</h1>
 
-                <AnimatePresence mode="wait">
-                    {!isEditing ? (
-                        <motion.div
-                            key="view"
+                {!isEditing ? (
+                        <div
                             className="w-full flex flex-col gap-4"
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            transition={{ duration: 0.15 }}
                         >
                             <div className="w-full grid grid-cols-2 gap-3">
                                 <div className="bg-gray-50 rounded-xl p-3 text-center">
@@ -105,15 +113,13 @@ export default function ProfilePage() {
                                 }
                                 <Button color="gray" size="full" onClick={swtch}>Close</Button>
                             </div>
-                        </motion.div>
+                            {isAdmin && isInGlobal && (
+                                <Button color="red" size="full" onClick={removeFromGlobal}>Remove from Global</Button>
+                            )}
+                        </div>
                     ) : (
-                        <motion.div
-                            key="edit"
+                        <div
                             className="w-full flex flex-col gap-4"
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            transition={{ duration: 0.15 }}
                         >
                             <p className="text-xs text-gray-400 uppercase tracking-widest text-center -mb-1">Edit Global Stats</p>
                             <div className="flex gap-3">
@@ -142,10 +148,9 @@ export default function ProfilePage() {
                                 <Button size="full" onClick={saveGlobal}>Save</Button>
                                 <Button color="gray" size="full" onClick={() => setIsEditing(false)}>Back</Button>
                             </div>
-                        </motion.div>
+                        </div>
                     )}
-                </AnimatePresence>
-            </motion.div>
-        </motion.div>
+            </div>
+        </div>
     )
 }

@@ -2,7 +2,7 @@ import { useContext } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGears, faHomeAlt, faPowerOff, faUsers } from "@fortawesome/free-solid-svg-icons";
+import { faGears, faHomeAlt, faPowerOff, faUserClock, faUserGraduate, faUsers } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MainContext } from "../context/MainContext";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
@@ -76,7 +76,7 @@ export default function Nav() {
     const location = useLocation();
 
     if (!context) return null;
-    const { user, userData, roleNotification } = context;
+    const { user, userData, roleNotification, admins } = context;
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -87,6 +87,7 @@ export default function Nav() {
     if (!user || !userData) return null;
 
     const path = location.pathname;
+    const isAdmin = admins.includes(user.uid);
 
     return (
         <>
@@ -101,6 +102,12 @@ export default function Nav() {
 
                     <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
                     <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
+                    {isAdmin && (
+                        <NavItem icon={faUserGraduate} label="Alumni" onClick={() => navigate("/alumni")} active={path.startsWith("/alumni")} />
+                    )}
+                    {isAdmin && (
+                        <NavItem icon={faUserClock} label="Old Users" onClick={() => navigate("/old-users")} active={path.startsWith("/old-users")} />
+                    )}
                     <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
 
                     {/* Divider */}
@@ -117,6 +124,12 @@ export default function Nav() {
             <nav className="fixed bottom-0 left-0 right-0 z-50 flex sm:hidden items-center justify-around px-2 py-2 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-t border-gray-200/60 dark:border-white/10">
                 <MobileNavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
                 <MobileNavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
+                {isAdmin && (
+                    <MobileNavItem icon={faUserGraduate} label="Alumni" onClick={() => navigate("/alumni")} active={path.startsWith("/alumni")} />
+                )}
+                {isAdmin && (
+                    <MobileNavItem icon={faUserClock} label="Old Users" onClick={() => navigate("/old-users")} active={path.startsWith("/old-users")} />
+                )}
                 <MobileNavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
                 <MobileNavItem icon={faPowerOff} label="Logout" onClick={handleLogout} danger />
             </nav>

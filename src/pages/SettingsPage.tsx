@@ -10,6 +10,7 @@ import { Alert } from "../components/PhraseAlert";
 import { useNavigate } from "react-router-dom";
 import ProfileImg from "../components/ProfileImg";
 import Input from "../components/Input";
+import SemesterResetModal from "../components/SemesterResetModal";
 
 export default function Settings() {
     const context = useContext(MainContext);
@@ -23,6 +24,13 @@ export default function Settings() {
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(userData?.photoURL ?? null);
     const [phrase, setPhrase] = useState("");
+    const [showResetModal, setShowResetModal] = useState(false);
+
+    const admins = context?.admins ?? [];
+    const dark = context?.dark ?? false;
+    const setDark = context?.setDark;
+    const setBugReportOpen = context?.setBugReportOpen;
+    const isAdmin = user ? admins.includes(user.uid) : false;
 
     const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -166,6 +174,25 @@ export default function Settings() {
                     <Alert value={phrase} setValue={setPhrase} />
                 </div>
 
+                {/* App (mobile only — desktop has the floating theme/bug-report buttons) */}
+                <div className="sm:hidden bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">App</h2>
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
+                            <span className="text-sm">Appearance</span>
+                            <Button onClick={() => setDark?.(d => !d)} color="gray" size="xsm" type="button">
+                                {dark ? "☀️ Light" : "🌙 Dark"}
+                            </Button>
+                        </div>
+                        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
+                            <span className="text-sm">{isAdmin ? "Bug Reports" : "Found a bug?"}</span>
+                            <Button onClick={() => setBugReportOpen?.(true)} color="gray" size="xsm" type="button">
+                                {isAdmin ? "🛠 View" : "🐛 Report"}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Danger zone */}
                 <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-6 mt-2">
                     <h2 className="text-sm font-semibold uppercase tracking-widest text-red-400 mb-1">Danger Zone</h2>
@@ -175,7 +202,24 @@ export default function Settings() {
                     </Button>
                 </div>
 
+                {/* Admin: Semester reset */}
+                {isAdmin && (
+                    <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-6">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-red-400 mb-1">Semester Reset</h2>
+                        <p className="text-sm text-gray-500 mb-4">
+                            Remove old roles to get ready for a new semester. Users whose only roles are removed will be
+                            permanently deleted along with their tasks; everyone else keeps their account, with points
+                            and completed tasks reset to 0.
+                        </p>
+                        <Button onClick={() => setShowResetModal(true)} color="red" size="sm">
+                            Reset for New Semester
+                        </Button>
+                    </div>
+                )}
+
             </div>
+
+            <SemesterResetModal open={showResetModal} onClose={() => setShowResetModal(false)} />
         </motion.div>
     );
 }
