@@ -11,6 +11,8 @@ import { useNavigate } from "react-router-dom";
 import ProfileImg from "../components/ProfileImg";
 import Input from "../components/Input";
 import SemesterResetModal from "../components/SemesterResetModal";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBug, faMoon, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
 
 export default function Settings() {
     const context = useContext(MainContext);
@@ -181,13 +183,15 @@ export default function Settings() {
                         <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
                             <span className="text-sm">Appearance</span>
                             <Button onClick={() => setDark?.(d => !d)} color="gray" size="xsm" type="button">
-                                {dark ? "☀️ Light" : "🌙 Dark"}
+                                <FontAwesomeIcon icon={dark ? faSun : faMoon} className="mr-1.5" />
+                                {dark ? "Light" : "Dark"}
                             </Button>
                         </div>
                         <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
                             <span className="text-sm">{isAdmin ? "Bug Reports" : "Found a bug?"}</span>
                             <Button onClick={() => setBugReportOpen?.(true)} color="gray" size="xsm" type="button">
-                                {isAdmin ? "🛠 View" : "🐛 Report"}
+                                <FontAwesomeIcon icon={isAdmin ? faWrench : faBug} className="mr-1.5" />
+                                {isAdmin ? "View" : "Report"}
                             </Button>
                         </div>
                     </div>

@@ -4,6 +4,8 @@ import { collection, addDoc, onSnapshot, deleteDoc, doc, Timestamp } from "fireb
 import { db } from "../lib/firebase";
 import { MainContext } from "../context/MainContext";
 import Button from "./Button";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBug, faMoon, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
 
 interface Bug {
     id: string;
@@ -73,7 +75,7 @@ export default function BugReport() {
                 className="hidden sm:flex fixed bottom-20 right-6 z-40 size-12 rounded-full shadow-lg items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
                 title={dark ? "Switch to light mode" : "Switch to dark mode"}
             >
-                {dark ? "☀️" : "🌙"}
+                <FontAwesomeIcon icon={dark ? faSun : faMoon} />
             </button>
 
             {/* Bug report floating button (desktop only — mobile users open this from Settings) */}
@@ -82,7 +84,7 @@ export default function BugReport() {
                 className="hidden sm:flex fixed bottom-6 right-6 z-40 size-12 rounded-full shadow-lg items-center justify-center transition-colors hover:cursor-pointer bg-gray-800 hover:bg-gray-700 text-white text-xl"
                 title={isAdmin ? "View bug reports" : "Report a bug"}
             >
-                {isAdmin ? "🛠" : "🐛"}
+                <FontAwesomeIcon icon={isAdmin ? faWrench : faBug} />
             </button>
 
             {/* Backdrop + panel */}
