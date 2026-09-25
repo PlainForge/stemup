@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { GoogleAuthProvider } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
 import RegisterCard from "../components/RegisterCard";
 import { motion } from "motion/react";
@@ -16,7 +15,6 @@ export default function RegisterPage() {
     const [name, setName] = useState("");
     const [phrase, setPhrase] = useState("");
     const [signInEmail, setSignInEmail] = useState<boolean>(false);
-    const provider = new GoogleAuthProvider();
     const navigate = useNavigate?.();
     const location = useLocation();
     const isLogin = location.pathname === '/login';
@@ -41,7 +39,7 @@ export default function RegisterPage() {
     // Google Login/Register
     const handleGoogleLogin = async () => {
         try {
-            await firebaseAuthService.signInWithGoogle(provider);
+            await firebaseAuthService.signInWithGoogle();
             navigate("/");
             setPhrase("");
             setEmail("");

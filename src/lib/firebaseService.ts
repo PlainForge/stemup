@@ -1,7 +1,9 @@
-import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
+import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
 import { auth, db, storage } from "./firebase";
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, query, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { Capacitor } from "@capacitor/core";
+import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 import type { Role, UserData, UserRoleData } from "../myDataTypes";
 
 const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
@@ -111,11 +113,22 @@ export const firebaseAuthService = {
     },
 
     /**
-     * Sign In with Google
-     * @param provider GoogleAuthProvider
+     * Sign In with Google. Popups don't work inside the native iOS/Android
+     * WebView, so native platforms use the Capacitor Firebase Authentication
+     * plugin's native Google flow instead, then sync the resulting credential
+     * into the Firebase JS SDK so the rest of the app (Firestore, onAuthStateChanged)
+     * keeps working exactly the same way.
      */
-    async signInWithGoogle(provider : GoogleAuthProvider) {
-        const userCred = await signInWithPopup(auth, provider);
+    async signInWithGoogle() {
+        let userCred;
+        if (Capacitor.isNativePlatform()) {
+            const result = await FirebaseAuthentication.signInWithGoogle();
+            const idToken = result.credential?.idToken;
+            if (!idToken) throw new Error("No ID token returned from Google Sign-In");
+            userCred = await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+        } else {
+            userCred = await signInWithPopup(auth, new GoogleAuthProvider());
+        }
         const user = userCred.user;
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);

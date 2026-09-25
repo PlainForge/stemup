@@ -1,5 +1,4 @@
 import { useContext, useEffect, useState } from "react";
-import { GoogleAuthProvider } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
 import LoginCard from "../components/LoginCard.tsx";
 import { firebaseAuthService } from "../lib/firebaseService.ts";
@@ -11,7 +10,6 @@ export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [phrase, setPhrase] = useState("");
-    const provider = new GoogleAuthProvider();
     const navigate = useNavigate?.();
     const context = useContext(MainContext);
     const user = context?.user ?? null;
@@ -25,7 +23,7 @@ export default function LoginPage() {
     // Google Login/Register
     const handleGoogleLogin = async () => {
         try {
-            await firebaseAuthService.signInWithGoogle(provider);
+            await firebaseAuthService.signInWithGoogle();
             navigate("/");
             setPhrase("");
             setEmail("");

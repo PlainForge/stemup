@@ -6,6 +6,12 @@ const config: CapacitorConfig = {
   appId: 'com.stempower.stemup',
   appName: 'StemUP',
   webDir: 'dist',
+  plugins: {
+    FirebaseAuthentication: {
+      providers: ['google.com'],
+      skipNativeAuth: false,
+    },
+  },
 };
 
 export default config;
