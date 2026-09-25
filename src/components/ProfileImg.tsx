@@ -11,6 +11,16 @@ function optimizeSrc(src?: string): string | undefined {
     if (src.includes("googleusercontent.com")) {
         return src.replace(/=s\d+-c/, "=s400-c").replace(/=s\d+$/, "=s400");
     }
+    // The default avatar service returns 64px unless asked for more
+    if (src.includes("ui-avatars.com")) {
+        try {
+            const url = new URL(src);
+            url.searchParams.set("size", "512");
+            return url.toString();
+        } catch {
+            return src;
+        }
+    }
     return src;
 }
 

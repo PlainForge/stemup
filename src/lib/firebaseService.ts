@@ -122,7 +122,8 @@ export const firebaseAuthService = {
         let photoURL = DEFAULT_AVATAR;
         if (!userSnap.exists()) {
             if (user.photoURL) {
-                const response = await fetch(user.photoURL);
+                // Google's default is a 96px thumbnail; ask for a high-res copy to store
+                const response = await fetch(user.photoURL.replace(/=s\d+-c/, "=s400-c").replace(/=s\d+$/, "=s400"));
                 const blob = await response.blob();
                 const storageRef = ref(storage, `profilePictures/${user.uid}`);
                 await uploadBytes(storageRef, blob);
@@ -442,6 +443,17 @@ export const firebaseAuthService = {
      * global membership, and can be undone with restoreLiveUserToGlobal.
      */
     async removeFromGlobalRole(uid: string) {
+        // Admins and anyone who can see the global leaderboard (members of a role
+        // with showInGlobalLeaderboard) must always stay in global
+        const [adminsSnap, viewerRolesSnap] = await Promise.all([
+            getDoc(doc(db, "admins", "all-perms")),
+            getDocs(query(collection(db, "roles"), where("showInGlobalLeaderboard", "==", true))),
+        ]);
+        const admins: string[] = adminsSnap.data()?.ids ?? [];
+        const isProtected = admins.includes(uid) ||
+            viewerRolesSnap.docs.some(d => ((d.data().members as string[]) ?? []).includes(uid));
+        if (isProtected) return false;
+
         const userRef = doc(db, "users", uid);
         const snap = await getDoc(userRef);
         const roles: UserRoleData[] = Array.isArray(snap.data()?.roles) ? snap.data()!.roles : [];
@@ -451,6 +463,7 @@ export const firebaseAuthService = {
             updateDoc(doc(db, "roles", GLOBAL_ROLE_ID), { members: arrayRemove(uid) }),
             updateDoc(userRef, { roles: updatedRoles }),
         ]);
+        return true;
     },
 
     /**

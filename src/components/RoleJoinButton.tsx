@@ -52,7 +52,7 @@ export default function JoinButton({ role } : JoinProps) {
 
     if (isMember) {
         return (
-            <LinkButton onClick={() => navigate(`/roles/${role.id}`)} moreClass="font-medium">Join</LinkButton>
+            <LinkButton onClick={() => navigate(`/roles/${role.id}`)} moreClass="font-medium">Enter</LinkButton>
         )
     }
 

@@ -4,7 +4,7 @@ import Button from "./Button";
 import ProfileImg from "./ProfileImg";
 import { useLocation, useParams } from "react-router-dom";
 import { firebaseAuthService, GLOBAL_ROLE_ID } from "../lib/firebaseService";
-import { doc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDocs, query, updateDoc, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 
@@ -26,6 +26,23 @@ export default function ProfilePage() {
         const frame = requestAnimationFrame(() => setEntered(true));
         return () => cancelAnimationFrame(frame);
     }, []);
+
+    // UIDs of everyone who can see the global leaderboard; they can't be removed from global
+    const [globalViewers, setGlobalViewers] = useState<Set<string> | null>(null);
+    const viewerIsAdmin = !!user && admins.includes(user.uid);
+    const selectedUid = selectedUser?.uid;
+    useEffect(() => {
+        if (!selectedUid || !viewerIsAdmin) return;
+        let cancelled = false;
+        getDocs(query(collection(db, "roles"), where("showInGlobalLeaderboard", "==", true)))
+            .then(snap => {
+                const uids = new Set<string>();
+                snap.docs.forEach(d => ((d.data().members as string[]) ?? []).forEach(u => uids.add(u)));
+                if (!cancelled) setGlobalViewers(uids);
+            })
+            .catch(err => console.error("Error loading global leaderboard viewers:", err));
+        return () => { cancelled = true; };
+    }, [selectedUid, viewerIsAdmin]);
 
     const location = useLocation();
     const { id: roleId } = useParams<{ id: string }>();
@@ -58,9 +75,17 @@ export default function ProfilePage() {
         );
         if (!confirmRemove) return;
 
-        await firebaseAuthService.removeFromGlobalRole(selectedUser.uid);
+        const removed = await firebaseAuthService.removeFromGlobalRole(selectedUser.uid);
+        if (!removed) {
+            window.alert(`${selectedUser.name} can't be removed from global (admins and people who can see the global leaderboard always stay in it).`);
+            return;
+        }
         setShowAccount?.(null);
     }
+
+    const canRemoveFromGlobal = isAdmin && isInGlobal &&
+        !admins.includes(selectedUser.uid) &&
+        globalViewers !== null && !globalViewers.has(selectedUser.uid);
 
     const openEdit = () => {
         setEditGlobalPoints(selectedUser.points ?? 0);
@@ -132,7 +157,7 @@ export default function ProfilePage() {
                                 }
                                 <Button color="gray" size="full" onClick={swtch}>Close</Button>
                             </div>
-                            {isAdmin && isInGlobal && (
+                            {canRemoveFromGlobal && (
                                 <Button color="red" size="full" onClick={removeFromGlobal}>Remove from Global</Button>
                             )}
                         </div>

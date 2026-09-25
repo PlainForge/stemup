@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
 import ProfileButton from "./ProfileButton";
 import ProfileImg from "./ProfileImg";
-import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import type { UserData, UserRoleData } from "../myDataTypes";
 
@@ -12,6 +12,7 @@ interface RoleLeaderboard {
     roleName: string;
     top3: UserData[];
     rewards: string[];
+    myRank: number | null;
 }
 
 export default function Dash() {
@@ -81,16 +82,11 @@ export default function Dash() {
     const [roleLeaderboardsLoading, setRoleLeaderboardsLoading] = useState(false);
     const isAdmin = user ? admins.includes(user.uid) : false;
 
-    // For users who don't see the global leaderboard: load a top-3 leaderboard
-    // (with each role's rewards) for every role they're in, excluding global
+    // Load a ranking (top 3, the user's own rank, and rewards) for every role the
+    // user is in, excluding global. Admins aren't ranked, so they get every role
+    // instead, as an overview of each role's current top 3.
     useEffect(() => {
-        if (!user || !userData || showGlobal || isAdmin) {
-            setRoleLeaderboards([]);
-            return;
-        }
-
-        const myRoles = (userData.roles ?? []).filter(r => r.id !== GLOBAL_ROLE_ID);
-        if (myRoles.length === 0) {
+        if (!user || !userData) {
             setRoleLeaderboards([]);
             return;
         }
@@ -99,6 +95,16 @@ export default function Dash() {
         setRoleLeaderboardsLoading(true);
 
         (async () => {
+            let myRoles: { id: string; name: string }[];
+            if (isAdmin) {
+                const rolesSnap = await getDocs(collection(db, "roles"));
+                myRoles = rolesSnap.docs
+                    .filter(d => d.id !== GLOBAL_ROLE_ID)
+                    .map(d => ({ id: d.id, name: (d.data().name as string) ?? "Untitled Role" }));
+            } else {
+                myRoles = (userData.roles ?? []).filter(r => r.id !== GLOBAL_ROLE_ID);
+            }
+
             const results = await Promise.all(myRoles.map(async (myRole): Promise<RoleLeaderboard> => {
                 const [roleSnap, rewardSnap] = await Promise.all([
                     getDoc(doc(db, "roles", myRole.id)),
@@ -128,9 +134,11 @@ export default function Dash() {
                     .sort((a, b) => b.rolePoints - a.rolePoints);
 
                 const rewardData = rewardSnap.exists() ? rewardSnap.data() : {};
+                const myIdx = ranked.findIndex(r => r.uid === user.uid);
                 return {
                     roleId: myRole.id,
                     roleName: myRole.name,
+                    myRank: myIdx >= 0 ? myIdx + 1 : null,
                     top3: ranked.slice(0, 3),
                     rewards: [
                         rewardData.first ?? "No reward set",
@@ -146,7 +154,7 @@ export default function Dash() {
         });
 
         return () => { cancelled = true; };
-    }, [user, userData, showGlobal, isAdmin, admins]);
+    }, [user, userData, isAdmin, admins]);
 
     if (!context || !user || !userData) return null;
 
@@ -156,7 +164,74 @@ export default function Dash() {
         .filter(u => !admins.includes(u.uid))
         .sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
 
+    // Roles where the user currently places top 3, best placing first
+    const currentMonth = new Date().toLocaleString("en-US", { month: "long" });
+    const placings = roleLeaderboards
+        .filter(rl => rl.myRank !== null && rl.myRank <= 3)
+        .sort((a, b) => (a.myRank as number) - (b.myRank as number));
+    const placeLabels = ["1st", "2nd", "3rd"];
+    const medals = ["🥇", "🥈", "🥉"];
+
+    const isRealPrize = (reward?: string) => !!reward && reward !== "No reward set" && reward !== "not set";
+
+    // Admins aren't ranked, so they see each role's current top 3 and prizes instead
+    const adminOverviewCard = isAdmin && roleLeaderboards.length > 0 ? (
+        <div className="w-full rounded-2xl border-2 border-yellow-300 bg-white shadow-sm p-4 flex flex-col gap-4">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">{currentMonth} Rewards Overview</h2>
+            {roleLeaderboards.map(rl => (
+                <div key={rl.roleId} className="flex flex-col gap-2">
+                    <p className="font-semibold leading-tight truncate">{rl.roleName}</p>
+                    {rl.top3.length === 0 ? (
+                        <p className="text-xs text-gray-400">No participants yet.</p>
+                    ) : rl.top3.map((m, idx) => (
+                        <div key={m.uid} className="flex items-center gap-2.5">
+                            <span className="text-xl shrink-0 w-7 text-center">{medals[idx]}</span>
+                            <div className="min-w-0 flex flex-col">
+                                <p className="text-sm font-medium leading-tight truncate">{m.name}</p>
+                                <p className={`text-xs leading-snug truncate ${isRealPrize(rl.rewards[idx]) ? "text-gray-500" : "text-gray-400"}`}>
+                                    {isRealPrize(rl.rewards[idx]) ? `Prize: ${rl.rewards[idx]}` : "No prize set"}
+                                </p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ))}
+        </div>
+    ) : null;
+
+    const userRewardsCard = placings.length > 0 ? (
+        <div className="w-full rounded-2xl border-2 border-yellow-300 bg-white shadow-sm p-4 flex flex-col gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Your {currentMonth} Rewards</h2>
+            {placings.map(rl => {
+                const idx = (rl.myRank as number) - 1;
+                const reward = rl.rewards[idx];
+                const hasReward = reward && reward !== "No reward set" && reward !== "not set";
+                return (
+                    <div key={rl.roleId} className="flex items-center gap-3">
+                        <span className="text-3xl shrink-0">{medals[idx]}</span>
+                        <div className="min-w-0 flex flex-col">
+                            <p className="font-semibold leading-tight truncate">{rl.roleName}</p>
+                            <p className="text-sm text-gray-500 leading-snug">{placeLabels[idx]} place</p>
+                            <p className={`text-xs leading-snug ${hasReward ? "text-gray-500" : "text-gray-400"}`}>
+                                {hasReward ? `Prize: ${reward}` : "No prize set"}
+                            </p>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    ) : null;
+
+    const rewardsCard = isAdmin ? adminOverviewCard : userRewardsCard;
+
     return (
+        <>
+        {/* Wide screens: floating on the right */}
+        {rewardsCard && (
+            <div className="hidden xl:block fixed right-6 top-28 w-72 z-30 max-h-[calc(100vh-8rem)] overflow-y-auto rounded-2xl">
+                {rewardsCard}
+            </div>
+        )}
         <motion.div
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -182,6 +257,10 @@ export default function Dash() {
                     </div>
                 </div>
             )}
+
+            {/* Smaller screens: shown above the leaderboards */}
+            {rewardsCard && <div className="w-full xl:hidden">{rewardsCard}</div>}
+
             {/* Global Leaderboard */}
             {(showGlobal || admins.includes(user.uid)) && (
                 <div className="w-full flex flex-col gap-3">
@@ -291,25 +370,43 @@ export default function Dash() {
                         <p className="text-gray-400 text-sm text-center py-4">Loading leaderboards...</p>
                     ) : roleLeaderboards.map(rl => (
                         <div key={rl.roleId} className="w-full flex flex-col gap-2">
-                            <h2 className="text-lg font-semibold">{rl.roleName} Leaderboard</h2>
+                            <h2 className="text-lg font-semibold truncate">{rl.roleName} Leaderboard</h2>
                             {rl.top3.length === 0 ? (
                                 <p className="text-gray-400 text-sm text-center py-4">No participants yet.</p>
                             ) : (
-                                <div className="flex flex-col gap-2">
-                                    {rl.top3.map((m, idx) => (
-                                        <div
-                                            key={m.uid}
-                                            className={`flex items-center justify-between bg-white border rounded-xl px-4 py-3 ${
-                                                m.uid === user.uid ? "border-blue-200 bg-blue-50" : "border-gray-100"
-                                            }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-lg">{["🥇", "🥈", "🥉"][idx]}</span>
-                                                <ProfileButton user={m} size="xxs" />
-                                            </div>
-                                            <p className="text-sm font-medium text-gray-700">{rl.rewards[idx]}</p>
-                                        </div>
-                                    ))}
+                                <div className="flex flex-col gap-3">
+                                    {rl.top3.map((m, idx) => {
+                                        const reward = rl.rewards[idx];
+                                        const hasReward = reward && reward !== "No reward set" && reward !== "not set";
+                                        return (
+                                            <motion.div
+                                                key={m.uid}
+                                                className={`flex items-center gap-3 rounded-2xl border-2 px-3 py-3 sm:px-4 ${
+                                                    m.uid === user.uid
+                                                        ? "bg-blue-50 border-blue-300"
+                                                        : `bg-white ${idx === 0 ? "border-yellow-300" : idx === 1 ? "border-gray-300" : "border-orange-300"}`
+                                                }`}
+                                                initial={{ opacity: 0, y: 8 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: idx * 0.05 }}
+                                            >
+                                                <span className="text-2xl shrink-0 w-8 text-center">{["🥇", "🥈", "🥉"][idx]}</span>
+                                                <motion.div
+                                                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                                                    whileHover={{ scale: 1.02 }}
+                                                    onClick={() => context.setShowAccount(m)}
+                                                >
+                                                    <ProfileImg src={m.photoURL} alt={m.name} size="xxs" />
+                                                    <div className="min-w-0 flex flex-col">
+                                                        <p className="font-semibold text-base leading-tight truncate">{m.name}</p>
+                                                        <p className={`text-xs leading-snug truncate ${hasReward ? "text-gray-500" : "text-gray-400"}`}>
+                                                            {hasReward ? `Prize: ${reward}` : "No prize set"}
+                                                        </p>
+                                                    </div>
+                                                </motion.div>
+                                            </motion.div>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -317,5 +414,6 @@ export default function Dash() {
                 </div>
             )}
         </motion.div>
+        </>
     )
 }
