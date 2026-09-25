@@ -3,7 +3,7 @@ import { FirebaseError } from "firebase/app";
 import RegisterCard from "../components/RegisterCard";
 import { motion } from "motion/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGoogle } from "@fortawesome/free-brands-svg-icons";
+import { faApple, faGoogle } from "@fortawesome/free-brands-svg-icons";
 import { firebaseAuthService } from "../lib/firebaseService";
 import { useLocation, useNavigate } from "react-router-dom";
 import Button from "../components/Button";
@@ -50,6 +50,23 @@ export default function RegisterPage() {
                 setPhrase("This email is already registered. Please login instead.");
             } else {
                 console.error("Registration error:", err);
+            }
+        }
+    };
+
+    // Apple Login/Register
+    const handleAppleLogin = async () => {
+        try {
+            await firebaseAuthService.signInWithApple();
+            navigate("/");
+            setPhrase("");
+            setEmail("");
+            setPassword("");
+        } catch (err) {
+            if (err instanceof FirebaseError && err.code === "auth/email-already-in-use") {
+                setPhrase("This email is already registered. Please login instead.");
+            } else {
+                console.error("Apple registration error:", err);
             }
         }
     };
@@ -129,6 +146,10 @@ export default function RegisterPage() {
                                 <Button size="full" onClick={handleGoogleLogin}>
                                     <FontAwesomeIcon icon={faGoogle} className="mr-2" />
                                     Continue with Google
+                                </Button>
+                                <Button size="full" color="gray" onClick={handleAppleLogin}>
+                                    <FontAwesomeIcon icon={faApple} className="mr-2" />
+                                    Continue with Apple
                                 </Button>
                                 <Button size="full" onClick={() => setSignInEmail(true)}>
                                     Continue with email

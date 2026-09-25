@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
 import { auth } from "../lib/firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGoogle } from "@fortawesome/free-brands-svg-icons";
+import { faApple, faGoogle } from "@fortawesome/free-brands-svg-icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import Button from "./Button";
 import LinkButton from "./LinkButton";
@@ -16,11 +16,12 @@ interface LoginCardProps {
     phrase: string;
     setPhrase: (phrase: string) => void;
     handleGoogleLogin: () => Promise<void>;
+    handleAppleLogin: () => Promise<void>;
     loginWithEmail: () => Promise<void>;
 }
 
 
-export default function LoginCard({email, setEmail, password, setPassword, phrase, handleGoogleLogin, loginWithEmail}: LoginCardProps) {
+export default function LoginCard({email, setEmail, password, setPassword, phrase, handleGoogleLogin, handleAppleLogin, loginWithEmail}: LoginCardProps) {
     const navigate = useNavigate?.();
     const location = useLocation();
     const isLogin = location.pathname === '/login';
@@ -82,6 +83,10 @@ export default function LoginCard({email, setEmail, password, setPassword, phras
             <Button size="full" onClick={handleGoogleLogin}>
                 <FontAwesomeIcon icon={faGoogle} className="mr-2" />
                 Continue with Google
+            </Button>
+            <Button size="full" color="gray" onClick={handleAppleLogin}>
+                <FontAwesomeIcon icon={faApple} className="mr-2" />
+                Continue with Apple
             </Button>
         </motion.div>
     )
