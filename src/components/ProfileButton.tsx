@@ -18,7 +18,7 @@ export default function ProfileButton({user, size} : ProfileButtonProps) {
     }
     return (
         <motion.div
-            className={`flex gap-4 items-center cursor-pointer`}
+            className={`flex gap-4 items-center cursor-pointer select-none`}
             whileHover={{scale: 1.04}}
             onClick={() => swtch()}
         >

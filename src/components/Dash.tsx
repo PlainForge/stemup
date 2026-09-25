@@ -311,7 +311,7 @@ export default function Dash() {
                                                 >
                                                     <span className="text-lg">{cfg.medal}</span>
                                                     <motion.div
-                                                        className="flex flex-col items-center gap-1 cursor-pointer"
+                                                        className="flex flex-col items-center gap-1 cursor-pointer select-none"
                                                         whileHover={{ scale: 1.05 }}
                                                         onClick={() => context.setShowAccount(u)}
                                                     >
@@ -392,7 +392,7 @@ export default function Dash() {
                                             >
                                                 <span className="text-2xl shrink-0 w-8 text-center">{["🥇", "🥈", "🥉"][idx]}</span>
                                                 <motion.div
-                                                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                                                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer select-none"
                                                     whileHover={{ scale: 1.02 }}
                                                     onClick={() => context.setShowAccount(m)}
                                                 >
