@@ -11,7 +11,10 @@
 }
 
 :root {
-  font-family: "Rubik", sans-serif;
+  /* Explicit emoji fallback — the native iOS WebView doesn't reliably fall back
+     to the system emoji font on its own when the active font (Rubik) has no
+     emoji glyphs, so emoji render as a missing-glyph box without this. */
+  font-family: "Rubik", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   font-optical-sizing: auto;
   font-weight: 300;
   font-style: normal;
