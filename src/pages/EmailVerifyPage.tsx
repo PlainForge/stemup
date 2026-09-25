@@ -3,6 +3,8 @@ import { useContext, useState } from "react";
 import { MainContext } from "../context/MainContext";
 import { motion } from "motion/react";
 import Button from "../components/Button";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faEnvelope } from "@fortawesome/free-solid-svg-icons";
 
 export default function VerifyEmailPage() {
     const context = useContext(MainContext);
@@ -23,8 +25,8 @@ export default function VerifyEmailPage() {
                 animate={{ y: 0, opacity: 1 }}
                 className="bg-white rounded-2xl shadow-md p-10 max-w-sm w-full flex flex-col items-center gap-5 text-center"
             >
-                <div className="size-16 rounded-full bg-blue-100 flex items-center justify-center text-3xl">
-                    ✉️
+                <div className="size-16 rounded-full bg-blue-100 flex items-center justify-center text-3xl text-blue-600">
+                    <FontAwesomeIcon icon={faEnvelope} />
                 </div>
                 <div className="flex flex-col gap-1">
                     <h1 className="text-xl font-bold">Verify your email</h1>

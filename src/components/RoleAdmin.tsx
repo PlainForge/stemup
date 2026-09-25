@@ -9,6 +9,7 @@ import Button from "./Button";
 import Input from "./Input";
 import { Alert } from "./PhraseAlert";
 import ProfileImg from "./ProfileImg";
+import MedalIcon from "./MedalIcon";
 import { firebaseAuthService } from "../lib/firebaseService";
 import ErrorMessage from "./ErrorMessage";
 
@@ -1009,12 +1010,15 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                     <form onSubmit={setReward} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
                         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Set monthly rewards</h2>
                         {[
-                            { name: "first", label: "🥇 1st Place" },
-                            { name: "second", label: "🥈 2nd Place" },
-                            { name: "third", label: "🥉 3rd Place" },
-                        ].map((r) => (
+                            { name: "first", label: "1st Place" },
+                            { name: "second", label: "2nd Place" },
+                            { name: "third", label: "3rd Place" },
+                        ].map((r, idx) => (
                             <div key={r.name} className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-gray-600">{r.label}</label>
+                                <label className="text-sm font-medium text-gray-600">
+                                    <MedalIcon rank={idx} className="mr-1.5" />
+                                    {r.label}
+                                </label>
                                 <Input type="text" name={r.name} placeholder="Reward description" required={true} autocomplete="false" size="full" />
                             </div>
                         ))}

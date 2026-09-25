@@ -11,6 +11,7 @@ import { MainContext } from "../context/MainContext";
 import Button from "../components/Button";
 import ProfileButton from "../components/ProfileButton";
 import ProfileImg from "../components/ProfileImg";
+import MedalIcon from "../components/MedalIcon";
 
 export default function RolePage() {
     const context = useContext(MainContext);
@@ -410,9 +411,9 @@ export default function RolePage() {
 
                         const podiumOrder = [top[1], top[0], top[2]]; // 2nd, 1st, 3rd
                         const podiumConfig = [
-                            { rank: 2, medal: "🥈", barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8", avatarClass: "size-24" },
-                            { rank: 1, medal: "🥇", barH: "h-24", avatarSize: "md", textSize: "text-base", mt: "mt-0", avatarClass: "size-34" },
-                            { rank: 3, medal: "🥉", barH: "h-10", avatarSize: "xs", textSize: "text-xs", mt: "mt-14", avatarClass: "size-14" },
+                            { rank: 2, barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8", avatarClass: "size-24" },
+                            { rank: 1, barH: "h-24", avatarSize: "md", textSize: "text-base", mt: "mt-0", avatarClass: "size-34" },
+                            { rank: 3, barH: "h-10", avatarSize: "xs", textSize: "text-xs", mt: "mt-14", avatarClass: "size-14" },
                         ];
 
                         return (
@@ -427,7 +428,7 @@ export default function RolePage() {
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: idx * 0.05 }}
                                         >
-                                            <span className="text-lg opacity-0">{cfg.medal}</span>
+                                            <span className="text-lg opacity-0"><MedalIcon rank={cfg.rank - 1} /></span>
                                             <div className={`${cfg.avatarClass} shrink-0 aspect-square rounded-full bg-gray-100 border-2 border-dashed border-gray-300`} />
                                             <p className={`font-semibold text-center ${cfg.textSize} text-gray-300`}>—</p>
                                             <p className={`${cfg.textSize} text-gray-200`}>— pts</p>
@@ -445,7 +446,7 @@ export default function RolePage() {
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: idx * 0.05 }}
                                         >
-                                            <span className="text-lg">{cfg.medal}</span>
+                                            <span className="text-lg"><MedalIcon rank={cfg.rank - 1} /></span>
                                             <motion.div
                                                 className="flex flex-col items-center gap-1 cursor-pointer"
                                                 whileHover={{ scale: 1.05 }}
@@ -508,11 +509,10 @@ export default function RolePage() {
                     {["First", "Second", "Third"].map((label, idx) => {
                         const filteredLeaders = leaders.filter((l) => !admins.includes(l.uid));
                         const winner = filteredLeaders[idx];
-                        const medals = ["🥇", "🥈", "🥉"];
                         return (
                             <div key={label} className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-5 py-4">
                                 <div className="flex items-center gap-3">
-                                    <span className="text-2xl">{medals[idx]}</span>
+                                    <span className="text-2xl"><MedalIcon rank={idx} /></span>
                                     <div>
                                         <p className="font-semibold">{label} Place</p>
                                         <p className="text-sm text-gray-500">{winner ? winner.name : "No user yet"}</p>
@@ -540,12 +540,11 @@ export default function RolePage() {
                             {snap.entries.length === 0 ? (
                                 <p className="text-sm text-gray-400">No entries.</p>
                             ) : snap.entries.map(entry => {
-                                const medals = ["🥇", "🥈", "🥉"];
                                 return (
                                     <div key={entry.uid} className="flex items-center justify-between px-2 py-1.5">
                                         <div className="flex items-center gap-3">
                                             <span className="w-6 text-center text-sm font-bold text-gray-400">
-                                                {entry.rank <= 3 ? medals[entry.rank - 1] : entry.rank}
+                                                {entry.rank <= 3 ? <MedalIcon rank={entry.rank - 1} /> : entry.rank}
                                             </span>
                                             <span className="font-medium text-sm">{entry.name}</span>
                                         </div>

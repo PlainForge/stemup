@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
 import ProfileButton from "./ProfileButton";
 import ProfileImg from "./ProfileImg";
+import MedalIcon from "./MedalIcon";
 import { collection, doc, getDoc, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import type { UserData, UserRoleData } from "../myDataTypes";
@@ -170,7 +171,6 @@ export default function Dash() {
         .filter(rl => rl.myRank !== null && rl.myRank <= 3)
         .sort((a, b) => (a.myRank as number) - (b.myRank as number));
     const placeLabels = ["1st", "2nd", "3rd"];
-    const medals = ["🥇", "🥈", "🥉"];
 
     const isRealPrize = (reward?: string) => !!reward && reward !== "No reward set" && reward !== "not set";
 
@@ -185,7 +185,7 @@ export default function Dash() {
                         <p className="text-xs text-gray-400">No participants yet.</p>
                     ) : rl.top3.map((m, idx) => (
                         <div key={m.uid} className="flex items-center gap-2.5">
-                            <span className="text-xl shrink-0 w-7 text-center">{medals[idx]}</span>
+                            <span className="text-xl shrink-0 w-7 text-center"><MedalIcon rank={idx} /></span>
                             <div className="min-w-0 flex flex-col">
                                 <p className="text-sm font-medium leading-tight truncate">{m.name}</p>
                                 <p className={`text-xs leading-snug truncate ${isRealPrize(rl.rewards[idx]) ? "text-gray-500" : "text-gray-400"}`}>
@@ -208,7 +208,7 @@ export default function Dash() {
                 const hasReward = reward && reward !== "No reward set" && reward !== "not set";
                 return (
                     <div key={rl.roleId} className="flex items-center gap-3">
-                        <span className="text-3xl shrink-0">{medals[idx]}</span>
+                        <span className="text-3xl shrink-0"><MedalIcon rank={idx} /></span>
                         <div className="min-w-0 flex flex-col">
                             <p className="font-semibold leading-tight truncate">{rl.roleName}</p>
                             <p className="text-sm text-gray-500 leading-snug">{placeLabels[idx]} place</p>
@@ -275,9 +275,9 @@ export default function Dash() {
                                 if (top.length === 0) return null;
                                 const podiumOrder = [top[1], top[0], top[2]];
                                 const podiumConfig = [
-                                    { rank: 2, medal: "🥈", barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8", avatarClass: "size-24" },
-                                    { rank: 1, medal: "🥇", barH: "h-24", avatarSize: "md", textSize: "text-base", mt: "mt-0", avatarClass: "size-34" },
-                                    { rank: 3, medal: "🥉", barH: "h-10", avatarSize: "xs", textSize: "text-xs", mt: "mt-14", avatarClass: "size-14" },
+                                    { rank: 2, barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8", avatarClass: "size-24" },
+                                    { rank: 1, barH: "h-24", avatarSize: "md", textSize: "text-base", mt: "mt-0", avatarClass: "size-34" },
+                                    { rank: 3, barH: "h-10", avatarSize: "xs", textSize: "text-xs", mt: "mt-14", avatarClass: "size-14" },
                                 ];
                                 return (
                                     <div className="flex items-end justify-center gap-2 sm:gap-4 mb-4 px-2">
@@ -291,7 +291,7 @@ export default function Dash() {
                                                     animate={{ opacity: 1, y: 0 }}
                                                     transition={{ delay: idx * 0.05 }}
                                                 >
-                                                    <span className="text-lg opacity-0">{cfg.medal}</span>
+                                                    <span className="text-lg opacity-0"><MedalIcon rank={cfg.rank - 1} /></span>
                                                     <div className={`${cfg.avatarClass} shrink-0 aspect-square rounded-full bg-gray-100 border-2 border-dashed border-gray-300`} />
                                                     <p className={`font-semibold text-center ${cfg.textSize} text-gray-300`}>—</p>
                                                     <p className={`${cfg.textSize} text-gray-200`}>— pts</p>
@@ -309,7 +309,7 @@ export default function Dash() {
                                                     animate={{ opacity: 1, y: 0 }}
                                                     transition={{ delay: idx * 0.05 }}
                                                 >
-                                                    <span className="text-lg">{cfg.medal}</span>
+                                                    <span className="text-lg"><MedalIcon rank={cfg.rank - 1} /></span>
                                                     <motion.div
                                                         className="flex flex-col items-center gap-1 cursor-pointer select-none"
                                                         whileHover={{ scale: 1.05 }}
@@ -390,7 +390,7 @@ export default function Dash() {
                                                 animate={{ opacity: 1, y: 0 }}
                                                 transition={{ delay: idx * 0.05 }}
                                             >
-                                                <span className="text-2xl shrink-0 w-8 text-center">{["🥇", "🥈", "🥉"][idx]}</span>
+                                                <span className="text-2xl shrink-0 w-8 text-center"><MedalIcon rank={idx} /></span>
                                                 <motion.div
                                                     className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer select-none"
                                                     whileHover={{ scale: 1.02 }}
