@@ -353,7 +353,7 @@ export default function RolePage() {
             </div>
 
             {/* Tab bar */}
-            <div className="flex items-center gap-1 border-b border-gray-200">
+            <div className="flex items-center gap-0.5 sm:gap-1 border-b border-gray-200 overflow-x-auto scrollbar-hide w-full">
                 {[
                     { key: "leaderboard", label: "Leaderboard" },
                     { key: "rewards", label: "Rewards" },
@@ -363,10 +363,10 @@ export default function RolePage() {
                         : [{ key: "admin", label: "Admin" }]
                     ),
                 ].map((tab) => (
-                    <div key={tab.key} className="relative">
+                    <div key={tab.key} className="relative shrink-0">
                         <button
                             onClick={() => setPageState(tab.key)}
-                            className={`px-4 py-2.5 text-sm font-medium transition-colors hover:cursor-pointer ${
+                            className={`px-2.5 sm:px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors hover:cursor-pointer ${
                                 pageState === tab.key
                                     ? "text-blue-600"
                                     : "text-gray-500 hover:text-gray-800"

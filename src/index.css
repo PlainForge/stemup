@@ -1,6 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap');
 @import "tailwindcss";
 
+/* Hides the scrollbar on horizontally-scrollable strips (e.g. the role page tab bar) while keeping them scrollable */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 :root {
   font-family: "Rubik", sans-serif;
   font-optical-sizing: auto;
@@ -40,6 +49,7 @@ body {
   background: rgb(var(--background));
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
 }
 
 /* ── Dark mode: neutral color overrides ── */
