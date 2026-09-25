@@ -37,24 +37,7 @@ export default function LoginPage() {
         }
     };
 
-    // Apple Login/Register
-    const handleAppleLogin = async () => {
-        try {
-            await firebaseAuthService.signInWithApple();
-            navigate("/");
-            setPhrase("");
-            setEmail("");
-            setPassword("");
-        } catch (err) {
-            if (err instanceof FirebaseError && err.code === "auth/email-already-in-use") {
-                setPhrase("This email is already registered. Please login instead.");
-            } else {
-                console.error("Apple login error:", err);
-            }
-        }
-    };
-
-    // Loging in with Email
+// Loging in with Email
     const loginWithEmail = async () => {
         try {
             await firebaseAuthService.loginWithEmail(email, password);
@@ -128,7 +111,6 @@ export default function LoginPage() {
                         phrase={phrase}
                         setPhrase={setPhrase}
                         handleGoogleLogin={handleGoogleLogin}
-                        handleAppleLogin={handleAppleLogin}
                         loginWithEmail={loginWithEmail}
                     />
                 </div>

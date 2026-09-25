@@ -1,4 +1,4 @@
-import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, OAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
+import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
 import { auth, db, storage } from "./firebase";
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, query, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -172,31 +172,6 @@ export const firebaseAuthService = {
             ? user.photoURL.replace(/=s\d+-c/, "=s400-c").replace(/=s\d+$/, "=s400")
             : undefined;
         await provisionOAuthUser(user, photoOverride);
-    },
-
-    /**
-     * Sign In with Apple. Same idea as signInWithGoogle, but Apple's native
-     * flow needs skipNativeAuth: true (the plugin only performs the native
-     * authorization UI and returns a raw credential) plus a nonce, unlike
-     * Google's idToken-only credential.
-     */
-    async signInWithApple() {
-        const provider = new OAuthProvider("apple.com");
-
-        let userCred;
-        if (Capacitor.isNativePlatform()) {
-            const result = await FirebaseAuthentication.signInWithApple({ skipNativeAuth: true });
-            const idToken = result.credential?.idToken;
-            if (!idToken) throw new Error("No ID token returned from Apple Sign-In");
-            userCred = await signInWithCredential(auth, provider.credential({
-                idToken,
-                rawNonce: result.credential?.nonce,
-            }));
-        } else {
-            userCred = await signInWithPopup(auth, provider);
-        }
-
-        await provisionOAuthUser(userCred.user);
     },
 
     async setAccountInformation(name: string | undefined, file: File | null, user: User, userData: UserData) {
