@@ -591,8 +591,8 @@ export default function RolePage() {
                             {([
                                 { key: "date-desc", label: "Newest" },
                                 { key: "date-asc",  label: "Oldest" },
-                                { key: "title-asc", label: "A → Z" },
-                                { key: "title-desc", label: "Z → A" },
+                                { key: "title-asc", label: "A-Z" },
+                                { key: "title-desc", label: "Z-A" },
                             ]).map(s => (
                                 <button
                                     key={s.key}

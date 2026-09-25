@@ -50,6 +50,43 @@ export function classifySemesterReset(users: ResetUser[], removeRoleIds: Set<str
     return { usersToArchive, usersToUpdate };
 }
 
+/**
+ * Creates the Firestore users/{uid} doc (and adds them to the global role) for a
+ * first-time OAuth sign-in. No-op if the user already has a profile.
+ * photoOverride lets callers pass a higher-res
+ * photo URL than what's on the Auth user object (e.g. Google's upscaled photo).
+ */
+async function provisionOAuthUser(user: User, photoOverride?: string) {
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) return;
+
+    let photoURL = DEFAULT_AVATAR;
+    const sourcePhoto = photoOverride ?? user.photoURL;
+    if (sourcePhoto) {
+        const response = await fetch(sourcePhoto);
+        const blob = await response.blob();
+        const storageRef = ref(storage, `profilePictures/${user.uid}`);
+        await uploadBytes(storageRef, blob);
+        photoURL = await getDownloadURL(storageRef);
+    }
+
+    await setDoc(userRef, {
+        email: user.email,
+        name: user.displayName,
+        roles: [{ id: GLOBAL_ROLE_ID, name: "global", points: 0, taskCompleted: 0 }],
+        createdAt: new Date(),
+        points: 0,
+        taskCompleted: 0,
+        photoURL,
+        currentRole: "",
+    });
+
+    await updateDoc(doc(db, "roles", GLOBAL_ROLE_ID), {
+        members: arrayUnion(user.uid),
+    });
+}
+
 async function removeUserRole(userId: string, roleId: string) {
   const userRef = doc(db, "users", userId);
   const snap = await getDoc(userRef);
@@ -130,34 +167,11 @@ export const firebaseAuthService = {
             userCred = await signInWithPopup(auth, new GoogleAuthProvider());
         }
         const user = userCred.user;
-        const userRef = doc(db, "users", user.uid);
-        const userSnap = await getDoc(userRef);
-        let photoURL = DEFAULT_AVATAR;
-        if (!userSnap.exists()) {
-            if (user.photoURL) {
-                // Google's default is a 96px thumbnail; ask for a high-res copy to store
-                const response = await fetch(user.photoURL.replace(/=s\d+-c/, "=s400-c").replace(/=s\d+$/, "=s400"));
-                const blob = await response.blob();
-                const storageRef = ref(storage, `profilePictures/${user.uid}`);
-                await uploadBytes(storageRef, blob);
-                photoURL = await getDownloadURL(storageRef);
-            }
-
-            await setDoc(userRef, {
-                email: user.email,
-                name: user.displayName,
-                roles: [{id: 'r3wUbRSCX7cxwBYhtAdg', name: 'global', points: 0, taskCompleted: 0}],
-                createdAt: new Date(),
-                points: 0,
-                taskCompleted: 0,
-                photoURL: photoURL,
-                currentRole: ""
-            });
-
-            await updateDoc(doc(db, "roles", 'r3wUbRSCX7cxwBYhtAdg'), {
-                members: arrayUnion(user.uid)
-            })
-        }
+        // Google's default is a 96px thumbnail; ask for a high-res copy to store
+        const photoOverride = user.photoURL
+            ? user.photoURL.replace(/=s\d+-c/, "=s400-c").replace(/=s\d+$/, "=s400")
+            : undefined;
+        await provisionOAuthUser(user, photoOverride);
     },
 
     async setAccountInformation(name: string | undefined, file: File | null, user: User, userData: UserData) {

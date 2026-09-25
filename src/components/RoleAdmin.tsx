@@ -730,8 +730,8 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                             {([
                                 { key: "date-desc", label: "Newest" },
                                 { key: "date-asc",  label: "Oldest" },
-                                { key: "title-asc", label: "A → Z" },
-                                { key: "title-desc",label: "Z → A" },
+                                { key: "title-asc", label: "A-Z" },
+                                { key: "title-desc",label: "Z-A" },
                             ]).map(s => (
                                 <button
                                     key={s.key}
@@ -985,9 +985,9 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
                                                 <p className="font-semibold mb-0.5">Global impact if saved with global:</p>
                                                 <p>
-                                                    Points: {m.points ?? 0} → {Math.max(0, (m.points ?? 0) + (editPoints - origEditPoints))}
+                                                    Points: {m.points ?? 0} to {Math.max(0, (m.points ?? 0) + (editPoints - origEditPoints))}
                                                     {" · "}
-                                                    Tasks: {m.taskCompleted ?? 0} → {Math.max(0, (m.taskCompleted ?? 0) + (editTaskCount - origEditTaskCount))}
+                                                    Tasks: {m.taskCompleted ?? 0} to {Math.max(0, (m.taskCompleted ?? 0) + (editTaskCount - origEditTaskCount))}
                                                 </p>
                                             </div>
                                         )}

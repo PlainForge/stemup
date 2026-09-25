@@ -8,6 +8,7 @@ import { firebaseAuthService } from "../lib/firebaseService";
 import { useLocation, useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import LinkButton from "../components/LinkButton";
+import ErrorMessage from "../components/ErrorMessage";
 
 export default function RegisterPage() {
     const [email, setEmail] = useState("");
@@ -123,6 +124,7 @@ export default function RegisterPage() {
                                     <LinkButton onClick={handleSwitch}>Sign In</LinkButton>
                                 </p>
                             </div>
+                            {phrase !== "" && <ErrorMessage>{phrase}</ErrorMessage>}
                             <div className="flex flex-col gap-3">
                                 <Button size="full" onClick={handleGoogleLogin}>
                                     <FontAwesomeIcon icon={faGoogle} className="mr-2" />
