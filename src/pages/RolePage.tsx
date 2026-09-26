@@ -12,6 +12,7 @@ import Button from "../components/Button";
 import ProfileButton from "../components/ProfileButton";
 import ProfileImg from "../components/ProfileImg";
 import MedalIcon from "../components/MedalIcon";
+import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 
 export default function RolePage() {
     const context = useContext(MainContext);
@@ -23,6 +24,7 @@ export default function RolePage() {
     const [leaders, setLeaders] = useState<UserData[]>([]);
     const [userTasks, setUserTasks] = useState<Task[]>([]);
     const [pageState, setPageState] = useState("leaderboard");
+    const tabBar = useSlidingIndicator(pageState);
     const [role, setRole] = useState<Role | null>(null);
     const [rewards, setRewards] = useState<string[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
@@ -354,7 +356,8 @@ export default function RolePage() {
             </div>
 
             {/* Tab bar */}
-            <div className="flex items-center gap-0.5 sm:gap-1 border-b border-gray-200 overflow-x-auto scrollbar-hide w-full pt-2">
+            <div ref={tabBar.ref} className="relative flex items-center gap-0.5 sm:gap-1 border-b border-gray-200 overflow-x-auto scrollbar-hide w-full pt-2">
+                <span aria-hidden className={`${tabBar.indicatorClass} bg-blue-600`} style={tabBar.indicatorStyle} />
                 {[
                     { key: "leaderboard", label: "Leaderboard" },
                     { key: "rewards", label: "Rewards" },
@@ -364,7 +367,7 @@ export default function RolePage() {
                         : [{ key: "admin", label: "Admin" }]
                     ),
                 ].map((tab) => (
-                    <div key={tab.key} className="relative shrink-0">
+                    <div key={tab.key} data-active={pageState === tab.key ? "true" : "false"} className="relative shrink-0">
                         <button
                             onClick={() => setPageState(tab.key)}
                             className={`px-2.5 sm:px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors hover:cursor-pointer ${
@@ -388,9 +391,6 @@ export default function RolePage() {
                                 </span>
                             )}
                         </button>
-                        {pageState === tab.key && (
-                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
-                        )}
                     </div>
                 ))}
             </div>

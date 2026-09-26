@@ -6,6 +6,7 @@ import { MainContext } from './context/MainContext';
 import VerifyEmailPage from './pages/EmailVerifyPage';
 import ProfilePage from './components/ProfilePage';
 import BugReport from './components/BugReport';
+import ConfirmHost from './components/ConfirmDialog';
 
 export default function App() {
   const context = useContext(MainContext);
@@ -49,10 +50,11 @@ export default function App() {
   if (user && needsVerification) return <VerifyEmailPage />;
   
   return (
-    <div className="flex flex-col items-center min-h-screen min-w-full pb-20 sm:pb-0 pt-[calc(env(safe-area-inset-top)+1rem)] sm:pt-20">
+    <div className="flex flex-col items-center min-h-screen min-w-full pb-[calc(env(safe-area-inset-bottom)+6.5rem)] sm:pb-0 pt-[calc(env(safe-area-inset-top)+1rem)] sm:pt-20">
       <Nav />
       {showAccount ? <ProfilePage /> : null}
       <BugReport />
+      <ConfirmHost />
       <Outlet />
     </div>
   );

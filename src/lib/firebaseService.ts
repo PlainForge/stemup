@@ -282,6 +282,10 @@ export const firebaseAuthService = {
     },
 
     async kickUserFromRole(roleId: string, targetUid: string) {
+        // Admins always stay in every role
+        const adminIds: string[] = (await getDoc(doc(db, "admins", "all-perms"))).data()?.ids ?? [];
+        if (adminIds.includes(targetUid)) return;
+
         const batch = writeBatch(db);
 
         // 1. Remove from role members

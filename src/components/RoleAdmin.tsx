@@ -1,4 +1,6 @@
-import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
+import { confirmDialog } from "../lib/confirm";
+import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { AnimatePresence, motion } from "motion/react";
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { db } from "../lib/firebase";
@@ -77,6 +79,14 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [taskSort, setTaskSort] = useState("date-desc");
     const [allSubmitted, setAllSubmitted] = useState<SubmittedTask[]>([]);
     const [editingMember, setEditingMember] = useState<string | null>(null);
+    const [reassignTaskId, setReassignTaskId] = useState<string | null>(null);
+    const [reassignTo, setReassignTo] = useState("");
+    const tabBar = useSlidingIndicator(page);
+    const [editTaskId, setEditTaskId] = useState<string | null>(null);
+    const [editTitle, setEditTitle] = useState("");
+    const [editDesc, setEditDesc] = useState("");
+    const [editPts, setEditPts] = useState(0);
+    const [editDue, setEditDue] = useState("");
     const [editPoints, setEditPoints] = useState(0);
     const [editTaskCount, setEditTaskCount] = useState(0);
     const [origEditPoints, setOrigEditPoints] = useState(0);
@@ -355,7 +365,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     };
 
     const resetRole = async (roleId : string) => {
-        const confirmDelete = window.confirm("Are you sure you want to force reset? This cannot be undone.");
+        const confirmDelete = await confirmDialog("Are you sure you want to force reset? This cannot be undone.", { title: "Force Reset", confirmLabel: "Reset", danger: true });
 
         if (!confirmDelete) return;
 
@@ -441,7 +451,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     }
 
     const deleteRole = async (roleId : string) => {
-        const confirmDelete = window.confirm("Are you sure you want to delete this role? This cannot be undone.");
+        const confirmDelete = await confirmDialog("Are you sure you want to delete this role? This cannot be undone.", { title: "Delete Role", confirmLabel: "Delete", danger: true });
 
         if (!confirmDelete) return;
 
@@ -507,7 +517,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     };
 
     const kickMember = async (uid: string, name: string) => {
-        const confirm = window.confirm(`Remove ${name} from this role?`);
+        const confirm = await confirmDialog(`Remove ${name} from this role?`, { title: "Kick Member", confirmLabel: "Kick", danger: true });
         if (!confirm) return;
         await firebaseAuthService.kickUserFromRole(role.id, uid);
     };
@@ -551,6 +561,79 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
 
     const nonAdminMembers = membersWithData.filter((m) => !admins.includes(m.uid));
 
+    // Remove a task entirely (completed or not). Points already awarded are left as-is.
+    const removeTask = async (task: Task) => {
+        const ok = await confirmDialog(
+            `Remove "${task.title}" assigned to ${task.assignedName}?${task.complete ? " Points already awarded stay with the member." : ""}`,
+            { title: "Remove Task", confirmLabel: "Remove", danger: true }
+        );
+        if (!ok) return;
+        try {
+            await Promise.all([
+                deleteDoc(doc(db, "tasks", task.id)),
+                deleteDoc(doc(db, "tasksSubmitted", task.id)),
+            ]);
+        } catch (err) {
+            console.error("Error removing task:", err);
+        }
+    };
+
+    const startEditTask = (task: Task) => {
+        const d = task.dueDate?.toDate();
+        setReassignTaskId(null);
+        setEditTaskId(task.id);
+        setEditTitle(task.title);
+        setEditDesc(task.description ?? "");
+        setEditPts(task.points);
+        setEditDue(d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "");
+    };
+
+    // Save edits to an unfinished task (and any pending submission so approval awards the new points)
+    const saveTaskEdit = async (task: Task) => {
+        const title = editTitle.trim();
+        if (!title || editPts < 0) return;
+        const fields: { title: string; description: string; points: number } = { title, description: editDesc.trim(), points: editPts };
+        try {
+            if (editDue) {
+                const [y, m, d] = editDue.split("-").map(Number);
+                const due = new Date(y, m - 1, d, 23, 59, 59);
+                await updateDoc(doc(db, "tasks", task.id), {
+                    ...fields,
+                    dueDate: Timestamp.fromDate(due),
+                    deleteAt: Timestamp.fromDate(new Date(due.getTime() + 7 * 24 * 60 * 60 * 1000)),
+                });
+            } else {
+                await updateDoc(doc(db, "tasks", task.id), { ...fields, dueDate: deleteField(), deleteAt: deleteField() });
+            }
+            if (allSubmitted.some(s => s.id === task.id && !s.complete)) {
+                await updateDoc(doc(db, "tasksSubmitted", task.id), fields);
+            }
+            setEditTaskId(null);
+        } catch (err) {
+            console.error("Error editing task:", err);
+        }
+    };
+
+    // Hand an unfinished task to another member, clearing progress/submission state
+    const reassignTask = async (task: Task) => {
+        const target = membersWithData.find(m => m.uid === reassignTo);
+        if (!target || target.uid === task.assignedTo) return;
+        try {
+            await updateDoc(doc(db, "tasks", task.id), {
+                assignedTo: target.uid,
+                assignedName: target.name,
+                status: deleteField(),
+                extensionRequested: deleteField(),
+                extensionDeclined: deleteField(),
+            });
+            await deleteDoc(doc(db, "tasksSubmitted", task.id));
+            setReassignTaskId(null);
+            setReassignTo("");
+        } catch (err) {
+            console.error("Error reassigning task:", err);
+        }
+    };
+
     const adminTabs = [
         { key: "requests", label: "Requests", badge: requested.length },
         { key: "creation", label: "Assign Task", badge: 0 },
@@ -564,9 +647,10 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         <motion.div className="w-full flex flex-col gap-4">
 
             {/* Admin sub-tab bar */}
-            <div className="flex flex-wrap items-center gap-1 border-b border-gray-200">
+            <div ref={tabBar.ref} className="relative flex flex-wrap items-center gap-1 border-b border-gray-200">
+                <span aria-hidden className={`${tabBar.indicatorClass} bg-blue-600`} style={tabBar.indicatorStyle} />
                 {adminTabs.map((tab) => (
-                    <div key={tab.key} className="relative shrink-0">
+                    <div key={tab.key} data-active={page === tab.key ? "true" : "false"} className="relative shrink-0">
                         <button
                             onClick={() => setPage(tab.key)}
                             className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap hover:cursor-pointer ${
@@ -580,9 +664,6 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                 </span>
                             )}
                         </button>
-                        {page === tab.key && (
-                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
-                        )}
                     </div>
                 ))}
             </div>
@@ -889,6 +970,69 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             <div className="flex gap-2 mt-auto">
                                                 <Button onClick={() => acceptTask(submission)} size="full" color="green">Approve</Button>
                                                 <Button onClick={() => declineTask(submission)} size="full" color="red">Decline</Button>
+                                            </div>
+                                        )}
+                                        {editTaskId === task.id ? (
+                                            <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
+                                                <input
+                                                    value={editTitle}
+                                                    onChange={e => setEditTitle(e.target.value)}
+                                                    placeholder="Title"
+                                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400"
+                                                />
+                                                <textarea
+                                                    value={editDesc}
+                                                    onChange={e => setEditDesc(e.target.value)}
+                                                    placeholder="Description (optional)"
+                                                    rows={2}
+                                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 resize-none"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        value={editPts}
+                                                        onChange={e => setEditPts(Math.max(0, +e.target.value))}
+                                                        className="w-1/3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400"
+                                                    />
+                                                    <input
+                                                        type="date"
+                                                        value={editDue}
+                                                        onChange={e => setEditDue(e.target.value)}
+                                                        className="flex-1 min-w-0 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400"
+                                                    />
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button onClick={() => saveTaskEdit(task)} size="full" color="blue" disabled={!editTitle.trim()}>Save</Button>
+                                                    <Button onClick={() => setEditTaskId(null)} size="full" color="gray">Cancel</Button>
+                                                </div>
+                                            </div>
+                                        ) : reassignTaskId === task.id ? (
+                                            <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
+                                                <select
+                                                    value={reassignTo}
+                                                    onChange={e => setReassignTo(e.target.value)}
+                                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400"
+                                                >
+                                                    <option value="">Reassign to…</option>
+                                                    {nonAdminMembers.filter(m => m.uid !== task.assignedTo).map(m => (
+                                                        <option key={m.uid} value={m.uid}>{m.name}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="flex gap-2">
+                                                    <Button onClick={() => reassignTask(task)} size="full" color="blue" disabled={!reassignTo}>Reassign</Button>
+                                                    <Button onClick={() => { setReassignTaskId(null); setReassignTo(""); }} size="full" color="gray">Cancel</Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-2 pt-3 border-t border-gray-100">
+                                                {!task.complete && (
+                                                    <Button onClick={() => startEditTask(task)} size="full" color="gray">Edit</Button>
+                                                )}
+                                                {!task.complete && (
+                                                    <Button onClick={() => { setEditTaskId(null); setReassignTaskId(task.id); setReassignTo(""); }} size="full" color="gray">Reassign</Button>
+                                                )}
+                                                <Button onClick={() => removeTask(task)} size="full" color="red">Remove</Button>
                                             </div>
                                         )}
                                     </motion.div>

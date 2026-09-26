@@ -5,7 +5,9 @@
       "Bash(node -e ' *)",
       "Bash(sed -i '240s/.*/            setRoleNotification\\(userTasks.some\\(t => !t.complete \\\\&\\\\& !seenTaskIds.has\\(t.id\\) \\\\&\\\\& !submittedTasks.some\\(s => s.id === t.id\\)\\)\\);/' src/pages/RolePage.tsx)",
       "Bash(sed -i '292s/.*/    const hasNewTasks = !admins.includes\\(user.uid\\) \\\\&\\\\& userTasks.some\\(t => !t.complete \\\\&\\\\& !seenTaskIds.has\\(t.id\\) \\\\&\\\\& !submittedTasks.some\\(s => s.id === t.id\\)\\);/' src/pages/RolePage.tsx)",
-      "Bash(sed -i '674s/.*/                                                    {!task.complete \\\\&\\\\& !isSubmitted \\\\&\\\\& !seenTaskIds.has\\(task.id\\) \\\\&\\\\& \\(/' src/pages/RolePage.tsx)"
+      "Bash(sed -i '674s/.*/                                                    {!task.complete \\\\&\\\\& !isSubmitted \\\\&\\\\& !seenTaskIds.has\\(task.id\\) \\\\&\\\\& \\(/' src/pages/RolePage.tsx)",
+      "Bash(git diff *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://stemup.web.app/privacy)"
     ]
   }
 }

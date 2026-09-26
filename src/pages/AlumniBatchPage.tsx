@@ -1,4 +1,5 @@
 import { useContext, useEffect, useState } from "react";
+import { confirmDialog } from "../lib/confirm";
 import { motion } from "motion/react";
 import { collection, doc, getDoc, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -79,7 +80,7 @@ export default function AlumniBatchPage() {
 
     const handleDelete = async () => {
         if (!batchId) return;
-        const confirmDelete = window.confirm(`Delete the "${batch?.name}" archive? This cannot be undone.`);
+        const confirmDelete = await confirmDialog(`Delete the "${batch?.name}" archive? This cannot be undone.`, { title: "Delete Archive", confirmLabel: "Delete", danger: true });
         if (!confirmDelete) return;
 
         try {

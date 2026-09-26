@@ -4,7 +4,7 @@ export default function PrivacyPolicyPage() {
             <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-col gap-6">
                 <div>
                     <h1 className="text-2xl font-bold">Privacy Policy</h1>
-                    <p className="text-sm text-gray-400 mt-1">Last updated: {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+                    <p className="text-sm text-gray-400 mt-1">Last updated: September 26, 2026</p>
                 </div>
 
                 <p className="text-sm text-gray-600 leading-relaxed">
@@ -19,7 +19,16 @@ export default function PrivacyPolicyPage() {
                         <li>Your name and email address</li>
                         <li>A profile photo, if you provide one or sign in with Google</li>
                         <li>App activity: tasks assigned and completed, points earned, and which roles/teams you belong to</li>
+                        <li>Bug reports you choose to send, including the text you write</li>
                     </ul>
+                </section>
+
+                <section className="flex flex-col gap-2">
+                    <h2 className="text-base font-semibold">Camera and photo access</h2>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                        The iOS app asks for camera or photo library access only when you choose to set a profile photo.
+                        The photo you pick is uploaded as your profile picture; the app doesn&apos;t read any other photos.
+                    </p>
                 </section>
 
                 <section className="flex flex-col gap-2">

@@ -1,10 +1,12 @@
 import { useContext, useEffect, useState } from "react";
+import { confirmDialog, alertDialog } from "../lib/confirm";
 import { MainContext } from "../context/MainContext";
 import Button from "./Button";
 import ProfileImg from "./ProfileImg";
 import { useLocation, useParams } from "react-router-dom";
 import { firebaseAuthService, GLOBAL_ROLE_ID } from "../lib/firebaseService";
-import { collection, doc, getDocs, query, updateDoc, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from "firebase/firestore";
+import type { UserRoleData } from "../myDataTypes";
 import { db } from "../lib/firebase";
 
 
@@ -57,11 +59,16 @@ export default function ProfilePage() {
 
     const isAdmin = admins.includes(user.uid);
 
+    // On a role page the card shows that role's stats, so edits target the role
+    const inRolePage = !!roleId && location.pathname.includes("/roles/");
+    const editingRole = inRolePage && (selectedUser.roles?.some(r => r.id === roleId) ?? false);
+
     const kick = async () => {
-        const confirmKick = window.confirm(
-            `Remove ${selectedUser.name} from this role?`
+        const confirmKick = await confirmDialog(
+            `Remove ${selectedUser.name} from this role?`,
+            { title: "Kick Member", confirmLabel: "Kick", danger: true }
         );
-        if (!confirmKick || !roleId) return;
+        if (!confirmKick || !roleId || admins.includes(selectedUser.uid)) return;
 
         await firebaseAuthService.kickUserFromRole(roleId, selectedUser.uid);
         setShowAccount?.(null);
@@ -70,14 +77,15 @@ export default function ProfilePage() {
     const isInGlobal = selectedUser.roles?.some(r => r.id === GLOBAL_ROLE_ID) ?? false;
 
     const removeFromGlobal = async () => {
-        const confirmRemove = window.confirm(
-            `Remove ${selectedUser.name} from the global leaderboard? They can be restored later from Old Users.`
+        const confirmRemove = await confirmDialog(
+            `Remove ${selectedUser.name} from the global leaderboard? They can be restored later from Old Users.`,
+            { title: "Remove from Global", confirmLabel: "Remove", danger: true }
         );
         if (!confirmRemove) return;
 
         const removed = await firebaseAuthService.removeFromGlobalRole(selectedUser.uid);
         if (!removed) {
-            window.alert(`${selectedUser.name} can't be removed from global (admins and people who can see the global leaderboard always stay in it).`);
+            await alertDialog(`${selectedUser.name} can't be removed from global (admins and people who can see the global leaderboard always stay in it).`);
             return;
         }
         setShowAccount?.(null);
@@ -91,6 +99,25 @@ export default function ProfilePage() {
         setEditGlobalPoints(selectedUser.points ?? 0);
         setEditGlobalTasks(selectedUser.taskCompleted ?? 0);
         setIsEditing(true);
+    };
+
+    // Save this role's stats; optionally apply the same change to the global totals
+    const saveRole = async (alsoGlobal: boolean) => {
+        const newPoints = Math.max(0, editGlobalPoints);
+        const newTasks = Math.max(0, editGlobalTasks);
+        const ref = doc(db, "users", selectedUser.uid);
+        const data = (await getDoc(ref)).data() ?? {};
+        const roles: UserRoleData[] = Array.isArray(data.roles) ? data.roles : [];
+        const current = roles.find(r => r.id === roleId);
+        const updatedRoles = roles.map(r => r.id === roleId ? { ...r, points: newPoints, taskCompleted: newTasks } : r);
+        const update: { roles: UserRoleData[]; points?: number; taskCompleted?: number } = { roles: updatedRoles };
+        if (alsoGlobal) {
+            update.points = Math.max(0, (data.points ?? 0) + (newPoints - (current?.points ?? 0)));
+            update.taskCompleted = Math.max(0, (data.taskCompleted ?? 0) + (newTasks - (current?.taskCompleted ?? 0)));
+        }
+        await updateDoc(ref, update);
+        setShowAccount?.({ ...selectedUser, roles: updatedRoles, points: newPoints, taskCompleted: newTasks });
+        setIsEditing(false);
     };
 
     const saveGlobal = async () => {
@@ -152,7 +179,7 @@ export default function ProfilePage() {
 
                             <div className="flex gap-2 w-full">
                                 {isAdmin && <Button color="gray" size="full" onClick={openEdit}>Edit</Button>}
-                                {isAdmin && location.pathname.includes("/roles") &&
+                                {isAdmin && !admins.includes(selectedUser.uid) && location.pathname.includes("/roles") &&
                                     <Button color="red" size="full" onClick={kick}>Kick</Button>
                                 }
                                 <Button color="gray" size="full" onClick={swtch}>Close</Button>
@@ -165,7 +192,7 @@ export default function ProfilePage() {
                         <div
                             className="w-full flex flex-col gap-4"
                         >
-                            <p className="text-xs text-gray-400 uppercase tracking-widest text-center -mb-1">Edit Global Stats</p>
+                            <p className="text-xs text-gray-400 uppercase tracking-widest text-center -mb-1">{editingRole ? "Edit Role Stats" : "Edit Global Stats"}</p>
                             <div className="flex gap-3">
                                 <div className="flex flex-col gap-1.5 flex-1">
                                     <label className="text-xs text-gray-400 uppercase tracking-widest">Points</label>
@@ -189,9 +216,15 @@ export default function ProfilePage() {
                                 </div>
                             </div>
                             <div className="flex gap-2 w-full">
-                                <Button size="full" onClick={saveGlobal}>Save</Button>
+                                {!editingRole && <Button size="full" onClick={saveGlobal}>Save</Button>}
                                 <Button color="gray" size="full" onClick={() => setIsEditing(false)}>Back</Button>
                             </div>
+                            {editingRole && (
+                                <div className="flex flex-col gap-2 w-full -mt-2">
+                                    <Button size="full" onClick={() => saveRole(false)}>Save to Role Only</Button>
+                                    <Button size="full" color="blue" onClick={() => saveRole(true)}>Save to Role + Global</Button>
+                                </div>
+                            )}
                         </div>
                     )}
             </div>

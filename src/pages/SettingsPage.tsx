@@ -1,9 +1,11 @@
 import { useContext, useEffect, useRef, useState } from "react";
+import { confirmDialog } from "../lib/confirm";
 import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
 import { firebaseAuthService } from "../lib/firebaseService";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { auth, db } from "../lib/firebase";
+import { signOut } from "firebase/auth";
 import Loading from "./Loading";
 import Button from "../components/Button";
 import { Alert } from "../components/PhraseAlert";
@@ -12,7 +14,7 @@ import ProfileImg from "../components/ProfileImg";
 import Input from "../components/Input";
 import SemesterResetModal from "../components/SemesterResetModal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBug, faMoon, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
+import { faBug, faMoon, faRightFromBracket, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
 
 export default function Settings() {
     const context = useContext(MainContext);
@@ -92,8 +94,14 @@ export default function Settings() {
         );
     };
 
+    const handleSignOut = async () => {
+        await signOut(auth);
+        navigate("/login");
+        window.location.reload();
+    };
+
     const deleteAccount = async () => {
-        const result = window.confirm("Are you sure? This action is permanent.")
+        const result = await confirmDialog("This permanently deletes your account, tasks, and role memberships. This cannot be undone.", { title: "Delete Account?", confirmLabel: "Delete", danger: true })
         if (!result) return;
 
         try {
@@ -202,6 +210,18 @@ export default function Settings() {
                                 {isAdmin ? "View" : "Report"}
                             </Button>
                         </div>
+                    </div>
+                </div>
+
+                {/* Account */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">Account</h2>
+                    <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
+                        <span className="text-sm">Sign out of this device</span>
+                        <Button onClick={handleSignOut} color="gray" size="sm" type="button" extraClasses="flex items-center justify-center gap-2 whitespace-nowrap shrink-0">
+                            <FontAwesomeIcon icon={faRightFromBracket} />
+                            Sign Out
+                        </Button>
                     </div>
                 </div>
 

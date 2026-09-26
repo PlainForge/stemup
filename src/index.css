@@ -90,5 +90,8 @@ body {
   color-scheme: dark;
 }
 
+[data-theme="dark"] input:hover,
+[data-theme="dark"] input:focus { border-color: rgb(129 140 248 / 0.55); }
+
 [data-theme="dark"] input::placeholder,
 [data-theme="dark"] textarea::placeholder { color: rgb(107 114 128); }

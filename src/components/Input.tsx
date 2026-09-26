@@ -31,7 +31,8 @@ export default function Input({size, id, name, type, placeholder, value, setValu
             className={`
                 ${sizeClass}
                 px-2 py-2 rounded-xl 
-                inset-shadow-sm inset-shadow-indigo-300 
+                inset-shadow-sm inset-shadow-indigo-300
+                dark:inset-shadow-black/40 dark:focus:inset-shadow-indigo-500/30
                 bg-white border-2 border-[rgba(0,0,0,0)] 
                 hover:border-[rgba(0,0,0,0.3)] 
                 focus:border-[rgba(0,0,0,0.3)] 
