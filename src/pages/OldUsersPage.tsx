@@ -133,13 +133,13 @@ export default function OldUsersPage() {
                     {rows.map(row => (
                         <div
                             key={`${row.source}-${row.uid}`}
-                            className="flex items-center justify-between px-4 py-3 rounded-xl border border-gray-100 bg-white"
+                            className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-gray-100 bg-white"
                         >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
                                 <ProfileImg src={row.photoURL} alt={row.name} size="xxs" />
-                                <div>
-                                    <p className="font-medium">{row.name}</p>
-                                    <p className="text-xs text-gray-400">
+                                <div className="min-w-0 flex-1">
+                                    <p className="font-medium truncate">{row.name}</p>
+                                    <p className="text-xs text-gray-400 truncate">
                                         {row.points} pts · {row.taskCompleted} tasks
                                         {row.source === "alumni" ? ` · Alumni: ${row.batchName}` : " · Removed from Global"}
                                     </p>
@@ -150,6 +150,7 @@ export default function OldUsersPage() {
                                 color="gray"
                                 size="xsm"
                                 type="button"
+                                extraClasses="shrink-0"
                                 disabled={restoringUid === row.uid}
                             >
                                 {restoringUid === row.uid ? "Restoring..." : "Restore"}

@@ -75,13 +75,15 @@ export default function Settings() {
         if (fileRef.current) fileRef.current.value = "";
     };
 
-    const handleCancelChanges = () => {
+    const handleUndoChanges = () => {
         setName(userData.name);
         setFile(null);
         setPreview(userData.photoURL || null);
 
         if (fileRef.current) fileRef.current.value = "";
     };
+
+    const hasChanges = name !== userData.name || file !== null;
 
     const resetRole = async () => {
         await updateDoc(doc(db, "users", user.uid), { currentRole: "" });
@@ -163,17 +165,23 @@ export default function Settings() {
                             </div>
                         </form>
                     </div>
-                </div>
 
-                {/* Save / Cancel */}
-                <div className="flex flex-wrap items-center gap-3">
-                    <Button onClick={handleSave} color="blue" size="sm">
-                        Save Changes
-                    </Button>
-                    <Button onClick={handleCancelChanges} color="gray" size="xsm">
-                        Cancel
-                    </Button>
-                    <Alert value={phrase} setValue={setPhrase} />
+                    {/* Save / Undo — only while there are unsaved changes (or a save confirmation to show) */}
+                    {(hasChanges || phrase !== "") && (
+                        <div className="flex flex-wrap items-center gap-3 mt-5 pt-5 border-t border-gray-100">
+                            {hasChanges && (
+                                <>
+                                    <Button onClick={handleSave} color="blue" size="sm">
+                                        Save Changes
+                                    </Button>
+                                    <Button onClick={handleUndoChanges} color="gray" size="xsm">
+                                        Undo
+                                    </Button>
+                                </>
+                            )}
+                            <Alert value={phrase} setValue={setPhrase} />
+                        </div>
+                    )}
                 </div>
 
                 {/* App (mobile only — desktop has the floating theme/bug-report buttons) */}
@@ -181,16 +189,16 @@ export default function Settings() {
                     <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">App</h2>
                     <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
-                            <span className="text-sm">Appearance</span>
-                            <Button onClick={() => setDark?.(d => !d)} color="gray" size="xsm" type="button">
-                                <FontAwesomeIcon icon={dark ? faSun : faMoon} className="mr-1.5" />
+                            <span className="text-sm">Theme</span>
+                            <Button onClick={() => setDark?.(d => !d)} color="gray" size="sm" type="button" extraClasses="flex items-center justify-center gap-2 whitespace-nowrap shrink-0">
+                                <FontAwesomeIcon icon={dark ? faSun : faMoon} />
                                 {dark ? "Light" : "Dark"}
                             </Button>
                         </div>
                         <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
-                            <span className="text-sm">{isAdmin ? "Bug Reports" : "Found a bug?"}</span>
-                            <Button onClick={() => setBugReportOpen?.(true)} color="gray" size="xsm" type="button">
-                                <FontAwesomeIcon icon={isAdmin ? faWrench : faBug} className="mr-1.5" />
+                            <span className="text-sm">{isAdmin ? "Bug Reports" : "Report a bug"}</span>
+                            <Button onClick={() => setBugReportOpen?.(true)} color="gray" size="sm" type="button" extraClasses="flex items-center justify-center gap-2 whitespace-nowrap shrink-0">
+                                <FontAwesomeIcon icon={isAdmin ? faWrench : faBug} />
                                 {isAdmin ? "View" : "Report"}
                             </Button>
                         </div>

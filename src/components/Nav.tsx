@@ -19,7 +19,7 @@ function NavItem({ icon, label, onClick, active, danger, ping }: {
         <button
             onClick={onClick}
             title={label}
-            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors hover:cursor-pointer ${
+            className={`relative flex items-center gap-1.5 min-w-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors hover:cursor-pointer ${
                 danger
                     ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
                     : active
@@ -27,8 +27,8 @@ function NavItem({ icon, label, onClick, active, danger, ping }: {
                     : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10"
             }`}
         >
-            <FontAwesomeIcon icon={icon} className="text-xs" />
-            <span className="hidden sm:inline">{label}</span>
+            <FontAwesomeIcon icon={icon} className="text-xs shrink-0" />
+            <span className="hidden sm:inline truncate whitespace-nowrap">{label}</span>
             {ping && (
                 <span className="absolute top-0.5 right-0.5 flex size-2">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
@@ -50,7 +50,7 @@ function MobileNavItem({ icon, label, onClick, active, danger, ping }: {
     return (
         <button
             onClick={onClick}
-            className={`relative flex flex-col items-center gap-0.5 px-5 py-1.5 rounded-xl text-xs font-medium transition-colors hover:cursor-pointer ${
+            className={`relative flex flex-col items-center gap-0.5 flex-1 min-w-0 px-1 py-1.5 rounded-xl text-xs font-medium transition-colors hover:cursor-pointer ${
                 danger
                     ? "text-red-500"
                     : active
@@ -59,9 +59,9 @@ function MobileNavItem({ icon, label, onClick, active, danger, ping }: {
             }`}
         >
             <FontAwesomeIcon icon={icon} className="text-xl" />
-            <span>{label}</span>
+            <span className="max-w-full truncate whitespace-nowrap">{label}</span>
             {ping && (
-                <span className="absolute top-1 right-3 flex size-2">
+                <span className="absolute top-1 right-[22%] flex size-2">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
                     <span className="relative inline-flex size-2 rounded-full bg-sky-500" />
                 </span>
@@ -93,9 +93,9 @@ export default function Nav() {
         <>
             {/* Desktop top nav */}
             <nav className="hidden sm:flex fixed top-4 left-0 right-0 z-50 justify-center px-4 pointer-events-none">
-                <div className="pointer-events-auto flex items-center gap-0.5 px-2 py-1.5 rounded-full backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-white/10 shadow-lg shadow-black/5">
+                <div className="pointer-events-auto flex items-center gap-0.5 max-w-full min-w-0 px-2 py-1.5 rounded-full backdrop-blur-xl bg-white/80 dark:bg-gray-900/80 border border-gray-200/60 dark:border-white/10 shadow-lg shadow-black/5">
                     {/* Logo */}
-                    <span className="font-bold text-sm px-3 tracking-tight select-none">StemUP</span>
+                    <span className="font-bold text-sm px-3 tracking-tight select-none shrink-0">StemUP</span>
 
                     {/* Divider */}
                     <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
@@ -114,7 +114,7 @@ export default function Nav() {
                     <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
 
                     {/* User name */}
-                    <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 px-2 max-w-32 truncate">{userData.name}</span>
+                    <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 px-2 max-w-32 min-w-0 truncate">{userData.name}</span>
 
                     <NavItem icon={faPowerOff} label="Logout" onClick={handleLogout} danger />
                 </div>

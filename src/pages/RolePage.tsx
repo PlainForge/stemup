@@ -237,7 +237,7 @@ export default function RolePage() {
         if (isAdmin) {
             setRoleNotification(requested.length > 0 || submittedTasks.length > 0);
         } else {
-            setRoleNotification(userTasks.some(t => !t.complete && !seenTaskIds.has(t.id)));
+            setRoleNotification(userTasks.some(t => !t.complete && !seenTaskIds.has(t.id) && !submittedTasks.some(s => s.id === t.id)));
         }
     }, [user, admins, requested, submittedTasks, userTasks, seenTaskIds, setRoleNotification]);
 
@@ -288,8 +288,8 @@ export default function RolePage() {
     if (loading || isMember === null) return <Loading />;
     if (!isMember || !user || !role ) return null;
 
-    const taskCount = userTasks.filter(task => !task.complete).length;
-    const hasNewTasks = !admins.includes(user.uid) && userTasks.some(t => !t.complete && !seenTaskIds.has(t.id));
+    const taskCount = userTasks.filter(task => !task.complete && !submittedTasks.some(s => s.id === task.id)).length;
+    const hasNewTasks = !admins.includes(user.uid) && userTasks.some(t => !t.complete && !seenTaskIds.has(t.id) && !submittedTasks.some(s => s.id === t.id));
 
     return (
         <div className="w-full max-w-3xl mx-auto flex flex-col gap-4 px-4 pb-10">
@@ -354,7 +354,7 @@ export default function RolePage() {
             </div>
 
             {/* Tab bar */}
-            <div className="flex items-center gap-0.5 sm:gap-1 border-b border-gray-200 overflow-x-auto scrollbar-hide w-full">
+            <div className="flex items-center gap-0.5 sm:gap-1 border-b border-gray-200 overflow-x-auto scrollbar-hide w-full pt-2">
                 {[
                     { key: "leaderboard", label: "Leaderboard" },
                     { key: "rewards", label: "Rewards" },
@@ -382,7 +382,7 @@ export default function RolePage() {
                                     : null
                             )}
                             {tab.key === "admin" && (requested.length > 0 || submittedTasks.length > 0) && (
-                                <span className="absolute -top-1 -right-1 flex size-2.5">
+                                <span className="absolute top-1 right-0.5 flex size-2.5">
                                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
                                     <span className="relative inline-flex size-2.5 rounded-full bg-sky-500"></span>
                                 </span>
@@ -671,7 +671,7 @@ export default function RolePage() {
                                             <div className="flex items-start justify-between gap-2">
                                                 <div className="flex items-center gap-1.5 min-w-0">
                                                     <h3 className="font-semibold leading-tight truncate">{task.title}</h3>
-                                                    {!task.complete && !seenTaskIds.has(task.id) && (
+                                                    {!task.complete && !isSubmitted && !seenTaskIds.has(task.id) && (
                                                         <span className="text-xs font-bold text-red-500 shrink-0">NEW</span>
                                                     )}
                                                 </div>

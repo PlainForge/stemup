@@ -18,7 +18,14 @@ export default function RolesSelectorPage() {
     const [roles, setRoles] = useState<Role[]>([]);
     const [requestsPerRole, setRequestsPerRole] = useState<Record<string, number>>({});
     const [submittedPerRole, setSubmittedPerRole] = useState<Record<string, number>>({});
-    const [incompletePerRole, setIncompletePerRole] = useState<Record<string, number>>({});
+    const [incompleteTasks, setIncompleteTasks] = useState<{ id: string; roleId: string }[]>([]);
+    const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
+
+    // Tasks the user has already submitted (awaiting review) no longer count as to-do
+    const incompletePerRole: Record<string, number> = {};
+    incompleteTasks.forEach(t => {
+        if (t.roleId && !submittedIds.has(t.id)) incompletePerRole[t.roleId] = (incompletePerRole[t.roleId] || 0) + 1;
+    });
 
     const user = context?.user ?? null;
     const userData = context?.userData ?? null;
@@ -59,14 +66,17 @@ export default function RolesSelectorPage() {
             where("complete", "==", false)
         );
         const unsub = onSnapshot(q, (snap) => {
-            const counts: Record<string, number> = {};
-            snap.docs.forEach(d => {
-                const roleId = d.data().roleId as string;
-                if (roleId) counts[roleId] = (counts[roleId] || 0) + 1;
-            });
-            setIncompletePerRole(counts);
+            setIncompleteTasks(snap.docs.map(d => ({ id: d.id, roleId: d.data().roleId as string })));
         });
-        return () => unsub();
+        const submittedQ = query(
+            collection(db, "tasksSubmitted"),
+            where("assignedTo", "==", user.uid),
+            where("complete", "==", false)
+        );
+        const unsubSubmitted = onSnapshot(submittedQ, (snap) => {
+            setSubmittedIds(new Set(snap.docs.map(d => d.id)));
+        }, (err) => console.error("Error fetching submitted tasks:", err));
+        return () => { unsub(); unsubSubmitted(); };
     }, [user, admins]);
 
     useEffect(() => {

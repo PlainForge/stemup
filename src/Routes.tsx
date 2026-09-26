@@ -11,6 +11,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AlumniPage from "./pages/AlumniPage";
 import AlumniBatchPage from "./pages/AlumniBatchPage";
 import OldUsersPage from "./pages/OldUsersPage";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 
 export const router = createBrowserRouter([
   {
@@ -24,6 +25,10 @@ export const router = createBrowserRouter([
   {
     path: "/loading",
     element: <Loading />
+  },
+  {
+    path: "/privacy",
+    element: <PrivacyPolicyPage />
   },
   {
     path: "/",
