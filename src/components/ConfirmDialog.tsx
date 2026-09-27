@@ -6,10 +6,21 @@ import { registerConfirmHost, type ConfirmRequest } from "../lib/confirm";
 export default function ConfirmHost() {
     const [req, setReq] = useState<ConfirmRequest | null>(null);
 
+    // Plain CSS entrance transition, same fix/pattern as the profile card and bug report panel
+    const [entered, setEntered] = useState(false);
     useEffect(() => {
         registerConfirmHost(setReq);
         return () => registerConfirmHost(null);
     }, []);
+
+    useEffect(() => {
+        if (!req) {
+            setEntered(false);
+            return;
+        }
+        const frame = requestAnimationFrame(() => setEntered(true));
+        return () => cancelAnimationFrame(frame);
+    }, [req]);
 
     if (!req) return null;
 
@@ -20,13 +31,15 @@ export default function ConfirmHost() {
 
     return (
         <div
-            className="fixed inset-0 z-[100] flex items-center justify-center px-6 bg-black/60"
+            className={`fixed inset-0 z-[100] flex items-center justify-center px-6 bg-black/60 transition-opacity duration-150 ${entered ? "opacity-100" : "opacity-0"}`}
             onClick={() => close(false)}
         >
             <div
                 role="alertdialog"
                 aria-modal="true"
-                className="w-full max-w-xs bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-4 text-center"
+                className={`w-full max-w-xs bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-4 text-center transition-all duration-150 ${
+                    entered ? "opacity-100 scale-100" : "opacity-0 scale-95"
+                }`}
                 onClick={(e) => e.stopPropagation()}
             >
                 <h2 className="text-lg font-bold">{req.title ?? (req.alertOnly ? "Notice" : "Are you sure?")}</h2>

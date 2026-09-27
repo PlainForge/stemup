@@ -3,29 +3,60 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGears, faHomeAlt, faUserClock, faUserGraduate, faUsers } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MainContext } from "../context/MainContext";
+import { IS_PHONE } from "../lib/device";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+
+type Box = { x: number; y: number; w: number; h: number };
 
 // A bar whose highlight pill slides to whichever child has data-active="true".
 // The pill is positioned relative to the bar itself (not the viewport), so page
 // scrollbars appearing/disappearing between routes can't make it drift.
-function PillBar({ activeKey, className, pillClassName, children }: {
+//
+// `squishy` swaps the plain slide for the stretch-then-settle "liquid" motion of
+// iOS-style tab bars (grow across the gap between the old and new tab, then
+// contract to fit the new one) — driven imperatively via the Web Animations API
+// so the stretch keyframe can be computed fresh from the actual pixel gap each time.
+function PillBar({ activeKey, className, pillClassName, squishy, children }: {
     activeKey: string;
     className: string;
     pillClassName: string;
+    squishy?: boolean;
     children: React.ReactNode;
 }) {
     const ref = useRef<HTMLDivElement>(null);
-    const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+    const pillRef = useRef<HTMLSpanElement>(null);
+    const prevBoxRef = useRef<Box | null>(null);
+    const [box, setBox] = useState<Box | null>(null);
     const [ready, setReady] = useState(false);
 
     const measure = useCallback(() => {
         const el = ref.current?.querySelector<HTMLElement>('[data-active="true"]');
-        setBox(el ? { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight } : null);
-    }, []);
+        const newBox: Box | null = el
+            ? { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight }
+            : null;
+        setBox(newBox);
+
+        if (squishy && newBox && pillRef.current) {
+            const prev = prevBoxRef.current;
+            if (prev && (prev.x !== newBox.x || prev.w !== newBox.w)) {
+                const unionLeft = Math.min(prev.x, newBox.x);
+                const unionRight = Math.max(prev.x + prev.w, newBox.x + newBox.w);
+                pillRef.current.animate(
+                    [
+                        { left: `${prev.x}px`, width: `${prev.w}px`, offset: 0, easing: "cubic-bezier(0.3,0,0.4,1)" },
+                        { left: `${unionLeft}px`, width: `${unionRight - unionLeft}px`, offset: 0.45, easing: "cubic-bezier(0.5,0,0.15,1)" },
+                        { left: `${newBox.x}px`, width: `${newBox.w}px`, offset: 1 },
+                    ],
+                    { duration: 420, fill: "none" }
+                );
+            }
+        }
+        if (newBox) prevBoxRef.current = newBox;
+    }, [squishy]);
 
     useLayoutEffect(() => { measure(); }, [measure, activeKey]);
 
-    // Enable the slide transition only after the first measurement so it doesn't fly in on load
+    // Enable the (non-squishy) slide transition only after the first measurement so it doesn't fly in on load
     useEffect(() => {
         const id = requestAnimationFrame(() => setReady(true));
         return () => cancelAnimationFrame(id);
@@ -41,13 +72,22 @@ function PillBar({ activeKey, className, pillClassName, children }: {
     return (
         <div ref={ref} className={`relative ${className}`}>
             {box && (
-                <span
-                    aria-hidden
-                    className={`absolute left-0 top-0 rounded-full pointer-events-none ${pillClassName} ${
-                        ready ? "transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]" : ""
-                    }`}
-                    style={{ transform: `translate(${box.x}px, ${box.y}px)`, width: box.w, height: box.h }}
-                />
+                squishy ? (
+                    <span
+                        ref={pillRef}
+                        aria-hidden
+                        className={`absolute rounded-full pointer-events-none ${pillClassName}`}
+                        style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
+                    />
+                ) : (
+                    <span
+                        aria-hidden
+                        className={`absolute left-0 top-0 rounded-full pointer-events-none ${pillClassName} ${
+                            ready ? "transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]" : ""
+                        }`}
+                        style={{ transform: `translate(${box.x}px, ${box.y}px)`, width: box.w, height: box.h }}
+                    />
+                )
             )}
             {children}
         </div>
@@ -120,6 +160,7 @@ export default function Nav() {
     const [scrolled, setScrolled] = useState(false);
 
     useEffect(() => {
+        if (IS_PHONE) return;
         const onScroll = () => setScrolled(window.scrollY > 8);
         onScroll();
         window.addEventListener("scroll", onScroll, { passive: true });
@@ -135,43 +176,14 @@ export default function Nav() {
     const isAdmin = admins.includes(user.uid);
     const activeKey = `${path.split("/")[1] ?? ""}|${isAdmin}`;
 
-    return (
-        <>
-            {/* Desktop top nav */}
-            <nav className="hidden sm:flex fixed top-6 left-0 right-0 z-50 justify-center px-4 pointer-events-none">
+    // Real device detection, not a viewport-width breakpoint — a laptop keeps the
+    // top bar even with a narrow window; only an actual phone gets the bottom one.
+    if (IS_PHONE) {
+        return (
+            <nav className="fixed left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+0.25rem)] z-50 flex justify-center px-4 pointer-events-none">
                 <PillBar
                     activeKey={activeKey}
-                    pillClassName="bg-gray-900 dark:bg-white"
-                    className={`pointer-events-auto flex items-center gap-0.5 max-w-full min-w-0 px-2 py-1.5 rounded-full backdrop-blur-2xl backdrop-saturate-150 border border-gray-200/60 dark:border-white/10 shadow-lg shadow-black/5 transition-[background-color,box-shadow] duration-300 ${
-                        scrolled ? "bg-white/50 dark:bg-gray-900/50" : "bg-white dark:bg-gray-900"
-                    }`}
-                >
-                    {/* Logo */}
-                    <span className="font-bold text-sm px-3 tracking-tight select-none shrink-0">StemUP</span>
-
-                    {/* Divider */}
-                    <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
-
-                    <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
-                    <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
-                    {isAdmin && (
-                        <NavItem icon={faUserGraduate} label="Alumni" onClick={() => navigate("/alumni")} active={path.startsWith("/alumni")} />
-                    )}
-                    {isAdmin && (
-                        <NavItem icon={faUserClock} label="Old Users" onClick={() => navigate("/old-users")} active={path.startsWith("/old-users")} />
-                    )}
-                    <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
-
-                    {/* User name */}
-                    <div className="hidden md:block w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
-                    <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 px-2 max-w-32 min-w-0 truncate">{userData.name}</span>
-                </PillBar>
-            </nav>
-
-            {/* Mobile bottom nav — floating frosted-glass capsule */}
-            <nav className="fixed left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+0.25rem)] z-50 flex sm:hidden justify-center px-4 pointer-events-none">
-                <PillBar
-                    activeKey={activeKey}
+                    squishy
                     pillClassName="bg-black/10 dark:bg-white/15"
                     className="pointer-events-auto flex items-center w-full max-w-md p-1.5 rounded-full bg-white/40 dark:bg-gray-900/40 backdrop-blur-2xl backdrop-saturate-200 border border-white/50 dark:border-white/10 shadow-xl shadow-black/10"
                 >
@@ -186,6 +198,38 @@ export default function Nav() {
                     <MobileNavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
                 </PillBar>
             </nav>
-        </>
+        );
+    }
+
+    return (
+        <nav className="fixed top-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+            <PillBar
+                activeKey={activeKey}
+                pillClassName="bg-gray-900 dark:bg-white"
+                className={`pointer-events-auto flex items-center gap-0.5 max-w-full min-w-0 px-2 py-1.5 rounded-full backdrop-blur-2xl backdrop-saturate-150 border border-gray-200/60 dark:border-white/10 shadow-lg shadow-black/5 transition-[background-color,box-shadow] duration-300 ${
+                    scrolled ? "bg-white/50 dark:bg-gray-900/50" : "bg-white dark:bg-gray-900"
+                }`}
+            >
+                {/* Logo */}
+                <span className="font-bold text-sm px-3 tracking-tight select-none shrink-0">StemUP</span>
+
+                {/* Divider */}
+                <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
+
+                <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
+                <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
+                {isAdmin && (
+                    <NavItem icon={faUserGraduate} label="Alumni" onClick={() => navigate("/alumni")} active={path.startsWith("/alumni")} />
+                )}
+                {isAdmin && (
+                    <NavItem icon={faUserClock} label="Old Users" onClick={() => navigate("/old-users")} active={path.startsWith("/old-users")} />
+                )}
+                <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
+
+                {/* User name */}
+                <div className="hidden md:block w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
+                <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 px-2 max-w-32 min-w-0 truncate">{userData.name}</span>
+            </PillBar>
+        </nav>
     );
 }

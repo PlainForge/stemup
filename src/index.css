@@ -80,6 +80,13 @@ body {
 [data-theme="dark"] .divide-gray-100 > * + * { border-color: rgb(55 65 81); }
 [data-theme="dark"] .divide-gray-200 > * + * { border-color: rgb(75 85 99); }
 
+/* iOS Safari/WKWebView zooms the page in on focus when a text input's font-size
+   is under 16px, and there's no way back out except reloading — force 16px on
+   phone-width screens (still overridable per element since specificity is low). */
+@media (max-width: 640px) {
+  input, textarea, select { font-size: 16px; }
+}
+
 /* Inputs & selects */
 [data-theme="dark"] input,
 [data-theme="dark"] textarea,

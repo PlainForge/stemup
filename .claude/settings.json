@@ -7,7 +7,10 @@
       "Bash(sed -i '292s/.*/    const hasNewTasks = !admins.includes\\(user.uid\\) \\\\&\\\\& userTasks.some\\(t => !t.complete \\\\&\\\\& !seenTaskIds.has\\(t.id\\) \\\\&\\\\& !submittedTasks.some\\(s => s.id === t.id\\)\\);/' src/pages/RolePage.tsx)",
       "Bash(sed -i '674s/.*/                                                    {!task.complete \\\\&\\\\& !isSubmitted \\\\&\\\\& !seenTaskIds.has\\(task.id\\) \\\\&\\\\& \\(/' src/pages/RolePage.tsx)",
       "Bash(git diff *)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://stemup.web.app/privacy)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://stemup.web.app/privacy)",
+      "Bash(ffmpeg -version)",
+      "Bash(python3 --version 2>&1; python --version 2>&1; ls /c/Users/arens/AppData/Local/Microsoft/WindowsApps/ 2>/dev/null | grep -i ffmpeg)",
+      "Read(//c/Users/arens/AppData/Local/Microsoft/WindowsApps//**)"
     ]
   }
 }

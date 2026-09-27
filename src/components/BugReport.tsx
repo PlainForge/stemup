@@ -1,5 +1,4 @@
 import { useContext, useEffect, useState, type FormEvent } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import { collection, addDoc, onSnapshot, deleteDoc, doc, Timestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { MainContext } from "../context/MainContext";
@@ -29,6 +28,18 @@ export default function BugReport() {
     const setOpen = context?.setBugReportOpen ?? (() => {});
 
     const isAdmin = user && admins.includes(user.uid);
+
+    // Plain CSS entrance transition (Framer Motion's initial/animate on this panel
+    // caused a visible flicker on mount, same issue and fix as the profile card)
+    const [entered, setEntered] = useState(false);
+    useEffect(() => {
+        if (!open) {
+            setEntered(false);
+            return;
+        }
+        const frame = requestAnimationFrame(() => setEntered(true));
+        return () => cancelAnimationFrame(frame);
+    }, [open]);
 
     // Admins: listen to all bugs
     useEffect(() => {
@@ -88,24 +99,18 @@ export default function BugReport() {
             </button>
 
             {/* Backdrop + panel */}
-            <AnimatePresence>
-                {open && (
-                    <>
-                        <motion.div
-                            className="fixed inset-0 bg-black/40 z-40"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setOpen(false)}
-                        />
+            {open && (
+                <>
+                    <div
+                        className={`fixed inset-0 bg-black/40 z-40 transition-opacity duration-150 ${entered ? "opacity-100" : "opacity-0"}`}
+                        onClick={() => setOpen(false)}
+                    />
 
-                        <motion.div
-                            className="fixed z-50 w-[calc(100%-2rem)] max-w-sm bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:top-auto sm:left-auto sm:right-6 sm:bottom-36 sm:translate-x-0 sm:translate-y-0"
-                            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                            transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                        >
+                    <div
+                        className={`fixed z-50 w-[calc(100%-2rem)] max-w-sm bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:top-auto sm:left-auto sm:right-6 sm:bottom-36 sm:translate-x-0 sm:translate-y-0 transition-all duration-150 ${
+                            entered ? "opacity-100 scale-100" : "opacity-0 scale-95"
+                        }`}
+                    >
                             {isAdmin ? (
                                 /* Admin view */
                                 <>
@@ -160,10 +165,9 @@ export default function BugReport() {
                                     </form>
                                 </>
                             )}
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
+                    </div>
+                </>
+            )}
         </>
     );
 }

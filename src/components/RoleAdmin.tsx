@@ -591,7 +591,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     // Save edits to an unfinished task (and any pending submission so approval awards the new points)
     const saveTaskEdit = async (task: Task) => {
         const title = editTitle.trim();
-        if (!title || editPts < 0) return;
+        if (!title || editPts < 0 || task.complete || allSubmitted.some(s => s.id === task.id && !s.complete)) return;
         const fields: { title: string; description: string; points: number } = { title, description: editDesc.trim(), points: editPts };
         try {
             if (editDue) {
@@ -614,10 +614,11 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         }
     };
 
-    // Hand an unfinished task to another member, clearing progress/submission state
+    // Hand an unfinished, not-yet-submitted task to another member, clearing progress state
     const reassignTask = async (task: Task) => {
         const target = membersWithData.find(m => m.uid === reassignTo);
-        if (!target || target.uid === task.assignedTo) return;
+        if (!target || target.uid === task.assignedTo || task.complete) return;
+        if (allSubmitted.some(s => s.id === task.id && !s.complete)) return;
         try {
             await updateDoc(doc(db, "tasks", task.id), {
                 assignedTo: target.uid,
@@ -626,7 +627,6 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                 extensionRequested: deleteField(),
                 extensionDeclined: deleteField(),
             });
-            await deleteDoc(doc(db, "tasksSubmitted", task.id));
             setReassignTaskId(null);
             setReassignTo("");
         } catch (err) {
@@ -932,7 +932,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                         Declined {task.declineCount}×{task.declineCount === 3 ? " · Closed" : ""}
                                                     </span>
                                                 )}
-                                                {task.status && (
+                                                {task.status && !task.complete && !submission && (
                                                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                                         task.status === "In Progress" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
                                                     }`}>
@@ -1026,10 +1026,10 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             </div>
                                         ) : (
                                             <div className="flex gap-2 pt-3 border-t border-gray-100">
-                                                {!task.complete && (
+                                                {!task.complete && !submission && (
                                                     <Button onClick={() => startEditTask(task)} size="full" color="gray">Edit</Button>
                                                 )}
-                                                {!task.complete && (
+                                                {!task.complete && !submission && (
                                                     <Button onClick={() => { setEditTaskId(null); setReassignTaskId(task.id); setReassignTo(""); }} size="full" color="gray">Reassign</Button>
                                                 )}
                                                 <Button onClick={() => removeTask(task)} size="full" color="red">Remove</Button>
