@@ -37,6 +37,7 @@ export default function VerifyEmailPage() {
                 <Button onClick={resend} color="blue" size="sm">
                     {sent ? "Email sent!" : "Resend email"}
                 </Button>
+                <p className="text-xs text-gray-400">Don't see it? Check your spam or junk folder.</p>
                 <p className="text-xs text-gray-400">This page will update automatically once verified.</p>
             </motion.div>
         </div>
