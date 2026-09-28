@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useIsMobileBarHidden } from "../lib/useIsMobileBarHidden";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGears, faHomeAlt, faUserClock, faUserGraduate, faUsers } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -131,17 +132,38 @@ function MobileNavItem({ icon, label, onClick, active, ping }: {
     active?: boolean;
     ping?: boolean;
 }) {
+    const iconRef = useRef<HTMLSpanElement>(null);
+    const wasActive = useRef(active);
+
+    // Icon "pops" with a springy overshoot the moment its tab becomes active,
+    // instead of just recoloring — same tap feedback GitHub/PayPal's tab bars use.
+    useEffect(() => {
+        if (active && !wasActive.current) {
+            iconRef.current?.animate(
+                [
+                    { transform: "scale(1)" },
+                    { transform: "scale(1.28)", offset: 0.5 },
+                    { transform: "scale(1)" },
+                ],
+                { duration: 380, easing: "cubic-bezier(0.34,1.56,0.64,1)" }
+            );
+        }
+        wasActive.current = active;
+    }, [active]);
+
     return (
         <button
             onClick={onClick}
             data-active={active ? "true" : "false"}
-            className={`relative flex flex-col items-center gap-0.5 flex-1 min-w-0 px-1 py-2 rounded-full text-[11px] font-medium transition-colors duration-300 hover:cursor-pointer ${
+            className={`relative flex flex-col items-center gap-0.5 flex-1 min-w-0 px-1 py-2 rounded-full text-[11px] font-medium transition-[color,transform] duration-300 active:scale-90 hover:cursor-pointer ${
                 active
                     ? "text-blue-500 dark:text-blue-400"
                     : "text-gray-700 dark:text-gray-200"
             }`}
         >
-            <FontAwesomeIcon icon={icon} className="text-xl" />
+            <span ref={iconRef} className="inline-block">
+                <FontAwesomeIcon icon={icon} className="text-xl" />
+            </span>
             <span className="max-w-full truncate whitespace-nowrap">{label}</span>
             {ping && (
                 <span className="absolute top-1.5 right-[22%] flex size-2">
@@ -167,6 +189,8 @@ export default function Nav() {
         return () => window.removeEventListener("scroll", onScroll);
     }, []);
 
+    const barHidden = useIsMobileBarHidden(IS_PHONE);
+
     if (!context) return null;
     const { user, userData, roleNotification, admins } = context;
 
@@ -180,7 +204,11 @@ export default function Nav() {
     // top bar even with a narrow window; only an actual phone gets the bottom one.
     if (IS_PHONE) {
         return (
-            <nav className="fixed left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+0.25rem)] z-50 flex justify-center px-4 pointer-events-none">
+            <nav
+                className={`fixed left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+0.25rem)] z-50 flex justify-center px-4 pointer-events-none transition-transform duration-300 ease-out ${
+                    barHidden ? "translate-y-24" : "translate-y-0"
+                }`}
+            >
                 <PillBar
                     activeKey={activeKey}
                     squishy
