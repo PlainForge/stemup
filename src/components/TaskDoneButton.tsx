@@ -1,7 +1,7 @@
 import type { Task } from "../myDataTypes";
 import { useContext, useEffect, useState } from "react";
 import { db } from "../lib/firebase";
-import { collection, doc, onSnapshot, query, setDoc, Timestamp, where } from "firebase/firestore";
+import { collection, deleteField, doc, onSnapshot, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
 import "./styles/doneButton.css"
 import { MainContext } from "../context/MainContext";
 import Button from "./Button";
@@ -45,6 +45,11 @@ export default function DoneButton({ task } : DoneButtonProps) {
                 complete: false,
                 title: task.title
             });
+            // Clear the auto-delete timer — an overdue task that's just been submitted
+            // shouldn't disappear out from under the admin while it's awaiting review
+            if (task.deleteAt) {
+                await updateDoc(doc(db, "tasks", task.id), { deleteAt: deleteField() });
+            }
         }   catch (err) {
             console.error("Error submitting task:", err);
         } finally {

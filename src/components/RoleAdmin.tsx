@@ -918,7 +918,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                         <div className="flex items-center justify-between gap-2 flex-wrap">
                                             <span className="text-xs text-gray-400">{task.assignedName}</span>
                                             <div className="flex gap-1 flex-wrap">
-                                                {overdue && (
+                                                {overdue && !submission && (
                                                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Overdue</span>
                                                 )}
                                                 {task.extensionRequested && (
@@ -947,11 +947,18 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             </div>
                                         </div>
                                         {task.dueDate && !task.complete && (
-                                            <p className={`text-xs ${overdue ? "text-red-400" : "text-gray-400"}`}>
+                                            <p className={`text-xs ${overdue && !submission ? "text-red-400" : "text-gray-400"}`}>
                                                 Due: {task.dueDate.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                                                {overdue && daysLeft !== null && (
+                                                {overdue && !submission && daysLeft !== null && (
                                                     <span className="ml-1">· {daysLeft > 0 ? `Deletes in ${daysLeft}d` : "Deleting soon"}</span>
                                                 )}
+                                            </p>
+                                        )}
+                                        {submission && (
+                                            <p className="text-xs text-yellow-600">
+                                                Submitted: {submission.submission.toDate().toLocaleString("en-US", {
+                                                    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit"
+                                                })}
                                             </p>
                                         )}
                                         <p className="text-xs text-gray-300">

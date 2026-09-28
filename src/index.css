@@ -1,6 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap');
 @import "tailwindcss";
 
+/* This is an app, not a document — clicking around shouldn't select text or show
+   the text (I-beam) cursor over it. Re-enabled explicitly for inputs/textareas
+   (so typing/editing still works normally) and anywhere `select-all`/`select-text`
+   is used on purpose (e.g. the role ID in RolePage, meant to be copied). */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input, textarea, [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Hides the scrollbar on horizontally-scrollable strips (e.g. the role page tab bar) while keeping them scrollable */
 .scrollbar-hide {
   -ms-overflow-style: none;
