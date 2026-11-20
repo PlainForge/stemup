@@ -4,7 +4,7 @@ import { db } from "../lib/firebase";
 import { MainContext } from "../context/MainContext";
 import Button from "./Button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBug, faMoon, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
+import { faBug, faMoon, faSun, faWrench, faXmark } from "@fortawesome/free-solid-svg-icons";
 
 interface Bug {
     id: string;
@@ -78,6 +78,18 @@ export default function BugReport() {
 
     if (!user) return null;
 
+    const closeButton = (
+        <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Close"
+            title="Close"
+            className="size-8 -mr-2 shrink-0 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors hover:cursor-pointer"
+        >
+            <FontAwesomeIcon icon={faXmark} />
+        </button>
+    );
+
     return (
         <>
             {/* Theme toggle button (desktop only — mobile users toggle this from Settings) */}
@@ -116,7 +128,10 @@ export default function BugReport() {
                                 <>
                                     <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                                         <h2 className="font-semibold">Bug Reports</h2>
-                                        <span className="text-xs text-gray-400">{bugs.length} total</span>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs text-gray-400">{bugs.length} total</span>
+                                            {closeButton}
+                                        </div>
                                     </div>
                                     <div className="flex flex-col gap-3 p-4 overflow-y-auto max-h-96">
                                         {bugs.length === 0 ? (
@@ -141,9 +156,12 @@ export default function BugReport() {
                             ) : (
                                 /* User view */
                                 <>
-                                    <div className="px-5 py-4 border-b border-gray-100">
-                                        <h2 className="font-semibold">Report a Bug</h2>
-                                        <p className="text-xs text-gray-400 mt-0.5">Help us improve by describing what went wrong.</p>
+                                    <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+                                        <div>
+                                            <h2 className="font-semibold">Report a Bug</h2>
+                                            <p className="text-xs text-gray-400 mt-0.5">Help us improve by describing what went wrong.</p>
+                                        </div>
+                                        {closeButton}
                                     </div>
                                     <form onSubmit={submitBug} className="flex flex-col gap-3 p-4">
                                         <input

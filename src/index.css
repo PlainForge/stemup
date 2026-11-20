@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400..700;1,400..700&display=swap');
 @import "tailwindcss";
 
 /* This is an app, not a document — clicking around shouldn't select text or show
@@ -25,11 +25,11 @@ input, textarea, [contenteditable] {
 
 :root {
   /* Explicit emoji fallback — the native iOS WebView doesn't reliably fall back
-     to the system emoji font on its own when the active font (Rubik) has no
+     to the system emoji font on its own when the active font (Google Sans) has no
      emoji glyphs, so emoji render as a missing-glyph box without this. */
-  font-family: "Rubik", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  font-family: "Google Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   font-optical-sizing: auto;
-  font-weight: 300;
+  font-weight: 400;
   font-style: normal;
 
   font-synthesis: none;

@@ -312,7 +312,7 @@ export const firebaseAuthService = {
             query(
             collection(db, "tasksSubmitted"),
             where("roleId", "==", roleId),
-            where("userId", "==", targetUid)
+            where("assignedTo", "==", targetUid)
             )
         );
 

@@ -91,6 +91,8 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [editTaskCount, setEditTaskCount] = useState(0);
     const [origEditPoints, setOrigEditPoints] = useState(0);
     const [origEditTaskCount, setOrigEditTaskCount] = useState(0);
+    // Global totals for the member being edited — membersWithData only carries this role's stats
+    const [editGlobal, setEditGlobal] = useState<{ points: number; taskCompleted: number } | null>(null);
 
     // Listen for all tasks in this role
     useEffect(() => {
@@ -531,6 +533,11 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         setEditTaskCount(rt);
         setOrigEditPoints(rp);
         setOrigEditTaskCount(rt);
+        setEditGlobal(null);
+        getDoc(doc(db, "users", m.uid)).then(snap => {
+            const d = snap.data();
+            setEditGlobal({ points: d?.points ?? 0, taskCompleted: d?.taskCompleted ?? 0 });
+        });
     };
 
     const saveRoleOnly = async (uid: string) => {
@@ -551,10 +558,12 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         const updatedRoles = (member.roles || []).map((r: UserRoleData) =>
             r.id === role.id ? { ...r, points: editPoints, taskCompleted: editTaskCount } : r
         );
+        // member.points/taskCompleted are this role's stats, so read the real global totals fresh
+        const fresh = (await getDoc(doc(db, "users", uid))).data();
         await updateDoc(doc(db, "users", uid), {
             roles: updatedRoles,
-            points: Math.max(0, (member.points ?? 0) + deltaPoints),
-            taskCompleted: Math.max(0, (member.taskCompleted ?? 0) + deltaTaskCount),
+            points: Math.max(0, (fresh?.points ?? 0) + deltaPoints),
+            taskCompleted: Math.max(0, (fresh?.taskCompleted ?? 0) + deltaTaskCount),
         });
         setEditingMember(null);
     };
@@ -1107,7 +1116,9 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             <ProfileImg src={m.photoURL} alt={m.name} size="xs" />
                                             <div>
                                                 <p className="font-semibold">{m.name}</p>
-                                                <p className="text-xs text-gray-400">Role stats · Global: {m.points ?? 0} pts, {m.taskCompleted ?? 0} tasks</p>
+                                                <p className="text-xs text-gray-400">
+                                                    Role stats{editGlobal ? ` · Global: ${editGlobal.points} pts, ${editGlobal.taskCompleted} tasks` : ""}
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="flex gap-4">
@@ -1132,13 +1143,13 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                 />
                                             </div>
                                         </div>
-                                        {(editPoints !== origEditPoints || editTaskCount !== origEditTaskCount) && (
+                                        {editGlobal && (editPoints !== origEditPoints || editTaskCount !== origEditTaskCount) && (
                                             <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
                                                 <p className="font-semibold mb-0.5">Global impact if saved with global:</p>
                                                 <p>
-                                                    Points: {m.points ?? 0} to {Math.max(0, (m.points ?? 0) + (editPoints - origEditPoints))}
+                                                    Points: {editGlobal.points} to {Math.max(0, editGlobal.points + (editPoints - origEditPoints))}
                                                     {" · "}
-                                                    Tasks: {m.taskCompleted ?? 0} to {Math.max(0, (m.taskCompleted ?? 0) + (editTaskCount - origEditTaskCount))}
+                                                    Tasks: {editGlobal.taskCompleted} to {Math.max(0, editGlobal.taskCompleted + (editTaskCount - origEditTaskCount))}
                                                 </p>
                                             </div>
                                         )}
