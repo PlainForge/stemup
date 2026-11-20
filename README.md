@@ -1,4 +1,3 @@
 # StemUp
 
-W.i.p
--tori
+Work in progress - Tori
