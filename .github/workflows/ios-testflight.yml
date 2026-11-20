@@ -1,0 +1,99 @@
+# Builds the Flutter iOS app in mobile/ and uploads it to App Store Connect
+# (TestFlight) whenever master changes something under mobile/.
+#
+# Signing is fully automatic: Xcode uses the App Store Connect API key to create
+# or fetch the distribution certificate and provisioning profile in the cloud,
+# so no .p12 or .mobileprovision files need to live in the repo or secrets.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   ASC_KEY_ID       App Store Connect API key ID
+#   ASC_ISSUER_ID    App Store Connect issuer ID
+#   ASC_KEY_P8       Full contents of the AuthKey_XXXX.p8 file
+#   APPLE_TEAM_ID    10-character Apple Developer team ID
+# Optional repository variable:
+#   BUILD_NUMBER_OFFSET  Added to the run number so builds stay above the last
+#                        Capacitor build you uploaded (default 100).
+
+name: iOS → TestFlight
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ios-testflight.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  build-and-upload:
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Compute build number
+        run: echo "BUILD_NUMBER=$(( ${{ vars.BUILD_NUMBER_OFFSET || 100 }} + ${{ github.run_number }} ))" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+          cd ios && pod install --repo-update
+
+      - name: Write App Store Connect API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/asc/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Prepare Xcode project
+        # Generates Flutter's iOS build settings (version from pubspec, build number from CI)
+        run: flutter build ios --release --config-only --build-number="$BUILD_NUMBER"
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            CODE_SIGN_STYLE=Automatic
+
+      - name: Export and upload to App Store Connect
+        run: |
+          plutil -replace teamID -string "${{ secrets.APPLE_TEAM_ID }}" ios/ExportOptions.plist
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
+
+      - name: Clean up API key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"
