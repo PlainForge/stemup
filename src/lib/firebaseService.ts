@@ -117,6 +117,9 @@ export const firebaseAuthService = {
         if (!email || !password || !name) return null;
 
         const userCred = await createUserWithEmailAndPassword(auth, email, password);
+        // Send the verification email first, so a failed profile write below
+        // can never leave a new user without their link
+        await sendEmailVerification(userCred.user);
         const userRef = doc(db, "users", userCred.user.uid);
         // Add starter data for new user
         await setDoc(userRef, {
@@ -133,8 +136,6 @@ export const firebaseAuthService = {
         await updateDoc(doc(db, "roles", 'r3wUbRSCX7cxwBYhtAdg'), {
             members: arrayUnion(userCred.user.uid)
         })
-
-        await sendEmailVerification(userCred.user);
     },
 
     /**

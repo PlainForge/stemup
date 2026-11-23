@@ -26,6 +26,14 @@ class AuthService {
 
   static bool get googleSupported => kIsWeb || _nativeGoogle;
 
+  /// Sign in with Apple uses Firebase's native Apple flow, which only exists on
+  /// iOS here. App Store guideline 4.8 requires it wherever Google sign-in is offered.
+  static bool get appleSupported => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  static AppleAuthProvider get _appleProvider => AppleAuthProvider()
+    ..addScope('email')
+    ..addScope('name');
+
   static Future<void> initGoogle() async {
     if (!_nativeGoogle) return;
     await GoogleSignIn.instance.initialize(
@@ -47,11 +55,13 @@ class AuthService {
   static Future<void> registerWithEmail(String email, String password, String name) async {
     final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
     final user = cred.user!;
+    // Send the verification email first, so a failed profile write below can
+    // never leave a new user without their link (App Review guideline 2.1).
+    await user.sendEmailVerification();
     await _db.doc('users/${user.uid}').set(_starterProfile(email: user.email, name: name, photoURL: defaultAvatar));
     await _db.doc('roles/$globalRoleId').update({
       'members': FieldValue.arrayUnion([user.uid]),
     });
-    await user.sendEmailVerification();
   }
 
   static Future<void> loginWithEmail(String email, String password) => _auth.signInWithEmailAndPassword(email: email, password: password);
@@ -74,9 +84,21 @@ class AuthService {
     await _provisionOAuthUser(user, photo);
   }
 
+  static Future<void> signInWithApple() async {
+    if (!appleSupported) throw UnsupportedError('Sign in with Apple is only available on iOS.');
+    final cred = await _auth.signInWithProvider(_appleProvider);
+    final user = cred.user!;
+    // Apple shares the name only on the very first sign-in, and users can hide
+    // their email behind a relay address, so fall back to something readable.
+    final name = user.displayName?.trim().isNotEmpty == true
+        ? user.displayName
+        : (user.email?.contains('privaterelay.appleid.com') == false ? user.email!.split('@').first : 'StemUp Member');
+    await _provisionOAuthUser(user, null, name: name);
+  }
+
   /// Creates users/{uid} (and adds them to the global role) on a first-time
-  /// Google sign-in. No-op if the profile already exists.
-  static Future<void> _provisionOAuthUser(User user, String? photoOverride) async {
+  /// Google or Apple sign-in. No-op if the profile already exists.
+  static Future<void> _provisionOAuthUser(User user, String? photoOverride, {String? name}) async {
     final ref = _db.doc('users/${user.uid}');
     if ((await ref.get()).exists) return;
 
@@ -93,7 +115,7 @@ class AuthService {
       }
     }
 
-    await ref.set(_starterProfile(email: user.email, name: user.displayName, photoURL: photoURL));
+    await ref.set(_starterProfile(email: user.email, name: name ?? user.displayName, photoURL: photoURL));
     await _db.doc('roles/$globalRoleId').update({
       'members': FieldValue.arrayUnion([user.uid]),
     });
@@ -133,7 +155,11 @@ class AuthService {
     if (user == null) return false;
 
     final providers = user.providerData.map((p) => p.providerId);
-    if (providers.contains('google.com')) {
+    String? appleAuthCode;
+    if (providers.contains('apple.com') && appleSupported) {
+      final cred = await user.reauthenticateWithProvider(_appleProvider);
+      appleAuthCode = cred.additionalUserInfo?.authorizationCode;
+    } else if (providers.contains('google.com')) {
       if (kIsWeb) {
         await user.reauthenticateWithPopup(GoogleAuthProvider());
       } else {
@@ -167,6 +193,10 @@ class AuthService {
     }
     writes.add(_db.doc('users/${user.uid}').delete());
     await Future.wait(writes);
+    // Apple requires revoking the app's Sign in with Apple tokens on deletion
+    if (appleAuthCode != null) {
+      await _auth.revokeTokenWithAuthorizationCode(appleAuthCode).catchError((_) {});
+    }
     await user.delete();
     if (_nativeGoogle) await GoogleSignIn.instance.signOut().catchError((_) {});
     return true;

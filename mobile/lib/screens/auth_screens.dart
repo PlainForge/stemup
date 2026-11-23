@@ -120,6 +120,47 @@ Widget _googleButton(VoidCallback onPressed, bool loading) => AppButton(
   onPressed: onPressed,
 );
 
+Widget _appleButton(VoidCallback onPressed, bool loading) => AppButton(
+  label: 'Continue with Apple',
+  icon: FontAwesomeIcons.apple.data,
+  style: AppButtonStyle.apple,
+  size: AppButtonSize.full,
+  loading: loading,
+  onPressed: onPressed,
+);
+
+/// Sign in with Apple (iOS only) stacked above Google, as App Review expects.
+Widget _oauthButtons({
+  required VoidCallback onApple,
+  required bool appleBusy,
+  required VoidCallback onGoogle,
+  required bool googleBusy,
+}) => Column(
+  crossAxisAlignment: CrossAxisAlignment.stretch,
+  children: [
+    if (AuthService.appleSupported) ...[_appleButton(onApple, appleBusy), const SizedBox(height: 12)],
+    _googleButton(onGoogle, googleBusy),
+  ],
+);
+
+Future<String?> _appleSignIn() async {
+  try {
+    await AuthService.signInWithApple();
+    return null;
+  } on FirebaseAuthException catch (e) {
+    debugPrint('Apple sign-in Firebase error: ${e.code} ${e.message}');
+    // The user closing Apple's sheet comes back as a cancel code (ASAuthorizationError 1001)
+    if (e.code.contains('cancel') || (e.message ?? '').contains('1001')) return '';
+    return switch (e.code) {
+      'account-exists-with-different-credential' || 'email-already-in-use' => 'This email is already registered. Please login instead.',
+      _ => 'Apple sign-in failed. Please try again.',
+    };
+  } catch (e) {
+    debugPrint('Apple sign-in error: $e');
+    return 'Apple sign-in failed. Please try again.';
+  }
+}
+
 Future<String?> _googleSignIn() async {
   try {
     await AuthService.signInWithGoogle();
@@ -156,6 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String _error = '';
   bool _busy = false;
   bool _googleBusy = false;
+  bool _appleBusy = false;
 
   @override
   void dispose() {
@@ -181,6 +223,20 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _apple() async {
+    setState(() {
+      _appleBusy = true;
+      _error = '';
+    });
+    final err = await _appleSignIn();
+    if (mounted) {
+      setState(() {
+        _appleBusy = false;
+        _error = err ?? '';
+      });
     }
   }
 
@@ -246,7 +302,7 @@ class _LoginScreenState extends State<LoginScreen> {
               line,
             ],
           ),
-          _googleButton(_google, _googleBusy),
+          _oauthButtons(onApple: _apple, appleBusy: _appleBusy, onGoogle: _google, googleBusy: _googleBusy),
         ],
       ),
     );
@@ -268,6 +324,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _error = '';
   bool _busy = false;
   bool _googleBusy = false;
+  bool _appleBusy = false;
 
   @override
   void dispose() {
@@ -296,6 +353,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _apple() async {
+    setState(() {
+      _appleBusy = true;
+      _error = '';
+    });
+    final err = await _appleSignIn();
+    if (mounted) {
+      setState(() {
+        _appleBusy = false;
+        _error = err ?? '';
+      });
     }
   }
 
@@ -343,7 +414,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _googleButton(_google, _googleBusy),
+          _oauthButtons(onApple: _apple, appleBusy: _appleBusy, onGoogle: _google, googleBusy: _googleBusy),
           const SizedBox(height: 12),
           AppButton(
             label: 'Continue with email',

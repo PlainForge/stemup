@@ -7,7 +7,8 @@ import 'package:flutter/services.dart';
 import '../theme/palette.dart';
 
 /// Button.tsx `color` prop.
-enum AppButtonStyle { neutral, blue, gray, red, green }
+/// [apple] follows Apple's Sign in with Apple guidelines: black in light mode, white in dark.
+enum AppButtonStyle { neutral, blue, gray, red, green, apple }
 
 /// Button.tsx `size` prop, for phone widths: xsm = 88, sm = 128, md = 208, full = stretch.
 enum AppButtonSize { xsm, sm, md, full }
@@ -39,6 +40,10 @@ class AppButton extends StatelessWidget {
       AppButtonStyle.gray => (Palette.buttonGray, const Color(0xFF000000)),
       AppButtonStyle.red => (Palette.buttonRed, const Color(0xFFFFFFFF)),
       AppButtonStyle.green => (Palette.green600, const Color(0xFFFFFFFF)),
+      AppButtonStyle.apple => (
+        Palette.resolve(context, const CupertinoDynamicColor.withBrightness(color: Color(0xFF000000), darkColor: Color(0xFFFFFFFF))),
+        Palette.resolve(context, const CupertinoDynamicColor.withBrightness(color: Color(0xFFFFFFFF), darkColor: Color(0xFF000000))),
+      ),
     };
     final width = switch (size) {
       AppButtonSize.xsm => 88.0,
