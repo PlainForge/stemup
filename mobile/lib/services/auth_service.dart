@@ -64,7 +64,50 @@ class AuthService {
     });
   }
 
-  static Future<void> loginWithEmail(String email, String password) => _auth.signInWithEmailAndPassword(email: email, password: password);
+  // ---- Linking Apple / Google / email accounts that share an email ----
+  //
+  // Firebase keeps one account per email. Signing in with a second provider
+  // for an email that already has an account fails with
+  // account-exists-with-different-credential. We hold on to that rejected
+  // credential and, once the person signs in the way they originally did,
+  // attach it to the account so both methods open the same profile.
+
+  static AuthCredential? _pendingCredential;
+  static String? _pendingEmail;
+
+  /// The provider the person is being asked to link ('Apple' / 'Google'), if any.
+  static String? get pendingLinkProvider => switch (_pendingCredential?.providerId) {
+    'apple.com' => 'Apple',
+    'google.com' => 'Google',
+    _ => null,
+  };
+
+  static void _rememberForLinking(FirebaseAuthException e, AuthCredential? fallback) {
+    if (e.code != 'account-exists-with-different-credential') return;
+    _pendingCredential = e.credential ?? fallback;
+    _pendingEmail = e.email?.toLowerCase();
+  }
+
+  /// Links any held credential to [user] when the emails match. Never throws:
+  /// a failed link must not undo a successful sign-in.
+  static Future<void> _linkPending(User user) async {
+    final pending = _pendingCredential;
+    if (pending == null) return;
+    final email = user.email?.toLowerCase();
+    if (_pendingEmail != null && email != _pendingEmail) return;
+    _pendingCredential = null;
+    _pendingEmail = null;
+    try {
+      await user.linkWithCredential(pending);
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Account link skipped: ${e.code} ${e.message}');
+    }
+  }
+
+  static Future<void> loginWithEmail(String email, String password) async {
+    final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
+    await _linkPending(cred.user!);
+  }
 
   static Future<OAuthCredential> _googleCredential() async {
     final account = await GoogleSignIn.instance.authenticate();
@@ -75,10 +118,21 @@ class AuthService {
 
   static Future<void> signInWithGoogle() async {
     if (!googleSupported) throw UnsupportedError('Google sign-in is only available on iOS, Android and web.');
-    final cred = kIsWeb
-        ? await _auth.signInWithPopup(GoogleAuthProvider())
-        : await _auth.signInWithCredential(await _googleCredential());
+    OAuthCredential? googleCred;
+    final UserCredential cred;
+    try {
+      if (kIsWeb) {
+        cred = await _auth.signInWithPopup(GoogleAuthProvider());
+      } else {
+        googleCred = await _googleCredential();
+        cred = await _auth.signInWithCredential(googleCred);
+      }
+    } on FirebaseAuthException catch (e) {
+      _rememberForLinking(e, googleCred);
+      rethrow;
+    }
     final user = cred.user!;
+    await _linkPending(user);
     // Google's default is a 96px thumbnail; ask for a high-res copy to store
     final photo = user.photoURL?.replaceAll(RegExp(r'=s\d+-c'), '=s400-c').replaceAll(RegExp(r'=s\d+$'), '=s400');
     await _provisionOAuthUser(user, photo);
@@ -86,8 +140,15 @@ class AuthService {
 
   static Future<void> signInWithApple() async {
     if (!appleSupported) throw UnsupportedError('Sign in with Apple is only available on iOS.');
-    final cred = await _auth.signInWithProvider(_appleProvider);
+    final UserCredential cred;
+    try {
+      cred = await _auth.signInWithProvider(_appleProvider);
+    } on FirebaseAuthException catch (e) {
+      _rememberForLinking(e, null);
+      rethrow;
+    }
     final user = cred.user!;
+    await _linkPending(user);
     // Apple shares the name only on the very first sign-in, and users can hide
     // their email behind a relay address, so fall back to something readable.
     final name = user.displayName?.trim().isNotEmpty == true

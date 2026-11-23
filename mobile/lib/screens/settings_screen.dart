@@ -170,7 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Image.memory(_photo!, width: Avatar.md, height: Avatar.md, fit: BoxFit.contain),
                           ),
                         )
-                      : Avatar(me.photoURL),
+                      : Avatar(me.photoURL, name: me.name),
                   const SizedBox(height: 8),
                   Pressable(
                     onPressed: _pickPhoto,

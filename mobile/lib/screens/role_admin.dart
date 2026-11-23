@@ -149,7 +149,7 @@ class _RoleAdminViewState extends State<RoleAdminView> {
         shadow: false,
         child: Row(
           children: [
-            Avatar(u.photoURL, size: Avatar.xs),
+            Avatar(u.photoURL, name: u.name, size: Avatar.xs),
             const SizedBox(width: 12),
             Expanded(child: info),
             for (var j = 0; j < actions.length; j++) ...[if (j > 0) const SizedBox(width: 8), actions[j]],
@@ -456,7 +456,7 @@ class _AssignTaskFormState extends State<_AssignTaskForm> {
                       ),
                       child: Row(
                         children: [
-                          Avatar(byId[uid]!.photoURL, size: Avatar.xxs),
+                          Avatar(byId[uid]!.photoURL, name: byId[uid]!.name, size: Avatar.xxs),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -890,7 +890,7 @@ class _EditMemberCardState extends State<_EditMemberCard> {
       children: [
         Row(
           children: [
-            Avatar(m.photoURL, size: Avatar.xs),
+            Avatar(m.photoURL, name: m.name, size: Avatar.xs),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

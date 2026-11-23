@@ -100,7 +100,7 @@ class _AlumniBatchScreenState extends State<AlumniBatchScreen> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Avatar(members[i].photoURL, size: Avatar.xxs),
+                        Avatar(members[i].photoURL, name: members[i].name, size: Avatar.xxs),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(

@@ -140,7 +140,7 @@ export default function ProfilePage() {
                 className={`flex flex-col items-center bg-white rounded-2xl shadow-xl p-6 w-full max-w-xs gap-4 transition-all duration-150 ${entered ? "opacity-100 scale-100" : "opacity-0 scale-90"}`}
                 onClick={(e) => e.stopPropagation()}
             >
-                <ProfileImg src={selectedUser.photoURL} />
+                <ProfileImg src={selectedUser.photoURL} alt={selectedUser.name} />
                 <h1 className="text-xl font-bold">{selectedUser.name}</h1>
 
                 {!isEditing ? (

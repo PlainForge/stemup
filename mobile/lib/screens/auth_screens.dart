@@ -143,6 +143,14 @@ Widget _oauthButtons({
   ],
 );
 
+/// Shown when an Apple/Google sign-in hits an email that already has an account.
+String _linkMessage() {
+  final provider = AuthService.pendingLinkProvider;
+  return provider == null
+      ? 'This email already has an account with a different sign-in method. Please sign in that way.'
+      : 'This email already has an account. Sign in the way you did before (email, Apple or Google) and $provider will be linked to it.';
+}
+
 Future<String?> _appleSignIn() async {
   try {
     await AuthService.signInWithApple();
@@ -152,7 +160,8 @@ Future<String?> _appleSignIn() async {
     // The user closing Apple's sheet comes back as a cancel code (ASAuthorizationError 1001)
     if (e.code.contains('cancel') || (e.message ?? '').contains('1001')) return '';
     return switch (e.code) {
-      'account-exists-with-different-credential' || 'email-already-in-use' => 'This email is already registered. Please login instead.',
+      'account-exists-with-different-credential' => _linkMessage(),
+      'email-already-in-use' => 'This email is already registered. Please login instead.',
       _ => 'Apple sign-in failed. Please try again.',
     };
   } catch (e) {
@@ -173,7 +182,8 @@ Future<String?> _googleSignIn() async {
     return switch (e.code) {
       'popup-closed-by-user' || 'cancelled-popup-request' => '',
       'popup-blocked' => 'Your browser blocked the sign-in popup. Allow popups and try again.',
-      'account-exists-with-different-credential' || 'email-already-in-use' => 'This email is already registered. Please login instead.',
+      'account-exists-with-different-credential' => _linkMessage(),
+      'email-already-in-use' => 'This email is already registered. Please login instead.',
       _ => 'Google sign-in failed. Please try again.',
     };
   } on UnsupportedError {

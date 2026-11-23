@@ -134,7 +134,7 @@ export default function Settings() {
                     <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
                         {/* Avatar */}
                         <div className="flex flex-col items-center gap-2 shrink-0">
-                            <ProfileImg src={preview ?? undefined} />
+                            <ProfileImg src={preview ?? undefined} alt={userData?.name} />
                             <label className="px-3 py-1.5 bg-gray-900 text-white rounded-xl text-xs cursor-pointer hover:bg-blue-600 transition-all duration-200">
                                 Change Photo
                                 <input

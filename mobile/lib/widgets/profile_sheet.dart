@@ -120,7 +120,7 @@ class _ProfileCardState extends State<_ProfileCard> {
 
     return Column(
       children: [
-        Avatar(_user.photoURL, size: Avatar.md),
+        Avatar(_user.photoURL, name: _user.name, size: Avatar.md),
         const SizedBox(height: 16),
         Heading(_user.name, size: 20, maxLines: 2),
         const SizedBox(height: 16),

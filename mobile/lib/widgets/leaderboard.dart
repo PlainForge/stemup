@@ -91,7 +91,7 @@ class Podium extends StatelessWidget {
             onPressed: () => showProfileSheet(context, u, roleId: roleId),
             child: Column(
               children: [
-                Avatar(u.photoURL, size: avatar),
+                Avatar(u.photoURL, name: u.name, size: avatar),
                 const SizedBox(height: 4),
                 Text(
                   u.name,
@@ -176,7 +176,7 @@ class RankRow extends StatelessWidget {
             onPressed: () => showProfileSheet(context, user, roleId: roleId),
             child: Row(
               children: [
-                Avatar(user.photoURL, size: Avatar.xxs),
+                Avatar(user.photoURL, name: user.name, size: Avatar.xxs),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(

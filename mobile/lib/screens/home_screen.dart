@@ -134,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Pressable(
                 onPressed: () => showProfileSheet(context, me),
-                child: Avatar(me.photoURL, size: Avatar.md),
+                child: Avatar(me.photoURL, name: me.name, size: Avatar.md),
               ),
               const SizedBox(height: 12),
               Heading(me.name, size: 24),
@@ -370,7 +370,7 @@ class _TopRow extends StatelessWidget {
               onPressed: () => showProfileSheet(context, user, roleId: roleId),
               child: Row(
                 children: [
-                  Avatar(user.photoURL, size: Avatar.xxs),
+                  Avatar(user.photoURL, name: user.name, size: Avatar.xxs),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

@@ -118,14 +118,27 @@ class EmptyState extends StatelessWidget {
 }
 
 /// Google photo URLs carry a size param like =s96-c; ui-avatars defaults to 64px.
-String optimizePhoto(String src) {
+/// Placeholder avatars are stored with name=User, so [name] is swapped in to
+/// make the initials match the person (and follow name changes).
+String optimizePhoto(String src, {String? name}) {
   if (src.contains('googleusercontent.com')) {
     return src.replaceAll(RegExp(r'=s\d+-c'), '=s400-c').replaceAll(RegExp(r'=s\d+$'), '=s400');
   }
   if (src.contains('ui-avatars.com')) {
     final uri = Uri.tryParse(src);
     // With a size param ui-avatars switches to SVG, which Flutter can't decode — ask for PNG explicitly
-    if (uri != null) return uri.replace(queryParameters: {...uri.queryParameters, 'size': '512', 'format': 'png'}).toString();
+    if (uri != null) {
+      return uri
+          .replace(
+            queryParameters: {
+              ...uri.queryParameters,
+              'size': '512',
+              'format': 'png',
+              if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+            },
+          )
+          .toString();
+    }
   }
   return src;
 }
@@ -135,10 +148,13 @@ Color avatarFill(BuildContext context) => Palette.isDark(context) ? const Color(
 
 /// ProfileImg.tsx sizes: xxs 32, xs 56, sm 96, md 136, lg 176.
 class Avatar extends StatelessWidget {
-  const Avatar(this.url, {super.key, this.size = 136});
+  const Avatar(this.url, {super.key, this.size = 136, this.name});
 
   final String url;
   final double size;
+
+  /// The person's name, used for the initials on placeholder avatars.
+  final String? name;
 
   static const xxs = 32.0, xs = 56.0, sm = 96.0, md = 136.0;
 
@@ -159,7 +175,7 @@ class Avatar extends StatelessWidget {
         child: url.isEmpty
             ? placeholder
             : Image.network(
-                optimizePhoto(url),
+                optimizePhoto(url, name: name),
                 // The whole photo, uncropped, inside the circle
                 fit: BoxFit.contain,
                 width: size,

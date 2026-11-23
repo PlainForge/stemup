@@ -75,7 +75,7 @@ class _OldUsersScreenState extends State<OldUsersScreen> {
                 shadow: false,
                 child: Row(
                   children: [
-                    Avatar(rows[i].photoURL, size: Avatar.xxs),
+                    Avatar(rows[i].photoURL, name: rows[i].name, size: Avatar.xxs),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
