@@ -147,15 +147,32 @@ class AuthService {
       _rememberForLinking(e, null);
       rethrow;
     }
-    final user = cred.user!;
-    await _linkPending(user);
-    // Apple shares the name only on the very first sign-in, and users can hide
-    // their email behind a relay address, so fall back to something readable.
-    final name = user.displayName?.trim().isNotEmpty == true
-        ? user.displayName
-        : (user.email?.contains('privaterelay.appleid.com') == false ? user.email!.split('@').first : 'StemUp Member');
+    await _linkPending(cred.user!);
+    // Firebase copies Apple's name onto the user just after sign-in completes,
+    // so re-read the user to pick it up.
+    await cred.user!.reload().catchError((_) {});
+    final user = _auth.currentUser ?? cred.user!;
+    final appleName = user.displayName?.trim();
+    final hasName = appleName != null && appleName.isNotEmpty;
+
+    // Apple shares the name only the first time an Apple ID signs in to the
+    // app, and users can hide their email behind a relay address, so fall back
+    // to something readable.
+    final name = hasName
+        ? appleName
+        : (user.email?.contains('privaterelay.appleid.com') == false ? user.email!.split('@').first : appleFallbackName);
     await _provisionOAuthUser(user, null, name: name);
+
+    // Profiles created before the name came through got the placeholder; fix them up.
+    if (hasName) {
+      final ref = _db.doc('users/${user.uid}');
+      final snap = await ref.get();
+      if (snap.data()?['name'] == appleFallbackName) await ref.update({'name': appleName});
+    }
   }
+
+  /// Name given to Apple accounts when Apple doesn't share one.
+  static const appleFallbackName = 'StemUp Member';
 
   /// Creates users/{uid} (and adds them to the global role) on a first-time
   /// Google or Apple sign-in. No-op if the profile already exists.
