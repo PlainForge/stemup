@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { FirebaseError } from "firebase/app";
 import LoginCard from "../components/LoginCard.tsx";
-import { firebaseAuthService } from "../lib/firebaseService.ts";
+import { firebaseAuthService, oauthErrorMessage } from "../lib/firebaseService.ts";
 import { useNavigate } from "react-router-dom";
 import { MainContext } from "../context/MainContext.ts";
 
@@ -20,22 +20,20 @@ export default function LoginPage() {
         }
     })
 
-    // Google Login/Register
-    const handleGoogleLogin = async () => {
+    // Google / Apple Login/Register
+    const handleOAuthLogin = async (signIn: () => Promise<void>) => {
         try {
-            await firebaseAuthService.signInWithGoogle();
+            await signIn();
             navigate("/");
             setPhrase("");
             setEmail("");
             setPassword("");
         } catch (err) {
-            if (err instanceof FirebaseError && err.code === "auth/email-already-in-use") {
-                setPhrase("This email is already registered. Please login instead.");
-            } else {
-                console.error("Registration error:", err);
-            }
+            setPhrase(oauthErrorMessage(err));
         }
     };
+    const handleGoogleLogin = () => handleOAuthLogin(firebaseAuthService.signInWithGoogle);
+    const handleAppleLogin = () => handleOAuthLogin(firebaseAuthService.signInWithApple);
 
 // Loging in with Email
     const loginWithEmail = async () => {
@@ -111,6 +109,7 @@ export default function LoginPage() {
                         phrase={phrase}
                         setPhrase={setPhrase}
                         handleGoogleLogin={handleGoogleLogin}
+                        handleAppleLogin={handleAppleLogin}
                         loginWithEmail={loginWithEmail}
                     />
                 </div>

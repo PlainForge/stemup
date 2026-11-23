@@ -1,9 +1,11 @@
-import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
+import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, linkWithCredential, OAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
 import { auth, db, storage } from "./firebase";
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, query, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { Capacitor } from "@capacitor/core";
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
+import { FirebaseError } from "firebase/app";
+import type { OAuthCredential } from "firebase/auth";
 import type { Role, UserData, UserRoleData } from "../myDataTypes";
 
 const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
@@ -56,7 +58,7 @@ export function classifySemesterReset(users: ResetUser[], removeRoleIds: Set<str
  * photoOverride lets callers pass a higher-res
  * photo URL than what's on the Auth user object (e.g. Google's upscaled photo).
  */
-async function provisionOAuthUser(user: User, photoOverride?: string) {
+async function provisionOAuthUser(user: User, photoOverride?: string, name?: string) {
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
     if (userSnap.exists()) return;
@@ -73,7 +75,7 @@ async function provisionOAuthUser(user: User, photoOverride?: string) {
 
     await setDoc(userRef, {
         email: user.email,
-        name: user.displayName,
+        name: name ?? user.displayName,
         roles: [{ id: GLOBAL_ROLE_ID, name: "global", points: 0, taskCompleted: 0 }],
         createdAt: new Date(),
         points: 0,
@@ -85,6 +87,53 @@ async function provisionOAuthUser(user: User, photoOverride?: string) {
     await updateDoc(doc(db, "roles", GLOBAL_ROLE_ID), {
         members: arrayUnion(user.uid),
     });
+}
+
+/** Name given to Apple accounts when Apple doesn't share one (same as the mobile app). */
+export const APPLE_FALLBACK_NAME = "StemUp Member";
+
+const appleProvider = () => {
+    const provider = new OAuthProvider("apple.com");
+    provider.addScope("email");
+    provider.addScope("name");
+    return provider;
+};
+
+// ---- Linking Apple / Google / email accounts that share an email ----
+// Firebase keeps one account per email, so signing in with a second provider
+// fails with account-exists-with-different-credential. Hold on to that rejected
+// credential and attach it once the person signs in the way they originally did.
+let pendingCredential: OAuthCredential | null = null;
+let pendingEmail: string | null = null;
+
+function rememberForLinking(err: unknown, fromError: (e: FirebaseError) => OAuthCredential | null) {
+    if (!(err instanceof FirebaseError) || err.code !== "auth/account-exists-with-different-credential") return;
+    pendingCredential = fromError(err);
+    const email = (err.customData as { email?: string } | undefined)?.email;
+    pendingEmail = email ? email.toLowerCase() : null;
+}
+
+/** Links any held credential to the user when the emails match. Never throws. */
+async function linkPending(user: User) {
+    const pending = pendingCredential;
+    if (!pending) return;
+    if (pendingEmail && user.email?.toLowerCase() !== pendingEmail) return;
+    pendingCredential = null;
+    pendingEmail = null;
+    try {
+        await linkWithCredential(user, pending);
+    } catch (err) {
+        console.warn("Account link skipped:", err);
+    }
+}
+
+/** The provider the person is being asked to link ("Apple" / "Google"), if any. */
+export function pendingLinkProvider() {
+    switch (pendingCredential?.providerId) {
+        case "apple.com": return "Apple";
+        case "google.com": return "Google";
+        default: return null;
+    }
 }
 
 async function removeUserRole(userId: string, roleId: string) {
@@ -147,7 +196,8 @@ export const firebaseAuthService = {
     async loginWithEmail(email: string, password: string) {
         if (!email || !password) return null;
 
-        await signInWithEmailAndPassword(auth, email, password);
+        const cred = await signInWithEmailAndPassword(auth, email, password);
+        await linkPending(cred.user);
     },
 
     /**
@@ -159,20 +209,57 @@ export const firebaseAuthService = {
      */
     async signInWithGoogle() {
         let userCred;
-        if (Capacitor.isNativePlatform()) {
-            const result = await FirebaseAuthentication.signInWithGoogle();
-            const idToken = result.credential?.idToken;
-            if (!idToken) throw new Error("No ID token returned from Google Sign-In");
-            userCred = await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
-        } else {
-            userCred = await signInWithPopup(auth, new GoogleAuthProvider());
+        try {
+            if (Capacitor.isNativePlatform()) {
+                const result = await FirebaseAuthentication.signInWithGoogle();
+                const idToken = result.credential?.idToken;
+                if (!idToken) throw new Error("No ID token returned from Google Sign-In");
+                userCred = await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+            } else {
+                userCred = await signInWithPopup(auth, new GoogleAuthProvider());
+            }
+        } catch (err) {
+            rememberForLinking(err, GoogleAuthProvider.credentialFromError);
+            throw err;
         }
         const user = userCred.user;
+        await linkPending(user);
         // Google's default is a 96px thumbnail; ask for a high-res copy to store
         const photoOverride = user.photoURL
             ? user.photoURL.replace(/=s\d+-c/, "=s400-c").replace(/=s\d+$/, "=s400")
             : undefined;
         await provisionOAuthUser(user, photoOverride);
+    },
+
+    /** Sign in with Apple uses a popup, so it's offered on the website only (not inside the Capacitor WebView). */
+    appleSupported: !Capacitor.isNativePlatform(),
+
+    async signInWithApple() {
+        let userCred;
+        try {
+            userCred = await signInWithPopup(auth, appleProvider());
+        } catch (err) {
+            rememberForLinking(err, OAuthProvider.credentialFromError);
+            throw err;
+        }
+        await linkPending(userCred.user);
+        // Firebase copies Apple's name onto the user just after sign-in; re-read to pick it up
+        await userCred.user.reload().catch(() => {});
+        const user = auth.currentUser ?? userCred.user;
+        const appleName = user.displayName?.trim();
+
+        // Apple shares the name only the first time an Apple ID signs in, and
+        // users can hide their email behind a relay address, so fall back to something readable
+        const name = appleName
+            || (user.email && !user.email.includes("privaterelay.appleid.com") ? user.email.split("@")[0] : APPLE_FALLBACK_NAME);
+        await provisionOAuthUser(user, undefined, name);
+
+        // Profiles created before the name came through got the placeholder; fix them up
+        if (appleName) {
+            const userRef = doc(db, "users", user.uid);
+            const snap = await getDoc(userRef);
+            if (snap.data()?.name === APPLE_FALLBACK_NAME) await updateDoc(userRef, { name: appleName });
+        }
     },
 
     async setAccountInformation(name: string | undefined, file: File | null, user: User, userData: UserData) {
@@ -223,6 +310,8 @@ export const firebaseAuthService = {
             const providerIds = user.providerData.map(p => p.providerId);
             if (providerIds.includes("google.com")) {
                 await reauthenticateWithPopup(user, new GoogleAuthProvider());
+            } else if (providerIds.includes("apple.com")) {
+                await reauthenticateWithPopup(user, appleProvider());
             } else {
                 const password = window.prompt("Please enter your password to confirm deletion:");
                 if (!password) return false;
@@ -542,4 +631,30 @@ export const firebaseAuthService = {
     onAuthStateChanged(callback: (user: User | null) => void) {
         return onAuthStateChanged(auth, callback);
     },
+}
+/**
+ * Turns an Apple/Google sign-in error into a message for the login screens.
+ * Returns "" when the person simply closed the popup.
+ */
+export function oauthErrorMessage(err: unknown): string {
+    if (!(err instanceof FirebaseError)) return "Sign-in failed. Please try again.";
+    switch (err.code) {
+        case "auth/popup-closed-by-user":
+        case "auth/cancelled-popup-request":
+        case "auth/user-cancelled":
+            return "";
+        case "auth/popup-blocked":
+            return "Your browser blocked the sign-in popup. Allow popups for this site and try again.";
+        case "auth/account-exists-with-different-credential": {
+            const provider = pendingLinkProvider();
+            return provider
+                ? `You already have an account with this email. Sign in the way you did before, and ${provider} will be linked to it.`
+                : "You already have an account with this email. Sign in the way you did before.";
+        }
+        case "auth/email-already-in-use":
+            return "This email is already registered. Please login instead.";
+        default:
+            console.error("Sign-in error:", err);
+            return "Sign-in failed. Please try again.";
+    }
 }

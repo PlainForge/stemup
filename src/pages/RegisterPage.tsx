@@ -3,8 +3,8 @@ import { FirebaseError } from "firebase/app";
 import RegisterCard from "../components/RegisterCard";
 import { motion } from "motion/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGoogle } from "@fortawesome/free-brands-svg-icons";
-import { firebaseAuthService } from "../lib/firebaseService";
+import { faApple, faGoogle } from "@fortawesome/free-brands-svg-icons";
+import { firebaseAuthService, oauthErrorMessage } from "../lib/firebaseService";
 import { useLocation, useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import LinkButton from "../components/LinkButton";
@@ -37,20 +37,16 @@ export default function RegisterPage() {
         }
     };
 
-    // Google Login/Register
-    const handleGoogleLogin = async () => {
+    // Google / Apple Login/Register
+    const handleOAuthLogin = async (signIn: () => Promise<void>) => {
         try {
-            await firebaseAuthService.signInWithGoogle();
+            await signIn();
             navigate("/");
             setPhrase("");
             setEmail("");
             setPassword("");
         } catch (err) {
-            if (err instanceof FirebaseError && err.code === "auth/email-already-in-use") {
-                setPhrase("This email is already registered. Please login instead.");
-            } else {
-                console.error("Registration error:", err);
-            }
+            setPhrase(oauthErrorMessage(err));
         }
     };
 
@@ -126,7 +122,13 @@ export default function RegisterPage() {
                             </div>
                             {phrase !== "" && <ErrorMessage>{phrase}</ErrorMessage>}
                             <div className="flex flex-col gap-3">
-                                <Button size="full" onClick={handleGoogleLogin}>
+                                {firebaseAuthService.appleSupported &&
+                                    <Button size="full" color="apple" onClick={() => handleOAuthLogin(firebaseAuthService.signInWithApple)}>
+                                        <FontAwesomeIcon icon={faApple} className="mr-2" />
+                                        Continue with Apple
+                                    </Button>
+                                }
+                                <Button size="full" onClick={() => handleOAuthLogin(firebaseAuthService.signInWithGoogle)}>
                                     <FontAwesomeIcon icon={faGoogle} className="mr-2" />
                                     Continue with Google
                                 </Button>

@@ -1,12 +1,13 @@
 import { motion } from "motion/react";
 import { auth } from "../lib/firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGoogle } from "@fortawesome/free-brands-svg-icons";
+import { faApple, faGoogle } from "@fortawesome/free-brands-svg-icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import Button from "./Button";
 import LinkButton from "./LinkButton";
 import Input from "./Input";
 import ErrorMessage from "./ErrorMessage";
+import { firebaseAuthService } from "../lib/firebaseService";
 
 interface LoginCardProps {
     email: string;
@@ -16,11 +17,12 @@ interface LoginCardProps {
     phrase: string;
     setPhrase: (phrase: string) => void;
     handleGoogleLogin: () => Promise<void>;
+    handleAppleLogin: () => Promise<void>;
     loginWithEmail: () => Promise<void>;
 }
 
 
-export default function LoginCard({email, setEmail, password, setPassword, phrase, handleGoogleLogin, loginWithEmail}: LoginCardProps) {
+export default function LoginCard({email, setEmail, password, setPassword, phrase, handleGoogleLogin, handleAppleLogin, loginWithEmail}: LoginCardProps) {
     const navigate = useNavigate?.();
     const location = useLocation();
     const isLogin = location.pathname === '/login';
@@ -79,10 +81,18 @@ export default function LoginCard({email, setEmail, password, setPassword, phras
                 <div className="flex-1 h-px bg-gray-200" />
             </div>
 
-            <Button size="full" onClick={handleGoogleLogin}>
-                <FontAwesomeIcon icon={faGoogle} className="mr-2" />
-                Continue with Google
-            </Button>
+            <div className="flex flex-col gap-3">
+                {firebaseAuthService.appleSupported &&
+                    <Button size="full" color="apple" onClick={handleAppleLogin}>
+                        <FontAwesomeIcon icon={faApple} className="mr-2" />
+                        Continue with Apple
+                    </Button>
+                }
+                <Button size="full" onClick={handleGoogleLogin}>
+                    <FontAwesomeIcon icon={faGoogle} className="mr-2" />
+                    Continue with Google
+                </Button>
+            </div>
         </motion.div>
     )
 }

@@ -19,6 +19,7 @@ export default function Button({size, type, color, extraClasses, children, onCli
         gray: "text-black bg-[rgb(200,200,200)] hover:bg-[rgb(170,170,170)]",
         blue: "text-white bg-blue-600 hover:bg-blue-800",
         green: "text-white bg-green-600 hover:bg-green-700",
+        apple: "text-white bg-black hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200",
     }[color];
     const sizeClass = {
         xsm: "w-22 lg:w-32 px-2",
