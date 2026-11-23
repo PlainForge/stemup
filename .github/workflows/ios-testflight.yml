@@ -64,8 +64,10 @@ jobs:
           echo "ASC_KEY_PATH=$RUNNER_TEMP/asc/AuthKey.p8" >> "$GITHUB_ENV"
 
       - name: Prepare Xcode project
-        # Generates Flutter's iOS build settings (version from pubspec, build number from CI)
-        run: flutter build ios --release --config-only --build-number="$BUILD_NUMBER"
+        # Generates Flutter's iOS build settings (version from pubspec, build number from CI).
+        # --no-codesign skips Flutter's local certificate check; the runner has none until
+        # the Archive step below creates/fetches one through the App Store Connect API key.
+        run: flutter build ios --release --config-only --no-codesign --build-number="$BUILD_NUMBER"
 
       - name: Archive
         run: |
