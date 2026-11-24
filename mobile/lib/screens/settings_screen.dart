@@ -142,18 +142,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return PageScaffold(
       title: 'Account Settings',
       children: [
-        // User ID under the title (font-mono text-xs text-gray-400), tap to copy
+        // User ID under the title, tap to copy (same chip as the role ID)
         Transform.translate(
-          offset: const Offset(0, -20),
-          child: GestureDetector(
-            onTap: () async {
-              await Clipboard.setData(ClipboardData(text: me.uid));
-              if (context.mounted) showToast(context, 'User ID copied');
-            },
-            child: Text(
-              me.uid,
-              style: TextStyle(fontSize: 12, fontFamily: 'Menlo', color: Palette.tertiary(context)),
-            ),
+          offset: const Offset(0, -16),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: CopyIdChip(me.uid, copiedMessage: 'User ID copied'),
           ),
         ),
 
@@ -464,12 +458,9 @@ class _AccessCardState extends State<_AccessCard> {
     final app = context.read<AppState>();
     final uid = app.user?.uid;
     if (uid == null || app.access != AccessLevel.user) return;
-    _sub = Db.myRequestsStream(uid).listen(
-      (r) {
-        if (mounted) setState(() => _request = r.where((x) => x.type == RequestType.instructor).firstOrNull);
-      },
-      onError: (_) {},
-    );
+    _sub = Db.myRequestsStream(uid).listen((r) {
+      if (mounted) setState(() => _request = r.where((x) => x.type == RequestType.instructor).firstOrNull);
+    }, onError: (_) {});
   }
 
   @override
@@ -538,7 +529,12 @@ class _AccessCardState extends State<_AccessCard> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  AppButton(label: 'Withdraw', size: AppButtonSize.xsm, style: AppButtonStyle.gray, onPressed: () => Db.deleteRequest(request.id)),
+                  AppButton(
+                    label: 'Withdraw',
+                    size: AppButtonSize.xsm,
+                    style: AppButtonStyle.gray,
+                    onPressed: () => Db.deleteRequest(request.id),
+                  ),
                 ],
               ),
             )

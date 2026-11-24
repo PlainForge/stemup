@@ -1,10 +1,13 @@
 // Shared pieces matching the web's recurring Tailwind patterns: white bordered
 // cards, uppercase tracking-widest captions, gray-50 inputs, pill chips, etc.
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../models/models.dart';
 import '../theme/palette.dart';
+import 'buttons.dart';
+import 'dialogs.dart';
 
 /// `bg-white rounded-2xl border border-gray-100 shadow-sm`, or `border-2` in
 /// [borderColor] for the highlighted variants.
@@ -516,5 +519,46 @@ class AccessTag extends StatelessWidget {
       AccessLevel.instructor => Palette.purple700,
       AccessLevel.admin => Palette.blue700,
     },
+  );
+}
+
+/// An ID in small gray monospace with a copy icon; tap to copy it (role and user IDs).
+class CopyIdChip extends StatelessWidget {
+  const CopyIdChip(this.id, {super.key, required this.copiedMessage});
+
+  final String id;
+
+  /// Toast shown once copied, e.g. "Role ID copied".
+  final String copiedMessage;
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+    onPressed: () async {
+      await Clipboard.setData(ClipboardData(text: id));
+      if (context.mounted) showToast(context, copiedMessage);
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Palette.fill(context),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Palette.resolve(context, Palette.gray100)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              id,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, fontFamily: 'Menlo', color: Palette.resolve(context, Palette.gray400)),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Icon(CupertinoIcons.doc_on_doc, size: 12, color: Palette.resolve(context, Palette.gray400)),
+        ],
+      ),
+    ),
   );
 }

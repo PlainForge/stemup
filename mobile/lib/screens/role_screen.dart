@@ -4,7 +4,6 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -15,7 +14,6 @@ import '../state/app_state.dart';
 import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
-import '../widgets/dialogs.dart';
 import '../widgets/leaderboard.dart';
 import '../widgets/page_scaffold.dart';
 import '../widgets/profile_sheet.dart';
@@ -139,7 +137,7 @@ class _RoleScreenState extends State<RoleScreen> {
     return PageScaffold(
       backLabel: 'Roles',
       backPath: '/roles',
-      trailing: _RoleIdChip(roleId: _id),
+      trailing: CopyIdChip(_id, copiedMessage: 'Role ID copied'),
       children: [
         Wrap(
           alignment: WrapAlignment.spaceBetween,
@@ -351,10 +349,16 @@ class _InstructorChips extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
             decoration: BoxDecoration(
-              color: Palette.resolve(context, const CupertinoDynamicColor.withBrightness(color: Color(0xFFFAF5FF), darkColor: Color(0xFF2E1065))),
+              color: Palette.resolve(
+                context,
+                const CupertinoDynamicColor.withBrightness(color: Color(0xFFFAF5FF), darkColor: Color(0xFF2E1065)),
+              ),
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: Palette.resolve(context, const CupertinoDynamicColor.withBrightness(color: Color(0xFFE9D5FF), darkColor: Color(0xFF581C87))),
+                color: Palette.resolve(
+                  context,
+                  const CupertinoDynamicColor.withBrightness(color: Color(0xFFE9D5FF), darkColor: Color(0xFF581C87)),
+                ),
               ),
             ),
             child: Row(
@@ -371,7 +375,10 @@ class _InstructorChips extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: Palette.resolve(context, const CupertinoDynamicColor.withBrightness(color: Palette.purple700, darkColor: Color(0xFFD8B4FE))),
+                      color: Palette.resolve(
+                        context,
+                        const CupertinoDynamicColor.withBrightness(color: Palette.purple700, darkColor: Color(0xFFD8B4FE)),
+                      ),
                     ),
                   ),
                 ),
@@ -380,32 +387,5 @@ class _InstructorChips extends StatelessWidget {
           ),
         ),
     ],
-  );
-}
-
-/// The role ID in small gray monospace, copied on tap.
-class _RoleIdChip extends StatelessWidget {
-  const _RoleIdChip({required this.roleId});
-
-  final String roleId;
-
-  @override
-  Widget build(BuildContext context) => Pressable(
-    onPressed: () async {
-      await Clipboard.setData(ClipboardData(text: roleId));
-      if (context.mounted) showToast(context, 'Role ID copied');
-    },
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Palette.fill(context),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Palette.resolve(context, Palette.gray100)),
-      ),
-      child: Text(
-        roleId,
-        style: TextStyle(fontSize: 12, fontFamily: 'Menlo', color: Palette.resolve(context, Palette.gray300)),
-      ),
-    ),
   );
 }

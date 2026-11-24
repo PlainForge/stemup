@@ -33,30 +33,39 @@ class AppShell extends StatelessWidget {
     final mq = MediaQuery.of(context);
     // bottom-[calc(env(safe-area-inset-bottom)+0.25rem)]
     final barBottom = mq.padding.bottom + 4;
+    // While typing, the keyboard covers the bar's spot; hide the bar rather than float it above the keyboard
+    final keyboardOpen = mq.viewInsets.bottom > 0;
 
     return CupertinoPageScaffold(
       child: Stack(
         children: [
-          // Pages see extra bottom padding so their content can scroll out from under the bar
+          // Pages see extra bottom padding so their content can scroll out from under the bar.
+          // The scaffold above already makes room for the keyboard, so pages get no view
+          // insets: otherwise each page makes room for it a second time (a keyboard-sized gap).
           MediaQuery(
-            data: mq.copyWith(padding: mq.padding.copyWith(bottom: barBottom + GlassTabBar.height + 8)),
+            data: mq
+                .removeViewInsets(removeBottom: true)
+                .copyWith(padding: mq.padding.copyWith(bottom: keyboardOpen ? 0 : barBottom + GlassTabBar.height + 8)),
             child: shell,
           ),
           Positioned(
             left: 16,
             right: 16,
             bottom: barBottom,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 448), // max-w-md
-                child: GlassTabBar(
-                  items: [for (final t in tabs) t.item],
-                  currentIndex: current,
-                  onSelect: (i) {
-                    final branch = tabs[i].branch;
-                    // Tapping the active tab pops back to that tab's root
-                    shell.goBranch(branch, initialLocation: branch == shell.currentIndex);
-                  },
+            child: Offstage(
+              offstage: keyboardOpen,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 448), // max-w-md
+                  child: GlassTabBar(
+                    items: [for (final t in tabs) t.item],
+                    currentIndex: current,
+                    onSelect: (i) {
+                      final branch = tabs[i].branch;
+                      // Tapping the active tab pops back to that tab's root
+                      shell.goBranch(branch, initialLocation: branch == shell.currentIndex);
+                    },
+                  ),
                 ),
               ),
             ),
