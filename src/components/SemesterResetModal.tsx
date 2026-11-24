@@ -101,7 +101,7 @@ export default function SemesterResetModal({ open, onClose }: SemesterResetModal
     const viewAlumniPage = () => {
         if (!result) return;
         onClose();
-        navigate(`/alumni/${result.batchId}`);
+        navigate(`/admin/inactive/${result.batchId}`);
     };
 
     return (
@@ -129,7 +129,7 @@ export default function SemesterResetModal({ open, onClose }: SemesterResetModal
                                 <h2 className="text-lg font-bold">Semester Reset</h2>
                                 <p className="text-sm text-gray-500 mt-1">
                                     Choose which roles to remove. Users whose only roles are removed will be archived to
-                                    an Alumni record and removed from active rosters; everyone else keeps their account,
+                                    Inactive Users and removed from active rosters; everyone else keeps their account,
                                     but their points and completed tasks reset to 0 for the new semester.
                                 </p>
                             </div>
@@ -186,7 +186,7 @@ export default function SemesterResetModal({ open, onClose }: SemesterResetModal
                             <div>
                                 <h2 className="text-lg font-bold">Name this Archive</h2>
                                 <p className="text-sm text-gray-500 mt-1">
-                                    Archived users will be saved under this name in the Alumni tab, e.g. "Fall 2025".
+                                    Archived users will be saved under this name in Admin → Inactive Users, e.g. "Fall 2025".
                                 </p>
                             </div>
 
@@ -288,7 +288,7 @@ export default function SemesterResetModal({ open, onClose }: SemesterResetModal
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <Button size="full" onClick={viewAlumniPage}>View Alumni Page</Button>
+                                <Button size="full" onClick={viewAlumniPage}>View Inactive Users</Button>
                                 <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600 transition-colors py-1 hover:cursor-pointer">
                                     Close
                                 </button>

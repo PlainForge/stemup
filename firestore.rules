@@ -1,0 +1,128 @@
+rules_version = '2';
+
+// StemUp access levels: User < Instructor < Admin.
+//   Admins:      ids in admins/all-perms (set by a developer in the console only)
+//   Instructors: ids in admins/instructors (set by admins from the Admin page)
+//   A role's instructors are listed in roles/{id}.instructors; an Instructor can
+//   run only the roles they're listed on. Admins can do everything.
+//
+// Deploy with: firebase deploy --only firestore:rules
+// This replaces whatever rules are in the Firebase console.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+
+    function isAdmin() {
+      return signedIn() && me() in get(/databases/$(database)/documents/admins/all-perms).data.get('ids', []);
+    }
+    function isInstructor() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/instructors)
+        && me() in get(/databases/$(database)/documents/admins/instructors).data.get('ids', []);
+    }
+    // Admins, or an Instructor listed on this role
+    function runsRole(roleId) {
+      return isAdmin() || (isInstructor()
+        && exists(/databases/$(database)/documents/roles/$(roleId))
+        && me() in get(/databases/$(database)/documents/roles/$(roleId)).data.get('instructors', []));
+    }
+    function changes() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    // The only difference between two lists is the signed-in user
+    function onlyMeChanged(before, after) {
+      return after.toSet().difference(before.toSet()).hasOnly([me()])
+        && before.toSet().difference(after.toSet()).hasOnly([me()]);
+    }
+
+    // Admins can read and write everything
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && me() == userId;
+      allow delete: if signedIn() && me() == userId;
+      // Your own profile, but not your own points, tasks completed or role list
+      allow update: if signedIn() && me() == userId
+        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email']);
+      // Instructors award points, edit stats, accept members and remove them
+      allow update: if isInstructor()
+        && changes().hasOnly(['roles', 'points', 'taskCompleted', 'currentRole']);
+    }
+
+    match /admins/{docId} {
+      allow read: if signedIn();
+      // Only admins (above) write here
+    }
+
+    match /roles/{roleId} {
+      allow read: if signedIn();
+      allow update: if runsRole(roleId);
+      // Anyone can ask to join (or withdraw), leave a role, or join the global role
+      allow update: if signedIn()
+        && changes().hasOnly(['members', 'pendingRequests'])
+        && onlyMeChanged(resource.data.get('members', []), request.resource.data.get('members', []))
+        && onlyMeChanged(resource.data.get('pendingRequests', []), request.resource.data.get('pendingRequests', []))
+        && (roleId == 'r3wUbRSCX7cxwBYhtAdg'
+            || request.resource.data.get('members', []).toSet().difference(resource.data.get('members', []).toSet()).size() == 0);
+      // Creating and deleting roles is admin-only (above)
+    }
+
+    match /rewards/{roleId} {
+      allow read: if signedIn();
+      allow write: if runsRole(roleId);
+    }
+
+    match /tasks/{taskId} {
+      allow read: if signedIn();
+      allow create: if runsRole(request.resource.data.roleId);
+      allow update, delete: if runsRole(resource.data.roleId);
+      // The person doing the task sets its status, asks for an extension, and
+      // (when submitting an overdue task) stops it auto-deleting
+      allow update: if signedIn() && resource.data.assignedTo == me()
+        && changes().hasOnly(['status', 'extensionRequested', 'deleteAt']);
+      // Deleting your account removes your tasks
+      allow delete: if signedIn() && resource.data.assignedTo == me();
+    }
+
+    match /tasksSubmitted/{taskId} {
+      allow read: if signedIn();
+      // Submitting your own task, for the points it's actually worth
+      allow create: if signedIn()
+        && request.resource.data.assignedTo == me()
+        && request.resource.data.complete == false
+        && exists(/databases/$(database)/documents/tasks/$(taskId))
+        && get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedTo == me()
+        && request.resource.data.points == get(/databases/$(database)/documents/tasks/$(taskId)).data.points
+        && request.resource.data.roleId == get(/databases/$(database)/documents/tasks/$(taskId)).data.roleId;
+      allow update, delete: if runsRole(resource.data.roleId);
+      allow delete: if signedIn() && resource.data.assignedTo == me();
+    }
+
+    // Saved Data (role resets). Resets run when an admin approves them.
+    match /leaderboardSnapshots/{snapId} {
+      allow read: if signedIn();
+    }
+
+    // Requests for an admin: Instructor access, a new role, a role reset
+    match /requests/{requestId} {
+      allow read: if signedIn() && (resource.data.uid == me() || isInstructor());
+      allow create: if signedIn()
+        && request.resource.data.uid == me()
+        && (request.resource.data.type == 'instructor'
+            || (request.resource.data.type == 'createRole' && isInstructor())
+            || (request.resource.data.type == 'resetRole' && runsRole(request.resource.data.roleId)));
+      // Withdrawing your own request; approving and declining is admin-only (above)
+      allow delete: if signedIn() && resource.data.uid == me();
+    }
+
+    match /bugs/{bugId} {
+      allow create: if signedIn() && request.resource.data.userId == me();
+    }
+
+    // Inactive Users archives (alumni/{batch}/members/{uid}) are admin-only (above).
+    // emailThrottle is written by Cloud Functions only.
+  }
+}

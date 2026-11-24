@@ -4,11 +4,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 
+import 'screens/admin_screen.dart';
 import 'screens/alumni_batch_screen.dart';
-import 'screens/alumni_screen.dart';
 import 'screens/auth_screens.dart';
 import 'screens/home_screen.dart';
-import 'screens/old_users_screen.dart';
 import 'screens/role_screen.dart';
 import 'screens/roles_screen.dart';
 import 'screens/settings_screen.dart';
@@ -19,7 +18,7 @@ import 'widgets/page_scaffold.dart';
 Page<void> _page(Widget child, GoRouterState state) => CupertinoPage<void>(key: state.pageKey, child: child);
 
 const _authPaths = {'/splash', '/login', '/register', '/verify'};
-const _adminPrefixes = ['/alumni', '/old-users'];
+const _adminPrefixes = ['/admin'];
 
 GoRouter buildRouter(AppState app) => GoRouter(
   initialLocation: '/splash',
@@ -35,6 +34,8 @@ GoRouter buildRouter(AppState app) => GoRouter(
       final role = app.userData?.currentRole ?? '';
       return role.isEmpty ? '/' : '/roles/$role';
     }
+    // Alumni and Old Users became the Admin tab's Inactive Users
+    if (loc.startsWith('/alumni') || loc.startsWith('/old-users')) return '/admin';
     if (!app.isAdmin && app.admins.isNotEmpty && _adminPrefixes.any(loc.startsWith)) return '/';
     return null;
   },
@@ -67,19 +68,20 @@ GoRouter buildRouter(AppState app) => GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
-              path: '/alumni',
-              pageBuilder: (_, s) => _page(const AlumniScreen(), s),
+              path: '/admin',
+              pageBuilder: (_, s) => _page(const AdminScreen(), s),
               routes: [
                 GoRoute(
-                  path: ':id',
+                  path: 'roles/:id',
+                  pageBuilder: (_, s) => _page(AdminRoleScreen(roleId: s.pathParameters['id']!), s),
+                ),
+                GoRoute(
+                  path: 'inactive/:id',
                   pageBuilder: (_, s) => _page(AlumniBatchScreen(batchId: s.pathParameters['id']!), s),
                 ),
               ],
             ),
           ],
-        ),
-        StatefulShellBranch(
-          routes: [GoRoute(path: '/old-users', pageBuilder: (_, s) => _page(const OldUsersScreen(), s))],
         ),
         StatefulShellBranch(
           routes: [GoRoute(path: '/settings', pageBuilder: (_, s) => _page(const SettingsScreen(), s))],

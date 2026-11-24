@@ -8,7 +8,8 @@ import * as nodemailer from "nodemailer";
 initializeApp();
 
 /**
- * Emails every admin whenever a member submits a task for approval.
+ * Emails every admin, and the role's instructors, whenever a member submits a
+ * task for approval.
  */
 export const notifyAdminsOnTaskSubmission = onDocumentCreated(
   {
@@ -21,25 +22,33 @@ export const notifyAdminsOnTaskSubmission = onDocumentCreated(
 
     const db = getFirestore();
 
-    const adminsSnap = await db.doc("admins/all-perms").get();
-    const adminIds: string[] = adminsSnap.data()?.ids ?? [];
-    if (adminIds.length === 0) return;
-
-    const [adminDocs, roleSnap] = await Promise.all([
-      Promise.all(adminIds.map((id) => db.doc(`users/${id}`).get())),
+    const [adminsSnap, instructorsSnap, roleSnap] = await Promise.all([
+      db.doc("admins/all-perms").get(),
+      db.doc("admins/instructors").get(),
       submission.roleId ? db.doc(`roles/${submission.roleId}`).get() : Promise.resolve(null),
     ]);
+    const adminIds: string[] = adminsSnap.data()?.ids ?? [];
+    // Only people who still have Instructor access count as the role's instructors
+    const instructorIds: string[] = instructorsSnap.data()?.ids ?? [];
+    const roleInstructors: string[] = ((roleSnap?.data()?.instructors as string[] | undefined) ?? [])
+      .filter((id) => instructorIds.includes(id));
+    const recipientIds = Array.from(new Set([...adminIds, ...roleInstructors]));
+    if (recipientIds.length === 0) return;
 
-    const adminEmails = adminDocs
+    const recipientDocs = await Promise.all(recipientIds.map((id) => db.doc(`users/${id}`).get()));
+
+    const adminEmails = recipientDocs
       .map((d) => d.data()?.email as string | undefined)
       .filter((email): email is string => !!email);
 
     if (adminEmails.length === 0) {
-      logger.warn("No admin emails found; skipping task submission notification");
+      logger.warn("No admin or instructor emails found; skipping task submission notification");
       return;
     }
 
     const roleName = roleSnap?.exists ? (roleSnap.data()?.name as string) : "Unknown role";
+
+    const esc = (v: unknown) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
     const transporter = nodemailer.createTransport({
       service: "gmail",
@@ -55,14 +64,15 @@ export const notifyAdminsOnTaskSubmission = onDocumentCreated(
         `${submission.description ? `Description: ${submission.description}\n\n` : ""}` +
         `Review it in the app under that role's Tasks tab.`,
       html:
-        `<p><strong>${submission.assignedName}</strong> submitted <strong>${submission.title}</strong> ` +
-        `(${submission.points} pts, ${roleName}) for approval.</p>` +
-        (submission.description ? `<p>${submission.description}</p>` : "") +
+        `<p><strong>${esc(submission.assignedName)}</strong> submitted <strong>${esc(submission.title)}</strong> ` +
+        `(${esc(submission.points)} pts, ${esc(roleName)}) for approval.</p>` +
+        (submission.description ? `<p>${esc(submission.description)}</p>` : "") +
         `<p>Review it in the app under that role's Tasks tab.</p>`,
     });
 
-    logger.info(`Notified ${adminEmails.length} admin(s) of task submission "${submission.title}"`);
+    logger.info(`Notified ${adminEmails.length} admin(s)/instructor(s) of task submission "${submission.title}"`);
   }
 );
 
 export { sendVerificationEmail, sendPasswordResetEmail } from "./authEmails";
+export { checkName, cleanProfileName } from "./nameFilter";

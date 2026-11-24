@@ -17,6 +17,8 @@ export default function Button({size, type, color, extraClasses, children, onCli
         neutral: "text-white bg-[rgb(24,24,24)] hover:bg-[rgb(24,24,255)]",
         red: "text-white bg-[rgb(255,24,24)] hover:bg-[rgb(255,100,100)]",
         gray: "text-black bg-[rgb(200,200,200)] hover:bg-[rgb(170,170,170)]",
+        // Soft and secondary, so Cancel never competes with the main action (follows dark mode)
+        cancel: "text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200",
         blue: "text-white bg-blue-600 hover:bg-blue-800",
         green: "text-white bg-green-600 hover:bg-green-700",
         apple: "text-white bg-black hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200",

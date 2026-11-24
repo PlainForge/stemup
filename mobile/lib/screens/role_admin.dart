@@ -1,9 +1,12 @@
 // components/RoleAdmin.tsx: join requests, task assignment, the full task list
-// with review actions, member stats, rewards and role config.
+// with review actions, member stats, instructors, rewards and role config.
+// Shown as the role page's Instructor tab for the role's instructors, and on
+// the admin role screen (/admin/roles/:id) for admins.
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
@@ -16,7 +19,7 @@ import '../widgets/dialogs.dart';
 import '../widgets/sliding_tabs.dart';
 import 'task_widgets.dart';
 
-enum _AdminTab { requests, creation, tasks, members, rewards, config }
+enum _AdminTab { requests, creation, tasks, members, instructors, rewards, config }
 
 enum _TaskFilter { all, submitted, pending, done }
 
@@ -82,7 +85,8 @@ class _RoleAdminViewState extends State<RoleAdminView> {
     super.dispose();
   }
 
-  List<UserData> _nonAdmins(AppState app) => widget.members.where((m) => !app.admins.contains(m.uid)).toList();
+  /// Members who take part: admins and the role's instructors aren't given tasks or ranked.
+  List<UserData> _nonAdmins(AppState app) => widget.members.where((m) => !app.isStaff(role, m.uid)).toList();
 
   SubmittedTask? _pendingFor(String taskId) {
     for (final s in _submitted) {
@@ -103,6 +107,7 @@ class _RoleAdminViewState extends State<RoleAdminView> {
             const SlidingTab(_AdminTab.creation, 'Assign Task'),
             SlidingTab(_AdminTab.tasks, 'Tasks', count: _submitted.where((s) => !s.complete).length),
             const SlidingTab(_AdminTab.members, 'Members'),
+            const SlidingTab(_AdminTab.instructors, 'Instructors'),
             const SlidingTab(_AdminTab.rewards, 'Rewards'),
             const SlidingTab(_AdminTab.config, 'Config'),
           ],
@@ -127,8 +132,9 @@ class _RoleAdminViewState extends State<RoleAdminView> {
               _AdminTab.creation => _AssignTaskForm(role: role, members: _nonAdmins(app)),
               _AdminTab.tasks => _tasksTab(context, app),
               _AdminTab.members => _membersTab(context, app),
-              _AdminTab.rewards => _RewardsForm(roleId: role.id),
-              _AdminTab.config => _ConfigTab(role: role, rankedMembers: _nonAdmins(app)..sort((a, b) => b.points.compareTo(a.points))),
+              _AdminTab.instructors => _InstructorsTab(role: role),
+              _AdminTab.rewards => _RewardsForm(role: role),
+              _AdminTab.config => _ConfigTab(role: role),
             },
           ),
         ),
@@ -291,7 +297,7 @@ class _RoleAdminViewState extends State<RoleAdminView> {
               AppButton(
                 label: 'Edit',
                 size: AppButtonSize.xsm,
-                style: AppButtonStyle.gray,
+                style: AppButtonStyle.blue,
                 onPressed: () => showModalCard<void>(
                   context,
                   builder: (_) => _EditMemberCard(member: list[i], roleId: role.id),
@@ -762,7 +768,7 @@ class _AdminTaskCardState extends State<_AdminTaskCard> {
                   AppButton(label: 'Save', style: AppButtonStyle.blue, size: AppButtonSize.full, onPressed: _saveEdit),
                   AppButton(
                     label: 'Cancel',
-                    style: AppButtonStyle.gray,
+                    style: AppButtonStyle.cancel,
                     size: AppButtonSize.full,
                     onPressed: () => setState(() => _mode = _CardMode.view),
                   ),
@@ -795,7 +801,7 @@ class _AdminTaskCardState extends State<_AdminTaskCard> {
                   ),
                   AppButton(
                     label: 'Cancel',
-                    style: AppButtonStyle.gray,
+                    style: AppButtonStyle.cancel,
                     size: AppButtonSize.full,
                     onPressed: () => setState(() {
                       _mode = _CardMode.view;
@@ -807,7 +813,7 @@ class _AdminTaskCardState extends State<_AdminTaskCard> {
             ),
             _CardMode.view => _row([
               if (!t.complete && sub == null)
-                AppButton(label: 'Edit', style: AppButtonStyle.gray, size: AppButtonSize.full, onPressed: _startEdit),
+                AppButton(label: 'Edit', style: AppButtonStyle.blue, size: AppButtonSize.full, onPressed: _startEdit),
               if (!t.complete && sub == null)
                 AppButton(
                   label: 'Reassign',
@@ -884,7 +890,9 @@ class _EditMemberCardState extends State<_EditMemberCard> {
     final m = widget.member;
     final dp = _read(_points) - m.points;
     final dt = _read(_tasks) - m.taskCompleted;
-    final g = _global;
+    // Only admins change global totals; instructors edit this role's stats only
+    final isAdmin = context.watch<AppState>().isAdmin;
+    final g = isAdmin ? _global : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -937,9 +945,11 @@ class _EditMemberCardState extends State<_EditMemberCard> {
           ),
         ],
         const SizedBox(height: 20),
-        AppButton(label: 'Save to Role Only', size: AppButtonSize.full, onPressed: () => _save(false)),
-        const SizedBox(height: 8),
-        AppButton(label: 'Save to Role + Global', style: AppButtonStyle.gray, size: AppButtonSize.full, onPressed: () => _save(true)),
+        AppButton(label: isAdmin ? 'Save to Role Only' : 'Save', size: AppButtonSize.full, onPressed: () => _save(false)),
+        if (isAdmin) ...[
+          const SizedBox(height: 8),
+          AppButton(label: 'Save to Role + Global', style: AppButtonStyle.gray, size: AppButtonSize.full, onPressed: () => _save(true)),
+        ],
         const SizedBox(height: 4),
         Center(
           child: LinkText('Cancel', size: 12, color: Palette.gray400, onPressed: () => Navigator.pop(context)),
@@ -952,9 +962,9 @@ class _EditMemberCardState extends State<_EditMemberCard> {
 // ── Rewards & config ────────────────────────────────────────────────────
 
 class _RewardsForm extends StatefulWidget {
-  const _RewardsForm({required this.roleId});
+  const _RewardsForm({required this.role});
 
-  final String roleId;
+  final Role role;
 
   @override
   State<_RewardsForm> createState() => _RewardsFormState();
@@ -962,59 +972,219 @@ class _RewardsForm extends StatefulWidget {
 
 class _RewardsFormState extends State<_RewardsForm> {
   final _fields = List.generate(3, (_) => TextEditingController());
+  late final _title = TextEditingController(text: widget.role.rewardsTitle);
 
   @override
   void dispose() {
     for (final f in _fields) {
       f.dispose();
     }
+    _title.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (_fields.any((f) => f.text.trim().isEmpty)) return;
-    await Db.setRewards(widget.roleId, _fields[0].text.trim(), _fields[1].text.trim(), _fields[2].text.trim());
+    await Db.setRewards(widget.role.id, _fields[0].text.trim(), _fields[1].text.trim(), _fields[2].text.trim());
     for (final f in _fields) {
       f.clear();
     }
     if (mounted) showToast(context, 'Rewards updated successfully');
   }
 
+  Future<void> _saveTitle() async {
+    await Db.setRewardsTitle(widget.role.id, _title.text);
+    if (mounted) showToast(context, _title.text.trim().isEmpty ? 'Title reset to the current month' : 'Title updated');
+  }
+
   @override
-  Widget build(BuildContext context) => _Section(
-    title: 'Set monthly rewards',
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      for (var i = 0; i < 3; i++)
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      _Section(
+        title: 'Rewards title',
+        children: [
+          const Muted('The heading on the Rewards tab. Leave it empty to show the current month.'),
+          AppTextField(
+            controller: _title,
+            placeholder: '${DateFormat('MMMM', 'en_US').format(DateTime.now())} Rewards',
+            maxLength: 48,
+            onSubmitted: (_) => _saveTitle(),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton(label: 'Save Title', size: AppButtonSize.sm, onPressed: _saveTitle),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      _Section(
+        title: 'Set rewards',
+        children: [
+          for (var i = 0; i < 3; i++)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                MedalIcon(i, size: 14),
-                const SizedBox(width: 6),
-                Text(
-                  ['1st Place', '2nd Place', '3rd Place'][i],
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.resolve(context, const Color(0xFF4B5563))),
+                Row(
+                  children: [
+                    MedalIcon(i, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      ['1st Place', '2nd Place', '3rd Place'][i],
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.resolve(context, const Color(0xFF4B5563))),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 6),
+                AppTextField(controller: _fields[i], placeholder: 'Reward description'),
               ],
             ),
-            const SizedBox(height: 6),
-            AppTextField(controller: _fields[i], placeholder: 'Reward description'),
-          ],
-        ),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: AppButton(label: 'Save Rewards', size: AppButtonSize.sm, onPressed: _save),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton(label: 'Save Rewards', size: AppButtonSize.sm, onPressed: _save),
+          ),
+        ],
       ),
     ],
   );
 }
 
-class _ConfigTab extends StatefulWidget {
-  const _ConfigTab({required this.role, required this.rankedMembers});
+// ── Instructors ─────────────────────────────────────────────────────────
+
+class _InstructorsTab extends StatefulWidget {
+  const _InstructorsTab({required this.role});
 
   final Role role;
-  final List<UserData> rankedMembers;
+
+  @override
+  State<_InstructorsTab> createState() => _InstructorsTabState();
+}
+
+class _InstructorsTabState extends State<_InstructorsTab> {
+  StreamSubscription<List<UserData>>? _sub;
+  String _key = '';
+  List<UserData> _people = const [];
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  /// Profiles for the role's instructors and everyone who could be added.
+  void _sync(AppState app) {
+    final uids = {...widget.role.instructors, ...app.instructors}.toList()..sort();
+    final key = uids.join(',');
+    if (key == _key) return;
+    _key = key;
+    _sub?.cancel();
+    _sub = Db.usersStream(uids).listen((u) {
+      if (mounted) setState(() => _people = u);
+    });
+  }
+
+  Future<void> _remove(AppState app, String uid, String name) async {
+    final self = uid == app.user!.uid;
+    final ok = await confirmDialog(
+      context,
+      title: self ? 'Leave as Instructor?' : 'Remove Instructor?',
+      message: self
+          ? "You'll stay a member of this role but won't be able to run it any more."
+          : "$name will stay a member of this role but won't be able to run it any more.",
+      confirmLabel: 'Remove',
+      destructive: true,
+    );
+    if (ok) await Db.removeRoleInstructor(widget.role.id, uid);
+  }
+
+  Future<void> _add(List<UserData> addable) async {
+    final uid = await pickOption<String>(context, title: 'Give access to', options: [for (final p in addable) (p.uid, p.name)]);
+    if (uid == null) return;
+    await Db.addRoleInstructor(widget.role, uid);
+    if (mounted) showToast(context, 'Instructor added');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    _sync(app);
+    final role = widget.role;
+    final byId = {for (final p in _people) p.uid: p};
+    final addable = _people.where((p) => app.instructors.contains(p.uid) && !role.instructors.contains(p.uid) && !app.admins.contains(p.uid)).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Section(
+          title: 'Running this role',
+          children: [
+            const Muted(
+              'Instructors here can give and review tasks, edit points, accept members and request resets. Admins can always run every role.',
+            ),
+            if (role.instructors.isEmpty) const Muted('No instructors yet.', color: Palette.gray400),
+            for (final uid in role.instructors)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Palette.fill(context),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Palette.separator(context)),
+                ),
+                child: Row(
+                  children: [
+                    Avatar(byId[uid]?.photoURL ?? '', name: byId[uid]?.name ?? '', size: Avatar.xxs),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${byId[uid]?.name ?? 'Loading...'}${uid == app.user!.uid ? ' (you)' : ''}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.label(context)),
+                          ),
+                          Muted(
+                            '${role.createdBy == uid ? 'Created this role' : 'Instructor'}'
+                            '${app.instructors.contains(uid) ? '' : ' · No longer an Instructor'}',
+                            size: 12,
+                            color: Palette.gray400,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (app.isAdmin || uid == app.user!.uid || role.createdBy != uid)
+                      AppButton(
+                        label: 'Remove',
+                        size: AppButtonSize.xsm,
+                        style: AppButtonStyle.red,
+                        onPressed: () => _remove(app, uid, byId[uid]?.name ?? 'This instructor'),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _Section(
+          title: 'Add an instructor',
+          children: [
+            if (addable.isEmpty)
+              const Muted('Every instructor already has access. Admins can make more people Instructors from the Admin page.', color: Palette.gray400)
+            else
+              PickerRow(value: 'Select an instructor', placeholder: true, onTap: () => _add(addable)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ConfigTab extends StatefulWidget {
+  const _ConfigTab({required this.role});
+
+  final Role role;
 
   @override
   State<_ConfigTab> createState() => _ConfigTabState();
@@ -1023,10 +1193,25 @@ class _ConfigTab extends StatefulWidget {
 class _ConfigTabState extends State<_ConfigTab> {
   final _name = TextEditingController();
   bool _resetting = false;
+  StreamSubscription<List<StemRequest>>? _resetSub;
+  StemRequest? _pendingReset;
+
+  @override
+  void initState() {
+    super.initState();
+    // A reset this role is waiting on an admin to approve
+    _resetSub = Db.roleRequestsStream(widget.role.id).listen(
+      (r) {
+        if (mounted) setState(() => _pendingReset = r.where((x) => x.type == RequestType.resetRole).firstOrNull);
+      },
+      onError: (_) {},
+    );
+  }
 
   @override
   void dispose() {
     _name.dispose();
+    _resetSub?.cancel();
     super.dispose();
   }
 
@@ -1038,19 +1223,36 @@ class _ConfigTabState extends State<_ConfigTab> {
     if (mounted) showToast(context, 'Role name updated successfully');
   }
 
+  // Admins reset straight away; instructors send the reset to an admin to approve
   Future<void> _reset() async {
-    final ok = await confirmDialog(
+    final app = context.read<AppState>();
+    final isAdmin = app.isAdmin;
+    final saveName = await promptText(
       context,
-      title: 'Force Reset',
-      message: 'Are you sure you want to force reset? This cannot be undone.',
-      confirmLabel: 'Reset',
-      destructive: true,
+      title: isAdmin ? 'Reset Role' : 'Request Reset',
+      message: isAdmin
+          ? "Every member's points and tasks completed in this role are saved under this name on the Saved Data tab, then cleared along with all tasks and prizes."
+          : "Name this save. An admin will review the reset; once approved, every member's points and tasks completed are saved under this name on the Saved Data tab, then cleared along with all tasks and prizes.",
+      placeholder: 'e.g. ${DateFormat('MMMM y', 'en_US').format(DateTime.now())}',
+      confirmLabel: isAdmin ? 'Reset' : 'Send Request',
+      destructive: isAdmin,
     );
-    if (!ok) return;
+    if (saveName == null || !mounted) return;
+    if (saveName.trim().isEmpty) {
+      await alertDialog(context, title: 'Name needed', message: 'Please enter a name for the saved data.');
+      return;
+    }
     setState(() => _resetting = true);
     try {
-      await Db.forceResetRole(widget.role.id, widget.rankedMembers);
-      if (mounted) showToast(context, 'Role has been reset successfully');
+      if (isAdmin) {
+        await Db.resetRole(widget.role.id, saveName.trim());
+        if (mounted) showToast(context, 'Role reset. Its data is on the Saved Data tab.');
+      } else {
+        await Db.requestRoleReset(app.user!.uid, app.userData?.name ?? '', widget.role, saveName);
+        if (mounted) showToast(context, 'Reset requested. An admin will review it.');
+      }
+    } catch (_) {
+      if (mounted) showToast(context, "Couldn't reset the role. Please try again.", error: true);
     } finally {
       if (mounted) setState(() => _resetting = false);
     }
@@ -1066,13 +1268,15 @@ class _ConfigTabState extends State<_ConfigTab> {
       destructive: true,
     );
     if (!ok) return;
-    router.go('/roles');
+    router.go('/admin');
     await Db.deleteRole(widget.role.id);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isAdmin = context.watch<AppState>().isAdmin;
     final on = widget.role.showInGlobalLeaderboard;
+    final pending = _pendingReset;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1090,7 +1294,7 @@ class _ConfigTabState extends State<_ConfigTab> {
         _Section(
           title: 'Global Leaderboard',
           children: [
-            const Muted('When enabled, members of this role can see the global leaderboard on the home page.'),
+            const Muted('When enabled, every member of this role can see the global leaderboard on the home page.'),
             Row(
               children: [
                 Expanded(
@@ -1111,29 +1315,57 @@ class _ConfigTabState extends State<_ConfigTab> {
         ),
         const SizedBox(height: 16),
         _Section(
-          title: 'Force reset',
+          title: 'Reset role',
           children: [
-            const Muted(
-              "Saves a leaderboard snapshot, then clears all tasks, submissions, and resets every member's points and task count for this role.",
+            Muted(
+              "Saves every member's points and tasks completed under a name you choose (shown with the date on the Saved Data tab), "
+              "then clears this role's tasks, submissions and prizes and sets everyone back to 0."
+              '${isAdmin ? '' : ' An admin has to approve it first.'}',
             ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppButton(label: 'Force Reset', size: AppButtonSize.sm, loading: _resetting, onPressed: _reset),
-            ),
+            if (pending != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Palette.amber50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Reset requested as "${pending.saveName}". Waiting for an admin.',
+                        style: const TextStyle(fontSize: 14, color: Palette.amber700),
+                      ),
+                    ),
+                    if (!isAdmin) ...[
+                      const SizedBox(width: 8),
+                      AppButton(label: 'Cancel', size: AppButtonSize.xsm, style: AppButtonStyle.cancel, onPressed: () => Db.deleteRequest(pending.id)),
+                    ],
+                  ],
+                ),
+              )
+            else
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(label: isAdmin ? 'Reset Role' : 'Request Reset', size: AppButtonSize.sm, loading: _resetting, onPressed: _reset),
+              ),
           ],
         ),
-        const SizedBox(height: 16),
-        _Section(
-          title: 'Danger Zone',
-          danger: true,
-          children: [
-            const Muted('Permanently deletes this role and all associated data.'),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppButton(label: 'Delete Role', size: AppButtonSize.sm, style: AppButtonStyle.red, onPressed: _delete),
-            ),
-          ],
-        ),
+        if (isAdmin) ...[
+          const SizedBox(height: 16),
+          _Section(
+            title: 'Danger Zone',
+            danger: true,
+            children: [
+              const Muted('Permanently deletes this role and all associated data, including its saved data.'),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(label: 'Delete Role', size: AppButtonSize.sm, style: AppButtonStyle.red, onPressed: _delete),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }

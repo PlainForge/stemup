@@ -3,6 +3,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import '../models/models.dart';
 import '../theme/palette.dart';
 
 /// `bg-white rounded-2xl border border-gray-100 shadow-sm`, or `border-2` in
@@ -500,3 +501,20 @@ class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStat
 
 /// Staggered delay for list item [i], capped so long lists don't crawl in.
 Duration stagger(int i, [int ms = 35]) => Duration(milliseconds: (i.clamp(0, 10)) * ms);
+
+/// User / Instructor / Admin pill (the web's AccessBadge).
+class AccessTag extends StatelessWidget {
+  const AccessTag(this.level, {super.key});
+
+  final AccessLevel level;
+
+  @override
+  Widget build(BuildContext context) => Tag(
+    level.label,
+    color: switch (level) {
+      AccessLevel.user => const Color(0xFF6B7280),
+      AccessLevel.instructor => Palette.purple700,
+      AccessLevel.admin => Palette.blue700,
+    },
+  );
+}

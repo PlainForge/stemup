@@ -1,4 +1,6 @@
-// pages/RolePage.tsx. Admins get the Admin tab (role_admin.dart) in place of Tasks.
+// pages/RolePage.tsx. The role's instructors get the Instructor tab
+// (role_admin.dart) in place of Tasks; admins get a Manage button that opens
+// the same view on the Admin page.
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -16,11 +18,12 @@ import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/leaderboard.dart';
 import '../widgets/page_scaffold.dart';
+import '../widgets/profile_sheet.dart';
 import '../widgets/sliding_tabs.dart';
 import 'role_admin.dart';
 import 'task_widgets.dart';
 
-enum _Tab { leaderboard, rewards, pastMonths, tasks, admin }
+enum _Tab { leaderboard, rewards, saved, tasks, instructor }
 
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key, required this.roleId});
@@ -108,20 +111,29 @@ class _RoleScreenState extends State<RoleScreen> {
 
     final me = app.userData!;
     final isAdmin = app.isAdmin;
-    final ranked = _members.where((m) => !app.admins.contains(m.uid)).toList()..sort((a, b) => b.points.compareTo(a.points));
+    final canManage = app.canManage(role);
+    // Admins and this role's instructors run it rather than take part: no Tasks tab, no ranking
+    final isStaff = app.isStaff(role, me.uid);
+    final ranked = _members.where((m) => !app.isStaff(role, m.uid)).toList()..sort((a, b) => b.points.compareTo(a.points));
     final myStats = me.roleData(_id);
     final isCurrent = me.currentRole == _id;
     final openTasks = _myTasks.where((t) => !t.complete && !_mySubmitted.contains(t.id)).toList();
-    final hasNew = !isAdmin && openTasks.any((t) => !app.seenTaskIds.contains(t.id));
+    final hasNew = !isStaff && openTasks.any((t) => !app.seenTaskIds.contains(t.id));
+    // The role's instructors who still have Instructor access
+    final roleInstructors = [
+      for (final uid in role.instructors)
+        if (app.instructors.contains(uid)) ?_members.where((m) => m.uid == uid).firstOrNull,
+    ];
+    var tab = _tab;
+    if ((tab == _Tab.tasks && isStaff) || (tab == _Tab.instructor && (!canManage || isAdmin))) tab = _Tab.leaderboard;
 
     final tabs = <SlidingTab<_Tab>>[
       const SlidingTab(_Tab.leaderboard, 'Leaderboard'),
       const SlidingTab(_Tab.rewards, 'Rewards'),
-      const SlidingTab(_Tab.pastMonths, 'Past Months'),
-      if (isAdmin)
-        SlidingTab(_Tab.admin, 'Admin', dot: role.pendingRequests.isNotEmpty || _pendingSubmitted.isNotEmpty)
-      else
-        SlidingTab(_Tab.tasks, 'Tasks', newBadge: hasNew, count: openTasks.length, countColor: Palette.green500),
+      const SlidingTab(_Tab.saved, 'Saved Data'),
+      if (!isStaff) SlidingTab(_Tab.tasks, 'Tasks', newBadge: hasNew, count: openTasks.length, countColor: Palette.green500),
+      if (canManage && !isAdmin)
+        SlidingTab(_Tab.instructor, 'Instructor', dot: role.pendingRequests.isNotEmpty || _pendingSubmitted.isNotEmpty),
     ];
 
     return PageScaffold(
@@ -145,13 +157,19 @@ class _RoleScreenState extends State<RoleScreen> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (!isAdmin && myStats != null) ...[
+                if (!isStaff && myStats != null) ...[
                   StatText(myStats.points, 'pts'),
                   const SizedBox(width: 12),
                   StatText(myStats.taskCompleted, 'tasks'),
                   const SizedBox(width: 12),
                 ],
-                if (isAdmin) ...[const Tag('Admin View', color: Palette.blue700), const SizedBox(width: 12)],
+                if (isAdmin) ...[
+                  AppButton(label: 'Manage', size: AppButtonSize.xsm, onPressed: () => context.push('/admin/roles/$_id')),
+                  const SizedBox(width: 12),
+                ] else if (canManage) ...[
+                  const Tag('Instructor', color: Palette.blue700),
+                  const SizedBox(width: 12),
+                ],
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   transitionBuilder: (child, a) => ScaleTransition(
@@ -171,7 +189,8 @@ class _RoleScreenState extends State<RoleScreen> {
             ),
           ],
         ),
-        SlidingTabs<_Tab>(tabs: tabs, selected: _tab, onChanged: (t) => setState(() => _tab = t)),
+        if (roleInstructors.isNotEmpty) _InstructorChips(people: roleInstructors, meUid: me.uid),
+        SlidingTabs<_Tab>(tabs: tabs, selected: tab, onChanged: (t) => setState(() => _tab = t)),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
           switchInCurve: Curves.easeOutCubic,
@@ -183,16 +202,16 @@ class _RoleScreenState extends State<RoleScreen> {
             ),
           ),
           layoutBuilder: (current, previous) => Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
-          child: KeyedSubtree(key: ValueKey(_tab), child: _tabBody(context, app, role, ranked)),
+          child: KeyedSubtree(key: ValueKey(tab), child: _tabBody(context, app, role, ranked, tab)),
         ),
       ],
     );
   }
 
-  Widget _tabBody(BuildContext context, AppState app, Role role, List<UserData> ranked) => switch (_tab) {
+  Widget _tabBody(BuildContext context, AppState app, Role role, List<UserData> ranked, _Tab tab) => switch (tab) {
     _Tab.leaderboard => Leaderboard(ranked: ranked, meUid: app.user!.uid, roleId: _id, emptyText: 'No members yet.'),
-    _Tab.rewards => _rewardsTab(context, ranked),
-    _Tab.pastMonths => _pastMonthsTab(context),
+    _Tab.rewards => _rewardsTab(context, role, ranked),
+    _Tab.saved => _savedTab(context),
     _Tab.tasks => MemberTasks(
       tasks: _myTasks,
       loading: _tasksLoading,
@@ -200,15 +219,15 @@ class _RoleScreenState extends State<RoleScreen> {
       filters: _filters,
       onFiltersChanged: () => setState(() {}),
     ),
-    _Tab.admin => RoleAdminView(role: role, members: _members),
+    _Tab.instructor => RoleAdminView(role: role, members: _members),
   };
 
-  Widget _rewardsTab(BuildContext context, List<UserData> ranked) {
+  Widget _rewardsTab(BuildContext context, Role role, List<UserData> ranked) {
     const labels = ['First', 'Second', 'Third'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Heading('${DateFormat('MMMM', 'en_US').format(DateTime.now())} Rewards'),
+        Heading(role.rewardsTitle.isNotEmpty ? role.rewardsTitle : '${DateFormat('MMMM', 'en_US').format(DateTime.now())} Rewards'),
         const SizedBox(height: 12),
         for (var i = 0; i < 3; i++)
           Padding(
@@ -249,8 +268,9 @@ class _RoleScreenState extends State<RoleScreen> {
     );
   }
 
-  Widget _pastMonthsTab(BuildContext context) {
-    if (_snapshots.isEmpty) return const EmptyState('No previous leaderboards yet.');
+  /// Leaderboards saved each time the role was reset.
+  Widget _savedTab(BuildContext context) {
+    if (_snapshots.isEmpty) return const EmptyState('Nothing saved yet. Each time this role is reset, its leaderboard is saved here.');
     return Column(
       children: [
         for (final snap in _snapshots)
@@ -261,7 +281,12 @@ class _RoleScreenState extends State<RoleScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SectionLabel(snap.month, padding: const EdgeInsets.only(bottom: 12)),
+                  Text(
+                    snap.title,
+                    style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                  ),
+                  if (snap.createdAt != null) Muted('Reset ${dateTimeLabel.format(snap.createdAt!)}', size: 12, color: Palette.gray400),
+                  const SizedBox(height: 12),
                   if (snap.entries.isEmpty)
                     const Muted('No entries.', color: Palette.gray400)
                   else
@@ -291,6 +316,8 @@ class _RoleScreenState extends State<RoleScreen> {
                               ),
                             ),
                             StatText(e.points, 'pts'),
+                            const SizedBox(width: 12),
+                            StatText(e.taskCompleted, 'tasks'),
                           ],
                         ),
                       ),
@@ -301,6 +328,59 @@ class _RoleScreenState extends State<RoleScreen> {
       ],
     );
   }
+}
+
+/// "INSTRUCTORS" followed by a purple chip per person who runs the role; tap for their profile.
+class _InstructorChips extends StatelessWidget {
+  const _InstructorChips({required this.people, required this.meUid});
+
+  final List<UserData> people;
+  final String meUid;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: [
+      SectionLabel(people.length == 1 ? 'Instructor' : 'Instructors', size: 12, padding: const EdgeInsets.only(right: 4)),
+      for (final p in people)
+        Pressable(
+          scale: .96,
+          onPressed: () => showProfileSheet(context, p),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
+            decoration: BoxDecoration(
+              color: Palette.resolve(context, const CupertinoDynamicColor.withBrightness(color: Color(0xFFFAF5FF), darkColor: Color(0xFF2E1065))),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: Palette.resolve(context, const CupertinoDynamicColor.withBrightness(color: Color(0xFFE9D5FF), darkColor: Color(0xFF581C87))),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Avatar(p.photoURL, name: p.name, size: Avatar.xxs),
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 160),
+                  child: Text(
+                    '${p.name}${p.uid == meUid ? ' (you)' : ''}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Palette.resolve(context, const CupertinoDynamicColor.withBrightness(color: Palette.purple700, darkColor: Color(0xFFD8B4FE))),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
 }
 
 /// The role ID in small gray monospace, copied on tap.

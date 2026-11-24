@@ -40,6 +40,30 @@ class Db {
       .snapshots()
       .map((s) => s.exists ? List<String>.from((s.data()?['ids'] as List?)?.whereType<String>() ?? const []) : <String>[]);
 
+  static Stream<List<String>> instructorsStream() => _db
+      .doc('admins/instructors')
+      .snapshots()
+      .map((s) => s.exists ? List<String>.from((s.data()?['ids'] as List?)?.whereType<String>() ?? const []) : <String>[]);
+
+  static Stream<List<StemRequest>> _requests(Query<Map<String, dynamic>> q) => q.snapshots().map((s) {
+    final list = s.docs.map(StemRequest.fromDoc).where((r) => r.type != null).toList();
+    list.sort((a, b) => (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
+    return list;
+  });
+
+  /// Everything waiting for an admin.
+  static Stream<List<StemRequest>> requestsStream() => _requests(_db.collection('requests'));
+
+  /// The signed-in user's own open requests.
+  static Stream<List<StemRequest>> myRequestsStream(String uid) => _requests(_db.collection('requests').where('uid', isEqualTo: uid));
+
+  /// Open requests about one role (a reset waiting for approval).
+  static Stream<List<StemRequest>> roleRequestsStream(String roleId) =>
+      _requests(_db.collection('requests').where('roleId', isEqualTo: roleId));
+
+  /// Every profile (the Admin page's Users tab).
+  static Stream<List<UserData>> allUsersStream() => _db.collection('users').snapshots().map((s) => s.docs.map(UserData.fromDoc).toList());
+
   static Stream<Role?> roleStream(String id) => _role(id).snapshots().map((s) => s.exists ? Role.fromDoc(s) : null);
 
   static Stream<List<Role>> rolesStream() => _db.collection('roles').snapshots().map((s) => s.docs.map(Role.fromDoc).toList());
@@ -147,17 +171,116 @@ class Db {
     });
   }
 
-  static Future<void> createRole(String name, List<String> admins) async {
-    final ref = await _db.collection('roles').add({'name': name, 'members': admins, 'pendingRequests': [], 'createdAt': DateTime.now()});
-    await _reward(ref.id).set({'first': 'not set', 'second': 'not set', 'third': 'not set'});
+  /// Adds the role to a user's roles list if it isn't there yet.
+  static Future<void> _addRoleToUser(String uid, String roleId, String roleName) async {
+    final snap = await _user(uid).get();
+    if (!snap.exists || UserData.fromDoc(snap).roleData(roleId) != null) return;
+    await _user(uid).update({
+      'roles': FieldValue.arrayUnion([UserRoleData(id: roleId, name: roleName).toMap()]),
+    });
+  }
+
+  /// Creates a role. Every admin joins it; [ownerUid] (the instructor who asked
+  /// for it) joins too and becomes its first instructor.
+  static Future<String> createRole(String name, {String purpose = '', String? ownerUid}) async {
+    final admins = await _admins();
+    final members = {...admins, ?ownerUid}.toList();
+    final ref = await _db.collection('roles').add({
+      'name': name,
+      'purpose': purpose,
+      'members': members,
+      'instructors': ownerUid != null && !admins.contains(ownerUid) ? [ownerUid] : <String>[],
+      'createdBy': ownerUid ?? '',
+      'pendingRequests': [],
+      'createdAt': DateTime.now(),
+    });
+    await _reward(ref.id).set({'first': noReward, 'second': noReward, 'third': noReward});
+    await Future.wait(members.map((uid) => _addRoleToUser(uid, ref.id, name)));
+    return ref.id;
+  }
+
+  // ── Requests & instructor access ───────────────────────────────────────
+
+  static Future<void> _addRequest(Map<String, dynamic> data) => _db.collection('requests').add({...data, 'createdAt': Timestamp.now()});
+
+  static Future<void> requestInstructor(String uid, String userName, String reason) =>
+      _addRequest({'type': 'instructor', 'uid': uid, 'userName': userName, 'reason': reason.trim()});
+
+  static Future<void> requestRoleCreation(String uid, String userName, String roleName, String purpose) =>
+      _addRequest({'type': 'createRole', 'uid': uid, 'userName': userName, 'roleName': roleName.trim(), 'purpose': purpose.trim()});
+
+  static Future<void> requestRoleReset(String uid, String userName, Role role, String saveName) => _addRequest({
+    'type': 'resetRole',
+    'uid': uid,
+    'userName': userName,
+    'roleId': role.id,
+    'roleName': role.name,
+    'saveName': saveName.trim(),
+  });
+
+  /// Withdraws or declines a request.
+  static Future<void> deleteRequest(String id) => _db.doc('requests/$id').delete();
+
+  /// Carries out the request, then removes it.
+  static Future<void> approveRequest(StemRequest r) async {
+    switch (r.type) {
+      case RequestType.instructor:
+        await grantInstructor(r.uid);
+      case RequestType.createRole:
+        await createRole(r.roleName.isEmpty ? 'Untitled Role' : r.roleName, purpose: r.purpose, ownerUid: r.uid);
+      case RequestType.resetRole:
+        // The role may have been deleted since the request was made
+        if (r.roleId.isNotEmpty && (await _role(r.roleId).get()).exists) {
+          await resetRole(r.roleId, r.saveName.isEmpty ? 'Saved Data' : r.saveName);
+        }
+      case null:
+        break;
+    }
+    await deleteRequest(r.id);
+  }
+
+  static Future<void> grantInstructor(String uid) async {
+    await _db.doc('admins/instructors').set({
+      'ids': FieldValue.arrayUnion([uid]),
+    }, SetOptions(merge: true));
+    // Any instructor request they had open is now settled
+    final open = await _db.collection('requests').where('uid', isEqualTo: uid).where('type', isEqualTo: 'instructor').get();
+    await Future.wait(open.docs.map((d) => d.reference.delete()));
+  }
+
+  /// Takes Instructor access away. They stay a member of their roles, but no longer run them.
+  static Future<void> revokeInstructor(String uid) async {
+    await _db.doc('admins/instructors').set({
+      'ids': FieldValue.arrayRemove([uid]),
+    }, SetOptions(merge: true));
+    final led = await _db.collection('roles').where('instructors', arrayContains: uid).get();
     await Future.wait(
-      admins.map(
-        (a) => _user(a).update({
-          'roles': FieldValue.arrayUnion([UserRoleData(id: ref.id, name: name).toMap()]),
+      led.docs.map(
+        (d) => d.reference.update({
+          'instructors': FieldValue.arrayRemove([uid]),
         }),
       ),
     );
   }
+
+  /// Gives another instructor access to run this role (and makes them a member).
+  static Future<void> addRoleInstructor(Role role, String uid) async {
+    await _role(role.id).update({
+      'instructors': FieldValue.arrayUnion([uid]),
+      'members': FieldValue.arrayUnion([uid]),
+      'pendingRequests': FieldValue.arrayRemove([uid]),
+    });
+    await _addRoleToUser(uid, role.id, role.name);
+  }
+
+  /// Stops an instructor running this role; they stay a member.
+  static Future<void> removeRoleInstructor(String roleId, String uid) => _role(roleId).update({
+    'instructors': FieldValue.arrayRemove([uid]),
+  });
+
+  static Future<void> setRewardsTitle(String roleId, String title) => _role(roleId).update({'rewardsTitle': title.trim()});
+
+  static Future<void> setShowGlobalLeaderboard(String uid, bool value) => _user(uid).update({'showGlobalLeaderboard': value});
 
   // ── Tasks (member side) ────────────────────────────────────────────────
 
@@ -321,23 +444,31 @@ class Db {
   static Future<void> setGlobalStats(String uid, {required int points, required int tasks}) =>
       _user(uid).update({'points': points, 'taskCompleted': tasks});
 
-  /// Saves a leaderboard snapshot, then clears the role's tasks, submissions and
-  /// rewards and zeroes every member's stats for it.
-  static Future<void> forceResetRole(String roleId, List<UserData> rankedMembers) async {
-    final now = Timestamp.now();
+  /// Saves the role's leaderboard under [saveName] (the Saved Data tab), then
+  /// clears its tasks, submissions and prizes and zeroes every member's points
+  /// and task count for it. Global totals are untouched.
+  static Future<void> resetRole(String roleId, String saveName) async {
+    final roleSnap = await _role(roleId).get();
+    if (!roleSnap.exists) return;
+    final role = Role.fromDoc(roleSnap);
+    final admins = await _admins();
+    final members = await getUsers(role.members);
+    final ranked = members.where((u) => !admins.contains(u.uid) && !role.instructors.contains(u.uid)).map((u) => u.withRoleStats(roleId)).toList()
+      ..sort((a, b) => b.points.compareTo(a.points));
+
     await _db.collection('leaderboardSnapshots').add({
       'roleId': roleId,
+      'name': saveName,
       'month': DateFormat('MMMM y', 'en_US').format(DateTime.now()),
-      'createdAt': now,
-      'deleteAt': _inDays(365),
+      'createdAt': Timestamp.now(),
       'entries': [
-        for (var i = 0; i < rankedMembers.length; i++)
+        for (var i = 0; i < ranked.length; i++)
           {
-            'uid': rankedMembers[i].uid,
-            'name': rankedMembers[i].name,
-            'photoURL': rankedMembers[i].photoURL,
-            'points': rankedMembers[i].points,
-            'taskCompleted': rankedMembers[i].taskCompleted,
+            'uid': ranked[i].uid,
+            'name': ranked[i].name,
+            'photoURL': ranked[i].photoURL,
+            'points': ranked[i].points,
+            'taskCompleted': ranked[i].taskCompleted,
             'rank': i + 1,
           },
       ],
@@ -353,27 +484,33 @@ class Db {
         writes.add(d.reference.delete());
       }
     }
-    writes.add(_reward(roleId).update({'first': noReward, 'second': noReward, 'third': noReward}));
-
-    final users = await _db.collection('users').get();
-    for (final d in users.docs) {
-      final u = UserData.fromDoc(d);
+    writes.add(_reward(roleId).set({'first': noReward, 'second': noReward, 'third': noReward}, SetOptions(merge: true)));
+    for (final u in members) {
+      if (u.roleData(roleId) == null) continue;
       final roles = u.roles.map((r) => r.id == roleId ? r.copyWith(points: 0, taskCompleted: 0) : r).map((r) => r.toMap()).toList();
-      writes.add(d.reference.update({'roles': roles}));
+      writes.add(_user(u.uid).update({'roles': roles}));
     }
     await Future.wait(writes);
   }
 
+  /// Deletes a role with its tasks, submissions, prizes, saved data and open requests.
   static Future<void> deleteRole(String roleId) async {
-    final users = await _db.collection('users').get();
-    final writes = <Future<void>>[
-      for (final d in users.docs)
-        if (d.data()['roles'] != null)
-          d.reference.update({'roles': UserData.fromDoc(d).roles.where((r) => r.id != roleId).map((r) => r.toMap()).toList()}),
-    ];
+    final roleSnap = await _role(roleId).get();
+    final memberIds = roleSnap.exists ? Role.fromDoc(roleSnap).members : const <String>[];
+    final writes = <Future<void>>[];
+    for (final u in await getUsers(memberIds)) {
+      writes.add(
+        _user(u.uid).update({
+          'roles': u.roles.where((r) => r.id != roleId).map((r) => r.toMap()).toList(),
+          if (u.currentRole == roleId) 'currentRole': '',
+        }),
+      );
+    }
     final results = await Future.wait([
       _tasks.where('roleId', isEqualTo: roleId).get(),
       _submittedCol.where('roleId', isEqualTo: roleId).get(),
+      _db.collection('leaderboardSnapshots').where('roleId', isEqualTo: roleId).get(),
+      _db.collection('requests').where('roleId', isEqualTo: roleId).get(),
     ]);
     for (final snap in results) {
       for (final d in snap.docs) {
@@ -381,6 +518,7 @@ class Db {
       }
     }
     await Future.wait(writes);
+    await _reward(roleId).delete().catchError((_) {});
     await _role(roleId).delete();
   }
 
@@ -391,6 +529,7 @@ class Db {
     final batch = _db.batch();
     batch.update(_role(roleId), {
       'members': FieldValue.arrayRemove([uid]),
+      'instructors': FieldValue.arrayRemove([uid]),
     });
 
     final snap = await _user(uid).get();

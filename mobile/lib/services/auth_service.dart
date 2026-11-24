@@ -134,6 +134,20 @@ class AuthService {
     };
   }
 
+  /// Whether a display name is free of profanity (the checkName function).
+  /// Allows it if the check can't run: the cleanProfileName function still
+  /// replaces a blocked name when the profile is saved.
+  static Future<bool> isNameAllowed(String name) async {
+    try {
+      final result = await _functions.httpsCallable('checkName').call<Map<String, dynamic>>({'name': name});
+      return result.data['ok'] != false;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  static const blockedNameMessage = "That name isn't allowed. Please choose a different one.";
+
   static Future<void> sendVerification(User user) async {
     try {
       await _functions.httpsCallable('sendVerificationEmail').call<void>();

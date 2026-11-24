@@ -78,8 +78,10 @@ class _HomeScreenState extends State<HomeScreen> {
       myRoles.map((role) async {
         final (id, name) = role;
         final results = await Future.wait([Db.roleStream(id).first, Db.getRewards(id)]);
-        final members = (results[0] as Role?)?.members ?? const <String>[];
-        final ranked = (await Db.getUsers(members)).where((u) => !app.admins.contains(u.uid)).map((u) => u.withRoleStats(id)).toList()
+        final roleDoc = results[0] as Role?;
+        final members = roleDoc?.members ?? const <String>[];
+        // Admins and the role's instructors run it, so they aren't ranked
+        final ranked = (await Db.getUsers(members)).where((u) => !app.isStaff(roleDoc, u.uid)).map((u) => u.withRoleStats(id)).toList()
           ..sort((a, b) => b.points.compareTo(a.points));
         final myIdx = ranked.indexWhere((u) => u.uid == me.uid);
         return _RoleBoard(
@@ -112,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (me == null) return const LoadingView();
 
     // Reload the per-role boards whenever the inputs that shape them change
-    final key = '${app.isAdmin}|${app.admins.join(',')}|${me.roles.map((r) => '${r.id}:${r.points}').join(',')}';
+    final key = '${app.isAdmin}|${app.admins.join(',')}|${app.instructors.length}|${me.roles.map((r) => '${r.id}:${r.points}').join(',')}';
     if (key != _boardsKey) {
       _boardsKey = key;
       _boardsLoading = _boards.isEmpty;
@@ -158,7 +160,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ?rewardsCard,
-        if (_canSeeGlobal || app.isAdmin)
+        // Admins always; instructors unless they turned it off in Settings; members of a role with it switched on
+        if (app.isAdmin || (app.isInstructor && me.showGlobalLeaderboard) || _canSeeGlobal)
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

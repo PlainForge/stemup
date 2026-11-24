@@ -12,6 +12,17 @@ String _str(dynamic v, [String fallback = '']) => v is String ? v : fallback;
 List<String> _strList(dynamic v) => v is List ? v.whereType<String>().toList() : const [];
 DateTime? _date(dynamic v) => v is Timestamp ? v.toDate() : null;
 
+/// User < Instructor < Admin.
+enum AccessLevel { user, instructor, admin }
+
+extension AccessLevelLabel on AccessLevel {
+  String get label => switch (this) {
+    AccessLevel.user => 'User',
+    AccessLevel.instructor => 'Instructor',
+    AccessLevel.admin => 'Admin',
+  };
+}
+
 class UserRoleData {
   final String id;
   final String name;
@@ -39,6 +50,9 @@ class UserData {
   final List<UserRoleData> roles;
   final String currentRole;
 
+  /// Instructors can hide the global leaderboard on Home; shown when unset.
+  final bool showGlobalLeaderboard;
+
   const UserData({
     required this.uid,
     required this.name,
@@ -48,6 +62,7 @@ class UserData {
     this.taskCompleted = 0,
     this.roles = const [],
     this.currentRole = '',
+    this.showGlobalLeaderboard = true,
   });
 
   factory UserData.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) => UserData.fromMap(doc.id, doc.data() ?? {});
@@ -63,6 +78,7 @@ class UserData {
         ? (m['roles'] as List).whereType<Map>().map((r) => UserRoleData.fromMap(Map<String, dynamic>.from(r))).toList()
         : const [],
     currentRole: _str(m['currentRole']),
+    showGlobalLeaderboard: m['showGlobalLeaderboard'] != false,
   );
 
   UserRoleData? roleData(String roleId) {
@@ -91,6 +107,7 @@ class UserData {
         taskCompleted: taskCompleted ?? this.taskCompleted,
         roles: roles ?? this.roles,
         currentRole: currentRole ?? this.currentRole,
+        showGlobalLeaderboard: showGlobalLeaderboard,
       );
 }
 
@@ -101,12 +118,25 @@ class Role {
   final List<String> pendingRequests;
   final bool showInGlobalLeaderboard;
 
+  /// Instructors who run this role (its creator plus anyone they add). They're
+  /// members too, but leaderboards leave them out, like admins.
+  final List<String> instructors;
+  final String createdBy;
+  final String purpose;
+
+  /// Heading on the Rewards tab; the current month when empty.
+  final String rewardsTitle;
+
   const Role({
     required this.id,
     required this.name,
     this.members = const [],
     this.pendingRequests = const [],
     this.showInGlobalLeaderboard = false,
+    this.instructors = const [],
+    this.createdBy = '',
+    this.purpose = '',
+    this.rewardsTitle = '',
   });
 
   factory Role.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -117,6 +147,10 @@ class Role {
       members: _strList(m['members']),
       pendingRequests: _strList(m['pendingRequests']),
       showInGlobalLeaderboard: m['showInGlobalLeaderboard'] == true,
+      instructors: _strList(m['instructors']),
+      createdBy: _str(m['createdBy']),
+      purpose: _str(m['purpose']),
+      rewardsTitle: _str(m['rewardsTitle']).trim(),
     );
   }
 
@@ -285,20 +319,34 @@ class SnapshotEntry {
   );
 }
 
+/// A role's leaderboard saved when it was reset (the role page's Saved Data tab).
 class LeaderboardSnapshot {
   final String id;
   final String roleId;
+
+  /// The name given when resetting; saves from before Saved Data only have [month].
+  final String name;
   final String month;
   final DateTime? createdAt;
   final List<SnapshotEntry> entries;
 
-  const LeaderboardSnapshot({required this.id, required this.roleId, required this.month, required this.createdAt, required this.entries});
+  const LeaderboardSnapshot({
+    required this.id,
+    required this.roleId,
+    this.name = '',
+    required this.month,
+    required this.createdAt,
+    required this.entries,
+  });
+
+  String get title => name.isNotEmpty ? name : (month.isNotEmpty ? month : 'Saved Data');
 
   factory LeaderboardSnapshot.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final m = doc.data() ?? {};
     return LeaderboardSnapshot(
       id: doc.id,
       roleId: _str(m['roleId']),
+      name: _str(m['name']),
       month: _str(m['month']),
       createdAt: _date(m['createdAt']),
       entries: m['entries'] is List
@@ -367,6 +415,62 @@ class Bug {
       bugDesc: _str(m['bugDesc']),
       userEmail: _str(m['userEmail']),
       userId: _str(m['userId']),
+    );
+  }
+}
+
+enum RequestType { instructor, createRole, resetRole }
+
+/// Something an admin has to approve, from the `requests` collection.
+class StemRequest {
+  final String id;
+  final RequestType? type;
+  final String uid;
+  final String userName;
+  final DateTime? createdAt;
+
+  /// instructor: why they want to be one.
+  final String reason;
+
+  /// createRole: the new role's name and purpose. resetRole: the role's name.
+  final String roleName;
+  final String purpose;
+
+  /// resetRole: which role, and the name to save its data under.
+  final String roleId;
+  final String saveName;
+
+  const StemRequest({
+    required this.id,
+    required this.type,
+    required this.uid,
+    this.userName = '',
+    this.createdAt,
+    this.reason = '',
+    this.roleName = '',
+    this.purpose = '',
+    this.roleId = '',
+    this.saveName = '',
+  });
+
+  factory StemRequest.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final m = doc.data() ?? {};
+    return StemRequest(
+      id: doc.id,
+      type: switch (m['type']) {
+        'instructor' => RequestType.instructor,
+        'createRole' => RequestType.createRole,
+        'resetRole' => RequestType.resetRole,
+        _ => null,
+      },
+      uid: _str(m['uid']),
+      userName: _str(m['userName']),
+      createdAt: _date(m['createdAt']),
+      reason: _str(m['reason']),
+      roleName: _str(m['roleName']),
+      purpose: _str(m['purpose']),
+      roleId: _str(m['roleId']),
+      saveName: _str(m['saveName']),
     );
   }
 }

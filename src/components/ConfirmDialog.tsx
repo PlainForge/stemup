@@ -63,7 +63,7 @@ export default function ConfirmHost() {
                 )}
                 <div className="flex gap-2">
                     {!req.alertOnly && (
-                        <Button color="gray" size="full" onClick={() => close(false)}>
+                        <Button color="cancel" size="full" onClick={() => close(false)}>
                             {req.cancelLabel ?? "Cancel"}
                         </Button>
                     )}

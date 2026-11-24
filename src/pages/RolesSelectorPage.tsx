@@ -1,8 +1,10 @@
-import { addDoc, arrayUnion, collection, doc, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useContext, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { type Role } from '../myDataTypes';
+import { type Role, type StemRequest } from '../myDataTypes';
+import { canManageRole, roleService } from '../lib/roleService';
+import { alertDialog } from '../lib/confirm';
 import JoinButton from '../components/RoleJoinButton';
 import Loading from './Loading';
 import { MainContext } from '../context/MainContext';
@@ -12,9 +14,16 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faStar } from '@fortawesome/free-solid-svg-icons';
 
 
+
+/** Stable fallback so hooks that depend on these lists don't re-run every render */
+const NO_IDS: string[] = [];
 export default function RolesSelectorPage() {
     const context = useContext(MainContext);
     const [roleName, setRoleName] = useState("");
+    const [purpose, setPurpose] = useState("");
+    const [creating, setCreating] = useState(false);
+    const [createStatus, setCreateStatus] = useState("");
+    const [myRoleRequests, setMyRoleRequests] = useState<StemRequest[]>([]);
     const [roles, setRoles] = useState<Role[]>([]);
     const [requestsPerRole, setRequestsPerRole] = useState<Record<string, number>>({});
     const [submittedPerRole, setSubmittedPerRole] = useState<Record<string, number>>({});
@@ -30,7 +39,9 @@ export default function RolesSelectorPage() {
     const user = context?.user ?? null;
     const userData = context?.userData ?? null;
     const loading = context?.loading ?? true;
-    const admins = context?.admins ?? [];
+    const admins = context?.admins ?? NO_IDS;
+    const instructors = context?.instructors ?? NO_IDS;
+    const access = context?.access ?? "user";
 
     useEffect(() => {
         if (!user) return;
@@ -39,23 +50,35 @@ export default function RolesSelectorPage() {
         const unsub = onSnapshot(rolesCol, (rolesSnap) => {
             const rolesList: Role[] = rolesSnap.docs.map((d) => ({
                 id: d.id,
-                ...(d.data() as { name: string }),
+                ...(d.data() as Omit<Role, "id">),
             }));
             setRoles(rolesList);
 
-            if (admins.includes(user.uid)) {
-                const counts: Record<string, number> = {};
-                rolesSnap.docs.forEach(d => {
-                    counts[d.id] = (d.data().pendingRequests || []).length;
-                });
-                setRequestsPerRole(counts);
-            }
+            // Join requests, for the roles this person runs
+            const counts: Record<string, number> = {};
+            rolesList.forEach(r => {
+                if (canManageRole(r, user.uid, admins, instructors)) counts[r.id] = (r.pendingRequests || []).length;
+            });
+            setRequestsPerRole(counts);
         }, (err) => {
             console.error("Error fetching roles:", err);
         });
 
         return () => unsub();
-    }, [user, admins]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- admins/instructors arrays are compared by content via join
+    }, [user, admins.join(","), instructors.join(",")]);
+
+    // The instructor's own role requests still waiting for an admin
+    useEffect(() => {
+        if (!user || access !== "instructor") {
+            setMyRoleRequests([]);
+            return;
+        }
+        const q = query(collection(db, "requests"), where("uid", "==", user.uid));
+        return onSnapshot(q, (snap) => {
+            setMyRoleRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as StemRequest)).filter(r => r.type === "createRole"));
+        }, (err) => console.error("Error loading your requests:", err));
+    }, [user, access]);
 
     useEffect(() => {
         if (!user || admins.includes(user.uid)) return;
@@ -80,7 +103,7 @@ export default function RolesSelectorPage() {
     }, [user, admins]);
 
     useEffect(() => {
-        if (!user || !admins.includes(user.uid)) return;
+        if (!user || access === "user") return;
 
         const q = query(collection(db, "tasksSubmitted"), where("complete", "==", false));
         const unsub = onSnapshot(q, (snap) => {
@@ -93,38 +116,38 @@ export default function RolesSelectorPage() {
         });
 
         return () => unsub();
-    }, [user, admins]);
+    }, [user, access]);
 
     if (!user || loading) return <Loading />
 
+    const isAdmin = access === "admin";
+
+    // Admins create roles straight away; instructors send the name and purpose to an admin
     const createRole = async () => {
-        if (roleName === "" || !roleName || roleName.length <= 0) return;
-        try {
-            const docRef = await addDoc(collection(db, "roles"), {
-                name: roleName,
-                members: admins,
-                pendingRequests: [],
-                createdAt: new Date()
-            })
-            await setDoc(doc(db, "rewards", docRef.id), {
-                first: "not set",
-                second: "not set",
-                third: "not set"
-            })
-
-            admins.map(async (admin) => {
-                await updateDoc(doc(db, "users", admin), {
-                    roles: arrayUnion({id: docRef.id, name: roleName, points: 0, taskCompleted: 0})
-                })
-            })
-
-            console.log("Role created with the ID: ", docRef.id)
-            setRoleName("")
-        } catch (err) {
-            console.log(err)
+        const name = roleName.trim();
+        if (!name) return;
+        if (!isAdmin && !purpose.trim()) {
+            await alertDialog("Please describe what this role is for, so an admin can review it.", "Purpose needed");
+            return;
         }
-    }
-
+        setCreating(true);
+        try {
+            if (isAdmin) {
+                await roleService.createRole(name, purpose.trim());
+                setCreateStatus(`Created "${name}".`);
+            } else {
+                await roleService.requestRoleCreation(user.uid, userData?.name ?? "", name, purpose);
+                setCreateStatus(`Sent "${name}" to an admin for review.`);
+            }
+            setRoleName("");
+            setPurpose("");
+        } catch (err) {
+            console.error(err);
+            await alertDialog("Couldn't send that. Please try again.", "Something went wrong");
+        } finally {
+            setCreating(false);
+        }
+    };
 
     return (
         <motion.div
@@ -152,7 +175,7 @@ export default function RolesSelectorPage() {
                             initial={{ x: -30, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                         >
-                            {!admins.includes(user.uid) && userData?.roles?.some(r => r.id === role.id) && (incompletePerRole[role.id] || 0) > 0 && (
+                            {!canManageRole(role, user.uid, admins, instructors) && userData?.roles?.some(r => r.id === role.id) && (incompletePerRole[role.id] || 0) > 0 && (
                                 <span className="absolute -top-2 -right-2 min-w-5 h-5 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1 shadow">
                                     {incompletePerRole[role.id]}
                                 </span>
@@ -162,7 +185,7 @@ export default function RolesSelectorPage() {
                                     <FontAwesomeIcon icon={faStar} className="text-blue-500 text-sm" />
                                 )}
                                 <p className="font-semibold">{role.name}</p>
-                                {admins.includes(user.uid) && ((requestsPerRole[role.id] || 0) + (submittedPerRole[role.id] || 0)) > 0 && (
+                                {canManageRole(role, user.uid, admins, instructors) && ((requestsPerRole[role.id] || 0) + (submittedPerRole[role.id] || 0)) > 0 && (
                                     <span className="relative flex size-2.5">
                                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
                                         <span className="relative inline-flex size-2.5 rounded-full bg-sky-500"></span>
@@ -177,10 +200,13 @@ export default function RolesSelectorPage() {
                 )}
             </div>
 
-            {admins.includes(user?.uid) && (
-                <div className="border-t border-gray-100 pt-6">
-                    <h2 className="text-base font-semibold mb-3">Create a Role</h2>
-                    <form className="flex flex-col sm:flex-row gap-3" onSubmit={(e) => e.preventDefault()}>
+            {access !== "user" && (
+                <div className="border-t border-gray-100 pt-6 flex flex-col gap-3">
+                    <div>
+                        <h2 className="text-base font-semibold">{isAdmin ? "Create a Role" : "Request a New Role"}</h2>
+                        {!isAdmin && <p className="text-sm text-gray-500 mt-0.5">An admin reviews it first. Once approved, you'll run the new role as its instructor.</p>}
+                    </div>
+                    <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); createRole(); }}>
                         <Input
                             size="full"
                             type="text"
@@ -191,8 +217,35 @@ export default function RolesSelectorPage() {
                             required={true}
                             autocomplete="false"
                         />
-                        <Button onClick={createRole} size="sm">Create</Button>
+                        <textarea
+                            value={purpose}
+                            onChange={e => setPurpose(e.target.value)}
+                            placeholder={isAdmin ? "Purpose (optional)" : "What is this role for?"}
+                            maxLength={500}
+                            rows={3}
+                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors resize-none"
+                        />
+                        <div className="flex items-center gap-3">
+                            <Button type="submit" size="sm" disabled={creating}>{creating ? "Sending..." : isAdmin ? "Create" : "Send Request"}</Button>
+                            {createStatus && <p className="text-sm text-green-600">{createStatus}</p>}
+                        </div>
                     </form>
+                    {myRoleRequests.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <p className="text-xs text-gray-400 uppercase tracking-widest">Waiting for an admin</p>
+                            {myRoleRequests.map(r => (
+                                <div key={r.id} className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl">
+                                    <span className="text-sm font-medium truncate">{r.roleName}</span>
+                                    <button
+                                        onClick={() => roleService.deleteRequest(r.id)}
+                                        className="text-xs text-gray-400 hover:text-red-500 transition-colors hover:cursor-pointer shrink-0"
+                                    >
+                                        Withdraw
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </motion.div>

@@ -25,12 +25,14 @@ class AppState extends ChangeNotifier {
   StreamSubscription<User?>? _authSub;
   StreamSubscription<UserData?>? _userSub;
   StreamSubscription<List<String>>? _adminSub;
+  StreamSubscription<List<String>>? _instructorSub;
   final List<StreamSubscription> _badgeSubs = [];
   Timer? _verifyTimer;
 
   User? user;
   UserData? userData;
   List<String> admins = const [];
+  List<String> instructors = const [];
 
   /// True until the first auth event (and, when signed in, the first profile
   /// snapshot) arrives. Only drives the launch splash; never flips back.
@@ -38,6 +40,27 @@ class AppState extends ChangeNotifier {
 
   bool get needsVerification => user != null && !user!.emailVerified;
   bool get isAdmin => user != null && admins.contains(user!.uid);
+  bool get isInstructor => user != null && instructors.contains(user!.uid);
+
+  /// User < Instructor < Admin.
+  AccessLevel get access => isAdmin
+      ? AccessLevel.admin
+      : isInstructor
+      ? AccessLevel.instructor
+      : AccessLevel.user;
+
+  AccessLevel accessOf(String uid) => admins.contains(uid)
+      ? AccessLevel.admin
+      : instructors.contains(uid)
+      ? AccessLevel.instructor
+      : AccessLevel.user;
+
+  /// Admins run every role; instructors run the roles they're listed on.
+  bool canManage(Role? role) => role != null && user != null && (isAdmin || (isInstructor && role.instructors.contains(user!.uid)));
+
+  /// Admins and a role's own instructors aren't ranked or given tasks in it.
+  /// Instructors who don't run the role take part like anyone else.
+  bool isStaff(Role? role, String uid) => admins.contains(uid) || (role?.instructors.contains(uid) ?? false);
 
   late ThemePref themePref;
 
@@ -49,11 +72,15 @@ class AppState extends ChangeNotifier {
   List<Task> myIncompleteTasks = const [];
   Set<String> mySubmittedIds = const {};
   List<SubmittedTask> pendingSubmissions = const [];
+
+  /// Requests waiting for an admin (admins only).
+  List<StemRequest> adminRequests = const [];
   Set<String> seenTaskIds = {};
 
   void _onAuth(User? usr) {
     _userSub?.cancel();
     _adminSub?.cancel();
+    _instructorSub?.cancel();
     _verifyTimer?.cancel();
     _cancelBadgeSubs();
 
@@ -61,6 +88,7 @@ class AppState extends ChangeNotifier {
     if (usr == null) {
       userData = null;
       admins = const [];
+      instructors = const [];
       initializing = false;
       notifyListeners();
       return;
@@ -106,6 +134,18 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       },
     );
+    _instructorSub = Db.instructorsStream().listen(
+      (ids) {
+        final wasInstructor = isInstructor;
+        instructors = ids;
+        if (wasInstructor != isInstructor) _startBadgeSubs();
+        notifyListeners();
+      },
+      onError: (_) {
+        instructors = const [];
+        notifyListeners();
+      },
+    );
     notifyListeners();
   }
 
@@ -119,14 +159,25 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       }),
     );
-    if (isAdmin) {
+    // Admins and instructors review submissions in the roles they run
+    if (isAdmin || isInstructor) {
       _badgeSubs.add(
         Db.allPendingSubmittedStream().listen((s) {
           pendingSubmissions = s;
           notifyListeners();
         }),
       );
-    } else {
+    }
+    if (isAdmin) {
+      _badgeSubs.add(
+        Db.requestsStream().listen((r) {
+          adminRequests = r;
+          notifyListeners();
+        }, onError: (_) {}),
+      );
+    }
+    // Everyone but admins can be a member doing tasks (instructors too, in roles they don't run)
+    if (!isAdmin) {
       _badgeSubs.add(
         Db.userIncompleteTasksStream(uid).listen((t) {
           myIncompleteTasks = t;
@@ -151,6 +202,7 @@ class AppState extends ChangeNotifier {
     myIncompleteTasks = const [];
     mySubmittedIds = const {};
     pendingSubmissions = const [];
+    adminRequests = const [];
   }
 
   /// To-do tasks per role (submitted-but-unreviewed tasks don't count).
@@ -162,21 +214,21 @@ class AppState extends ChangeNotifier {
     return out;
   }
 
-  /// Pending join requests + submissions awaiting review, per role (admins).
+  /// Pending join requests + submissions awaiting review, per role this person runs.
   Map<String, int> get adminAttentionPerRole {
+    final managed = {for (final r in roles.where(canManage)) r.id};
     final out = <String, int>{};
     for (final r in roles) {
-      if (r.pendingRequests.isNotEmpty) out[r.id] = r.pendingRequests.length;
+      if (managed.contains(r.id) && r.pendingRequests.isNotEmpty) out[r.id] = r.pendingRequests.length;
     }
     for (final s in pendingSubmissions) {
-      out[s.roleId] = (out[s.roleId] ?? 0) + 1;
+      if (managed.contains(s.roleId)) out[s.roleId] = (out[s.roleId] ?? 0) + 1;
     }
     return out;
   }
 
-  bool get rolesTabBadge => isAdmin
-      ? adminAttentionPerRole.isNotEmpty
-      : myIncompleteTasks.any((t) => !seenTaskIds.contains(t.id) && !mySubmittedIds.contains(t.id));
+  bool get rolesTabBadge =>
+      adminAttentionPerRole.isNotEmpty || myIncompleteTasks.any((t) => !seenTaskIds.contains(t.id) && !mySubmittedIds.contains(t.id));
 
   // ── Seen tasks (same localStorage key the web app uses, per device) ──
 
@@ -218,6 +270,7 @@ class AppState extends ChangeNotifier {
     _authSub?.cancel();
     _userSub?.cancel();
     _adminSub?.cancel();
+    _instructorSub?.cancel();
     _verifyTimer?.cancel();
     _cancelBadgeSubs();
     super.dispose();

@@ -86,7 +86,7 @@ export default function AlumniBatchPage() {
         try {
             setDeleting(true);
             await firebaseAuthService.deleteAlumniBatch(batchId);
-            navigate("/alumni", { replace: true });
+            navigate("/admin?tab=inactive", { replace: true });
         } catch (err) {
             console.error("Error deleting alumni batch:", err);
         } finally {
@@ -100,7 +100,7 @@ export default function AlumniBatchPage() {
         return (
             <div className="w-full max-w-2xl mx-auto flex flex-col gap-4 px-4 py-6 items-center">
                 <p className="text-gray-400 text-sm text-center py-8">This archive no longer exists.</p>
-                <Button onClick={() => navigate("/alumni")} color="gray" size="sm">Back to Alumni</Button>
+                <Button onClick={() => navigate("/admin?tab=inactive")} color="gray" size="sm">Back to Inactive Users</Button>
             </div>
         );
     }
@@ -113,10 +113,10 @@ export default function AlumniBatchPage() {
         >
             <div>
                 <button
-                    onClick={() => navigate("/alumni")}
+                    onClick={() => navigate("/admin?tab=inactive")}
                     className="text-xs text-gray-400 hover:text-gray-600 transition-colors mb-2 flex items-center gap-1.5 hover:cursor-pointer"
                 >
-                    <FontAwesomeIcon icon={faArrowLeft} className="text-[10px]" /> Back to Alumni
+                    <FontAwesomeIcon icon={faArrowLeft} className="text-[10px]" /> Back to Inactive Users
                 </button>
                 <h1 className="text-2xl font-bold">{batch.name}</h1>
                 <p className="text-sm text-gray-500 mt-0.5">

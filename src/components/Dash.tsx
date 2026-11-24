@@ -13,14 +13,19 @@ interface RoleLeaderboard {
     roleName: string;
     top3: UserData[];
     rewards: string[];
+    rewardsTitle: string;
     myRank: number | null;
 }
 
+
+/** Stable fallback so hooks that depend on these lists don't re-run every render */
+const NO_IDS: string[] = [];
 export default function Dash() {
     const context = useContext(MainContext);
     const user = context?.user ?? null;
     const userData = context?.userData ?? null;
-    const admins = context?.admins ?? [];
+    const admins = context?.admins ?? NO_IDS;
+    const access = context?.access ?? "user";
 
     const [globalLeaders, setGlobalLeaders] = useState<UserData[]>([]);
     const [showGlobal, setShowGlobal] = useState(false);
@@ -112,10 +117,12 @@ export default function Dash() {
                     getDoc(doc(db, "rewards", myRole.id)),
                 ]);
                 const memberIds: string[] = roleSnap.exists() ? (roleSnap.data().members ?? []) : [];
+                // The role's instructors run it, so like admins they aren't ranked
+                const roleInstructors: string[] = roleSnap.exists() ? (roleSnap.data().instructors ?? []) : [];
 
                 const memberDocs = await Promise.all(memberIds.map(uid => getDoc(doc(db, "users", uid))));
                 const ranked = memberDocs
-                    .filter(d => d.exists() && !admins.includes(d.id))
+                    .filter(d => d.exists() && !admins.includes(d.id) && !roleInstructors.includes(d.id))
                     .map(d => {
                         const data = d.data()!;
                         const roles: UserRoleData[] = Array.isArray(data.roles) ? data.roles : [];
@@ -141,6 +148,7 @@ export default function Dash() {
                     roleName: myRole.name,
                     myRank: myIdx >= 0 ? myIdx + 1 : null,
                     top3: ranked.slice(0, 3),
+                    rewardsTitle: roleSnap.exists() ? ((roleSnap.data().rewardsTitle as string | undefined)?.trim() ?? "") : "",
                     rewards: [
                         rewardData.first ?? "No reward set",
                         rewardData.second ?? "No reward set",
@@ -158,6 +166,10 @@ export default function Dash() {
     }, [user, userData, isAdmin, admins]);
 
     if (!context || !user || !userData) return null;
+
+    // Admins always see the global leaderboard; instructors unless they turned it off in
+    // Settings; everyone in a role whose instructor switched it on for that role
+    const seesGlobal = isAdmin || (access === "instructor" && userData.showGlobalLeaderboard !== false) || showGlobal;
 
     const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
@@ -181,6 +193,7 @@ export default function Dash() {
             {roleLeaderboards.map(rl => (
                 <div key={rl.roleId} className="flex flex-col gap-2">
                     <p className="font-semibold leading-tight truncate">{rl.roleName}</p>
+                    {rl.rewardsTitle && <p className="text-xs text-gray-400 -mt-1.5 truncate">{rl.rewardsTitle}</p>}
                     {rl.top3.length === 0 ? (
                         <p className="text-xs text-gray-400">No participants yet.</p>
                     ) : rl.top3.map((m, idx) => (
@@ -211,7 +224,7 @@ export default function Dash() {
                         <span className="text-3xl shrink-0"><MedalIcon rank={idx} /></span>
                         <div className="min-w-0 flex flex-col">
                             <p className="font-semibold leading-tight truncate">{rl.roleName}</p>
-                            <p className="text-sm text-gray-500 leading-snug">{placeLabels[idx]} place</p>
+                            <p className="text-sm text-gray-500 leading-snug">{placeLabels[idx]} place{rl.rewardsTitle ? ` · ${rl.rewardsTitle}` : ""}</p>
                             <p className={`text-xs leading-snug ${hasReward ? "text-gray-500" : "text-gray-400"}`}>
                                 {hasReward ? `Prize: ${reward}` : "No prize set"}
                             </p>
@@ -262,7 +275,7 @@ export default function Dash() {
             {rewardsCard && <div className="w-full xl:hidden">{rewardsCard}</div>}
 
             {/* Global Leaderboard */}
-            {(showGlobal || admins.includes(user.uid)) && (
+            {seesGlobal && (
                 <div className="w-full flex flex-col gap-3">
                     <h2 className="text-lg font-semibold">Global Leaderboard</h2>
                     {sorted.length === 0 ? (
@@ -364,7 +377,7 @@ export default function Dash() {
             )}
 
             {/* Per-role leaderboards, for users who don't have a global leaderboard */}
-            {!showGlobal && !isAdmin && (roleLeaderboardsLoading || roleLeaderboards.length > 0) && (
+            {!seesGlobal && (roleLeaderboardsLoading || roleLeaderboards.length > 0) && (
                 <div className="w-full flex flex-col gap-6">
                     {roleLeaderboardsLoading ? (
                         <p className="text-gray-400 text-sm text-center py-4">Loading leaderboards...</p>

@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useIsMobileBarHidden } from "../lib/useIsMobileBarHidden";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGears, faHomeAlt, faUserClock, faUserGraduate, faUsers } from "@fortawesome/free-solid-svg-icons";
+import { faGears, faHomeAlt, faUserShield, faUsers } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MainContext } from "../context/MainContext";
 import { IS_PHONE } from "../lib/device";
@@ -192,7 +192,7 @@ export default function Nav() {
     const barHidden = useIsMobileBarHidden(IS_PHONE);
 
     if (!context) return null;
-    const { user, userData, roleNotification, admins } = context;
+    const { user, userData, roleNotification, admins, adminRequestCount } = context;
 
     if (!user || !userData) return null;
 
@@ -218,10 +218,7 @@ export default function Nav() {
                     <MobileNavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
                     <MobileNavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
                     {isAdmin && (
-                        <MobileNavItem icon={faUserGraduate} label="Alumni" onClick={() => navigate("/alumni")} active={path.startsWith("/alumni")} />
-                    )}
-                    {isAdmin && (
-                        <MobileNavItem icon={faUserClock} label="Old Users" onClick={() => navigate("/old-users")} active={path.startsWith("/old-users")} />
+                        <MobileNavItem icon={faUserShield} label="Admin" onClick={() => navigate("/admin")} active={path.startsWith("/admin")} ping={adminRequestCount > 0} />
                     )}
                     <MobileNavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
                 </PillBar>
@@ -247,10 +244,7 @@ export default function Nav() {
                 <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
                 <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
                 {isAdmin && (
-                    <NavItem icon={faUserGraduate} label="Alumni" onClick={() => navigate("/alumni")} active={path.startsWith("/alumni")} />
-                )}
-                {isAdmin && (
-                    <NavItem icon={faUserClock} label="Old Users" onClick={() => navigate("/old-users")} active={path.startsWith("/old-users")} />
+                    <NavItem icon={faUserShield} label="Admin" onClick={() => navigate("/admin")} active={path.startsWith("/admin")} ping={adminRequestCount > 0} />
                 )}
                 <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
 

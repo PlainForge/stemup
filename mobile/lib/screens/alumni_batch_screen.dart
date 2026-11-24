@@ -39,7 +39,7 @@ class _AlumniBatchScreenState extends State<AlumniBatchScreen> {
     setState(() => _deleting = true);
     try {
       await Db.deleteAlumniBatch(widget.batchId);
-      router.go('/alumni');
+      router.go('/admin');
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
@@ -59,10 +59,10 @@ class _AlumniBatchScreenState extends State<AlumniBatchScreen> {
               const EmptyState('This archive no longer exists.'),
               Center(
                 child: AppButton(
-                  label: 'Back to Alumni',
+                  label: 'Back to Admin',
                   style: AppButtonStyle.gray,
                   size: AppButtonSize.sm,
-                  onPressed: () => context.go('/alumni'),
+                  onPressed: () => context.go('/admin'),
                 ),
               ),
             ],
@@ -72,8 +72,8 @@ class _AlumniBatchScreenState extends State<AlumniBatchScreen> {
         final subtitle = '$created${batch.roleNames.isNotEmpty ? ' · Archived from: ${batch.roleNames.join(', ')}' : ''}';
 
         return PageScaffold(
-          backLabel: 'Back to Alumni',
-          backPath: '/alumni',
+          backLabel: 'Back to Admin',
+          backPath: '/admin',
           title: batch.name,
           subtitle: subtitle.isEmpty ? null : subtitle,
           spacing: 8,

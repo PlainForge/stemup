@@ -8,6 +8,7 @@ import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 import { FirebaseError } from "firebase/app";
 import type { OAuthCredential } from "firebase/auth";
 import type { Role, UserData, UserRoleData } from "../myDataTypes";
+import { cleanName } from "./nameFilter";
 
 const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User&background=90caf9&color=fff";
 export const GLOBAL_ROLE_ID = "r3wUbRSCX7cxwBYhtAdg";
@@ -76,7 +77,8 @@ async function provisionOAuthUser(user: User, photoOverride?: string, name?: str
 
     await setDoc(userRef, {
         email: user.email,
-        name: name ?? user.displayName,
+        // Google/Apple names skip the sign-up form, so they're filtered here
+        name: cleanName(name ?? user.displayName),
         roles: [{ id: GLOBAL_ROLE_ID, name: "global", points: 0, taskCompleted: 0 }],
         createdAt: new Date(),
         points: 0,
@@ -307,7 +309,7 @@ export const firebaseAuthService = {
         if (appleName) {
             const userRef = doc(db, "users", user.uid);
             const snap = await getDoc(userRef);
-            if (snap.data()?.name === APPLE_FALLBACK_NAME) await updateDoc(userRef, { name: appleName });
+            if (snap.data()?.name === APPLE_FALLBACK_NAME) await updateDoc(userRef, { name: cleanName(appleName) });
         }
     },
 
@@ -442,6 +444,7 @@ export const firebaseAuthService = {
         const roleRef = doc(db, "roles", roleId);
         batch.update(roleRef, {
             members: arrayRemove(targetUid),
+            instructors: arrayRemove(targetUid),
         });
 
         await removeUserRole(targetUid, roleId);

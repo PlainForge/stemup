@@ -387,6 +387,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _error = '';
     });
     try {
+      if (!await AuthService.isNameAllowed(_name.text.trim())) {
+        setState(() => _error = AuthService.blockedNameMessage);
+        return;
+      }
       await AuthService.registerWithEmail(_email.text.trim(), _password.text, _name.text.trim());
     } on FirebaseAuthException catch (e) {
       setState(

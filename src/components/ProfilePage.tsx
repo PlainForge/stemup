@@ -178,7 +178,7 @@ export default function ProfilePage() {
                             })()}
 
                             <div className="flex gap-2 w-full">
-                                {isAdmin && <Button color="gray" size="full" onClick={openEdit}>Edit</Button>}
+                                {isAdmin && <Button color="blue" size="full" onClick={openEdit}>Edit</Button>}
                                 {isAdmin && !admins.includes(selectedUser.uid) && location.pathname.includes("/roles") &&
                                     <Button color="red" size="full" onClick={kick}>Kick</Button>
                                 }

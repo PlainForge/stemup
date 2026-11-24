@@ -192,7 +192,7 @@ class _ProfileCardState extends State<_ProfileCard> {
               Expanded(
                 child: AppButton(
                   label: 'Edit',
-                  style: AppButtonStyle.gray,
+                  style: AppButtonStyle.blue,
                   size: AppButtonSize.full,
                   onPressed: () => setState(() {
                     _points.text = '${_user.points}';

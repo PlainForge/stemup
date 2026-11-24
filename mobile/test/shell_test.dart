@@ -60,8 +60,7 @@ void main() {
           branches: [
             StatefulShellBranch(routes: [route('/', 'Home')]),
             StatefulShellBranch(routes: [route('/roles', 'Roles')]),
-            StatefulShellBranch(routes: [route('/alumni', 'Alumni')]),
-            StatefulShellBranch(routes: [route('/old-users', 'Old Users')]),
+            StatefulShellBranch(routes: [route('/admin', 'Admin')]),
             StatefulShellBranch(
               routes: [GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen())],
             ),

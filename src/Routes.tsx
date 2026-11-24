@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import App from "./App";
 import LoginPage from "./pages/LoginPage";
 import RolePage from "./pages/RolePage";
@@ -8,9 +8,9 @@ import RegisterPage from "./pages/RegisterPage";
 import Home from "./pages/Home";
 import Loading from "./pages/Loading";
 import ProtectedRoute from "./components/ProtectedRoute";
-import AlumniPage from "./pages/AlumniPage";
 import AlumniBatchPage from "./pages/AlumniBatchPage";
-import OldUsersPage from "./pages/OldUsersPage";
+import AdminPage from "./pages/AdminPage";
+import AdminRolePage from "./pages/AdminRolePage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 
 export const router = createBrowserRouter([
@@ -37,9 +37,12 @@ export const router = createBrowserRouter([
       { index: true, element: <Home /> },
       { path: "settings", element: <Settings /> },
       { path: "roles", element: <RolesSelectorPage /> },
-      { path: "alumni", element: <AlumniPage /> },
-      { path: "alumni/:id", element: <AlumniBatchPage /> },
-      { path: "old-users", element: <OldUsersPage /> },
+      { path: "admin", element: <AdminPage /> },
+      { path: "admin/roles/:id", element: <AdminRolePage /> },
+      { path: "admin/inactive/:id", element: <AlumniBatchPage /> },
+      // Alumni and Old Users became the Admin page's Inactive Users tab
+      { path: "alumni/*", element: <Navigate to="/admin?tab=inactive" replace /> },
+      { path: "old-users", element: <Navigate to="/admin?tab=inactive" replace /> },
 
       {
         path: "roles/:id",

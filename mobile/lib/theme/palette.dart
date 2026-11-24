@@ -55,6 +55,7 @@ class Palette {
   static const orange200 = Color(0xFFFED7AA);
   static const orange100 = Color(0xFFFFEDD5);
   static const orange700 = Color(0xFFC2410C);
+  static const purple700 = Color(0xFF7E22CE);
   static const amber50 = Color(0xFFFFFBEB);
   static const amber700 = Color(0xFFB45309);
   static const sky500 = Color(0xFF0EA5E9);

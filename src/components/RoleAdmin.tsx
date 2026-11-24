@@ -1,10 +1,12 @@
-import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
-import { confirmDialog } from "../lib/confirm";
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, onSnapshot, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
+import { alertDialog, confirmDialog, promptDialog } from "../lib/confirm";
+import { roleService, isRoleStaff } from "../lib/roleService";
+import { useNavigate } from "react-router-dom";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { AnimatePresence, motion } from "motion/react";
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { db } from "../lib/firebase";
-import { type Role, type SubmittedTask, type Task, type UserData, type UserRoleData } from "../myDataTypes";
+import { type Role, type StemRequest, type SubmittedTask, type Task, type UserData, type UserRoleData } from "../myDataTypes";
 import { MainContext } from "../context/MainContext";
 import LinkButton from "./LinkButton";
 import Button from "./Button";
@@ -55,14 +57,24 @@ const MONTH_OPTIONS = Array.from({ length: 13 }, (_, i) => {
 });
 
 interface prop {
-    role: {name: string, id: string},
+    role: Role,
     membersWithData: UserData[],
     requested: string[],
-    setRequested: (ids: string[]) => void,
 }
 
+/**
+ * Everything for running a role: join requests, tasks, members, instructors,
+ * rewards and settings. Shown as the role page's Instructor tab for the role's
+ * instructors, and on the admin role page (/admin/roles/:id) for admins.
+ */
 export default function RoleAdminPage({ role, membersWithData, requested } : prop) {
     const context = useContext(MainContext);
+    const navigate = useNavigate();
+    const [pendingReset, setPendingReset] = useState<StemRequest | null>(null);
+    const [instructorProfiles, setInstructorProfiles] = useState<{ uid: string; name: string; photoURL: string }[]>([]);
+    const [addInstructorUid, setAddInstructorUid] = useState("");
+    const [rewardsTitle, setRewardsTitle] = useState(role.rewardsTitle ?? "");
+    const [phrase5, setPhrase5] = useState(""); // Rewards title phrase
     const [page, setPage] = useState("requests");
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
     const [createTaskFor, setCreateSetTaskFor] = useState<string[]>([]);
@@ -71,7 +83,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [phrase2, setPhrase2] = useState(""); // Role reset phrase
     const [phrase3, setPhrase3] = useState(""); // Role reward phrase
     const [phrase4, setPhrase4] = useState(""); // Sent task phrase
-    const [showInGlobal, setShowInGlobal] = useState(false);
+    const showInGlobal = role.showInGlobalLeaderboard ?? false;
     const [allTasks, setAllTasks] = useState<Task[]>([]);
     const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "done" | "submitted">("all");
     const [taskSearch, setTaskSearch] = useState("");
@@ -112,13 +124,33 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         return () => unsub();
     }, [role.id]);
 
-    // Listen for global leaderboard flag
+    // A reset this role is waiting on an admin to approve
     useEffect(() => {
-        const unsub = onSnapshot(doc(db, "roles", role.id), (snap) => {
-            if (snap.exists()) setShowInGlobal(snap.data().showInGlobalLeaderboard ?? false);
-        });
-        return () => unsub();
+        const q = query(collection(db, "requests"), where("roleId", "==", role.id));
+        return onSnapshot(q, (snap) => {
+            const reset = snap.docs.map(d => ({ id: d.id, ...d.data() } as StemRequest)).find(r => r.type === "resetRole");
+            setPendingReset(reset ?? null);
+        }, (err) => console.error("Error loading reset requests:", err));
     }, [role.id]);
+
+    // Names and photos for the people who can run this role, and for every instructor that could be added
+    const allInstructors = context?.instructors ?? [];
+    const instructorsKey = Array.from(new Set([...(role.instructors ?? []), ...allInstructors])).join(",");
+    useEffect(() => {
+        const uids = instructorsKey ? instructorsKey.split(",") : [];
+        let cancelled = false;
+        Promise.all(uids.map(uid => getDoc(doc(db, "users", uid)))).then(snaps => {
+            if (cancelled) return;
+            setInstructorProfiles(snaps.filter(s => s.exists()).map(s => ({
+                uid: s.id,
+                name: (s.data()!.name as string) ?? "Unknown User",
+                photoURL: (s.data()!.photoURL as string) ?? "",
+            })));
+        });
+        return () => { cancelled = true; };
+    }, [instructorsKey]);
+
+    useEffect(() => setRewardsTitle(role.rewardsTitle ?? ""), [role.rewardsTitle]);
 
     // Get Users that requested
     useEffect(() => {
@@ -366,123 +398,66 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         });
     };
 
-    const resetRole = async (roleId : string) => {
-        const confirmDelete = await confirmDialog("Are you sure you want to force reset? This cannot be undone.", { title: "Force Reset", confirmLabel: "Reset", danger: true });
+    const isAdmin = !!context?.user && (context.admins ?? []).includes(context.user.uid);
 
-        if (!confirmDelete) return;
-
+    // Admins reset straight away; instructors send the reset to an admin to approve
+    const resetRole = async () => {
+        const saveName = await promptDialog(
+            isAdmin
+                ? "Every member's points and tasks completed in this role are saved under this name on the Saved Data tab, then cleared along with all tasks and prizes."
+                : "Name this save. An admin will review the reset; once approved, every member's points and tasks completed are saved under this name on the Saved Data tab, then cleared along with all tasks and prizes.",
+            {
+                title: isAdmin ? "Reset Role" : "Request Reset",
+                confirmLabel: isAdmin ? "Reset" : "Send Request",
+                danger: isAdmin,
+                input: { placeholder: `e.g. ${new Date().toLocaleString("en-US", { month: "long", year: "numeric" })}` },
+            }
+        );
+        if (saveName === null) return;
+        if (!saveName.trim()) {
+            await alertDialog("Please enter a name for the saved data.", "Name needed");
+            return;
+        }
         try {
-            // Save leaderboard snapshot before resetting
-            const snapshotAdmins = context?.admins ?? [];
-            const nonAdminMembers = membersWithData
-                .filter(m => !snapshotAdmins.includes(m.uid))
-                .sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
-
-            const month = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
-            const now = Timestamp.now();
-            const deleteAt = Timestamp.fromDate(new Date(now.toMillis() + 365 * 24 * 60 * 60 * 1000));
-
-            await addDoc(collection(db, "leaderboardSnapshots"), {
-                roleId,
-                month,
-                createdAt: now,
-                deleteAt,
-                entries: nonAdminMembers.map((u, idx) => ({
-                    uid: u.uid,
-                    name: u.name,
-                    photoURL: u.photoURL ?? "",
-                    points: u.points ?? 0,
-                    taskCompleted: u.taskCompleted ?? 0,
-                    rank: idx + 1,
-                })),
-            });
-
-            const updates: Promise<void>[] = [];
-
-            const tasksQ = query(collection(db, "tasks"), where("roleId", "==", roleId));
-            const tasksSnap = await getDocs(tasksQ);
-            tasksSnap.forEach((taskDoc) => {
-                updates.push(deleteDoc(doc(db, "tasks", taskDoc.id)));
-            });
-
-            const submittedQ = query(collection(db, "tasksSubmitted"), where("roleId", "==", roleId));
-            const submittedSnap = await getDocs(submittedQ);
-            submittedSnap.forEach((taskDoc) => {
-                updates.push(deleteDoc(doc(db, "tasksSubmitted", taskDoc.id)));
-            });
-
-            // Reset rewards
-            const rewardRef = doc(db, "rewards", roleId);
-            updates.push(
-                updateDoc(rewardRef, {
-                    first: "No reward set",
-                    second: "No reward set",
-                    third: "No reward set",
-                })
-            );
-
-            // Reset all users' points and taskCompleted for this role
-            const usersSnap = await getDocs(collection(db, "users"));
-            usersSnap.forEach((userDoc) => {
-                const data = userDoc.data();
-                const roles: UserRoleData[] = Array.isArray(data.roles) ? data.roles : [];
-
-                const updatedRoles = roles.map((r) => {
-                    if (r.id === roleId) {
-                        return {
-                            ...r,
-                            points: 0,
-                            taskCompleted: 0,
-                        };
-                    }
-                    return r;
-                });
-
-                updates.push(
-                    updateDoc(doc(db, "users", userDoc.id), { roles: updatedRoles })
-                );
-            });
-
-            await Promise.all(updates);
-
-            setPhrase2("Role has been reset successfully");
-            console.log(`Role ${roleId} has been reset.`);
+            if (isAdmin) {
+                await roleService.resetRole(role.id, saveName.trim());
+                setPhrase2("Role reset. Its data is on the Saved Data tab.");
+            } else {
+                await roleService.requestRoleReset(context!.user!.uid, context!.userData?.name ?? "", role, saveName);
+                setPhrase2("Reset requested. An admin will review it.");
+            }
         } catch (err) {
             console.error("Error resetting role:", err);
+            await alertDialog("Couldn't reset the role. Please try again.", "Reset failed");
         }
-    }
+    };
 
-    const deleteRole = async (roleId : string) => {
+    const cancelResetRequest = async () => {
+        if (!pendingReset) return;
+        await roleService.deleteRequest(pendingReset.id);
+    };
+
+    const deleteRole = async () => {
         const confirmDelete = await confirmDialog("Are you sure you want to delete this role? This cannot be undone.", { title: "Delete Role", confirmLabel: "Delete", danger: true });
-
         if (!confirmDelete) return;
-
         try {
-            const usersRef = collection(db, "users");
-            const userSnaps = await getDocs(usersRef);
+            await roleService.deleteRole(role.id);
+            navigate("/admin", { replace: true });
+        } catch (err) {
+            console.error(err);
+            await alertDialog("Couldn't delete the role. Please try again.", "Delete failed");
+        }
+    };
 
-            const userUpdates = userSnaps.docs
-                .filter(snap => snap.data().roles)
-                .map(snap => {
-                    const updatedRoles = snap.data().roles.filter((r: Role) => r.id !== roleId);
-                    return updateDoc(doc(db, "users", snap.id), { roles: updatedRoles });
-                });
-
-            const tasksSnap = await getDocs(query(collection(db, "tasks"), where("roleId", "==", roleId)));
-            const taskDeletes = tasksSnap.docs.map(task => deleteDoc(doc(db, "tasks", task.id)));
-
-            const submittedSnap = await getDocs(query(collection(db, "tasksSubmitted"), where("roleId", "==", roleId)));
-            const submittedDeletes = submittedSnap.docs.map(task => deleteDoc(doc(db, "tasksSubmitted", task.id)));
-
-            await Promise.all([...userUpdates, ...taskDeletes, ...submittedDeletes]);
-
-            await deleteDoc(doc(db, "roles", roleId));
-
-            console.log(`Role ${roleId} and all related data deleted successfully`);
+    const saveRewardsTitle = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        try {
+            await roleService.setRewardsTitle(role.id, rewardsTitle);
+            setPhrase5(rewardsTitle.trim() ? "Title updated" : "Title reset to the current month");
         } catch (err) {
             console.error(err);
         }
-    }
+    };
 
     const setReward = async (e : FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -513,6 +488,32 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     if (!user || !userData || loading) {
         return <h1>Loading...</h1>
     }
+
+    const roleInstructors = role.instructors ?? [];
+    const addableInstructors = instructorProfiles.filter(p => allInstructors.includes(p.uid) && !roleInstructors.includes(p.uid) && !admins.includes(p.uid));
+
+    const addInstructor = async () => {
+        const person = instructorProfiles.find(p => p.uid === addInstructorUid);
+        if (!person) return;
+        try {
+            await roleService.addRoleInstructor(role, person.uid);
+            setAddInstructorUid("");
+        } catch (err) {
+            console.error("Error adding instructor:", err);
+        }
+    };
+
+    const removeInstructor = async (uid: string, name: string) => {
+        const isSelf = uid === user.uid;
+        const ok = await confirmDialog(
+            isSelf
+                ? "You'll stay a member of this role but won't be able to run it any more."
+                : `${name} will stay a member of this role but won't be able to run it any more.`,
+            { title: isSelf ? "Leave as Instructor?" : "Remove Instructor?", confirmLabel: "Remove", danger: true }
+        );
+        if (!ok) return;
+        await roleService.removeRoleInstructor(role.id, uid);
+    };
 
     const toggleGlobalLeaderboard = async () => {
         await updateDoc(doc(db, "roles", role.id), { showInGlobalLeaderboard: !showInGlobal });
@@ -551,6 +552,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     };
 
     const saveRoleAndGlobal = async (uid: string) => {
+        if (!isAdmin) return;
         const member = membersWithData.find(m => m.uid === uid);
         if (!member) return;
         const deltaPoints = editPoints - origEditPoints;
@@ -568,7 +570,8 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         setEditingMember(null);
     };
 
-    const nonAdminMembers = membersWithData.filter((m) => !admins.includes(m.uid));
+    // Admins and the role's instructors aren't given tasks or ranked
+    const nonAdminMembers = membersWithData.filter((m) => !isRoleStaff(role, m.uid, admins));
 
     // Remove a task entirely (completed or not). Points already awarded are left as-is.
     const removeTask = async (task: Task) => {
@@ -648,6 +651,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         { key: "creation", label: "Assign Task", badge: 0 },
         { key: "tasks", label: "Tasks", badge: allSubmitted.filter(t => !t.complete).length },
         { key: "members", label: "Members", badge: 0 },
+        { key: "instructors", label: "Instructors", badge: 0 },
         { key: "rewards", label: "Rewards", badge: 0 },
         { key: "config", label: "Config", badge: 0 },
     ];
@@ -709,9 +713,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                         <div className="flex items-center justify-between">
                             <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Assign to</h2>
                             <LinkButton onClick={() => {
-                                const allUids = membersWithData
-                                    .filter(m => m.uid && !admins.includes(m.uid))
-                                    .map(m => m.uid as string);
+                                const allUids = nonAdminMembers.map(m => m.uid as string);
                                 setCreateSetTaskFor(allUids);
                             }}>Select all</LinkButton>
                         </div>
@@ -727,10 +729,9 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                             className="w-full bg-gray-50 border border-gray-200 px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
                         >
                             <option value="" disabled>Select a member</option>
-                            {membersWithData.map((member) => {
-                                if (!member.uid || admins.includes(member.uid)) return null;
-                                return <option key={member.uid} value={member.uid}>{member.name}</option>;
-                            })}
+                            {nonAdminMembers.map((member) => (
+                                <option key={member.uid} value={member.uid}>{member.name}</option>
+                            ))}
                         </select>
 
                         {createTaskFor.length > 0 && (
@@ -1020,7 +1021,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <Button onClick={() => saveTaskEdit(task)} size="full" color="blue" disabled={!editTitle.trim()}>Save</Button>
-                                                    <Button onClick={() => setEditTaskId(null)} size="full" color="gray">Cancel</Button>
+                                                    <Button onClick={() => setEditTaskId(null)} size="full" color="cancel">Cancel</Button>
                                                 </div>
                                             </div>
                                         ) : reassignTaskId === task.id ? (
@@ -1037,13 +1038,13 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                 </select>
                                                 <div className="flex gap-2">
                                                     <Button onClick={() => reassignTask(task)} size="full" color="blue" disabled={!reassignTo}>Reassign</Button>
-                                                    <Button onClick={() => { setReassignTaskId(null); setReassignTo(""); }} size="full" color="gray">Cancel</Button>
+                                                    <Button onClick={() => { setReassignTaskId(null); setReassignTo(""); }} size="full" color="cancel">Cancel</Button>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="flex gap-2 pt-3 border-t border-gray-100">
                                                 {!task.complete && !submission && (
-                                                    <Button onClick={() => startEditTask(task)} size="full" color="gray">Edit</Button>
+                                                    <Button onClick={() => startEditTask(task)} size="full" color="blue">Edit</Button>
                                                 )}
                                                 {!task.complete && !submission && (
                                                     <Button onClick={() => { setEditTaskId(null); setReassignTaskId(task.id); setReassignTo(""); }} size="full" color="gray">Reassign</Button>
@@ -1081,7 +1082,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
-                                    <Button onClick={() => openEditMember(m)} size="xsm" color="gray">Edit</Button>
+                                    <Button onClick={() => openEditMember(m)} size="xsm" color="blue">Edit</Button>
                                     <Button onClick={() => kickMember(m.uid, m.name)} size="xsm" color="red">Kick</Button>
                                 </div>
                             </div>
@@ -1117,7 +1118,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             <div>
                                                 <p className="font-semibold">{m.name}</p>
                                                 <p className="text-xs text-gray-400">
-                                                    Role stats{editGlobal ? ` · Global: ${editGlobal.points} pts, ${editGlobal.taskCompleted} tasks` : ""}
+                                                    Role stats{isAdmin && editGlobal ? ` · Global: ${editGlobal.points} pts, ${editGlobal.taskCompleted} tasks` : ""}
                                                 </p>
                                             </div>
                                         </div>
@@ -1143,7 +1144,8 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                 />
                                             </div>
                                         </div>
-                                        {editGlobal && (editPoints !== origEditPoints || editTaskCount !== origEditTaskCount) && (
+                                        {/* Only admins change global totals; instructors edit this role's stats only */}
+                                        {isAdmin && editGlobal && (editPoints !== origEditPoints || editTaskCount !== origEditTaskCount) && (
                                             <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
                                                 <p className="font-semibold mb-0.5">Global impact if saved with global:</p>
                                                 <p>
@@ -1154,8 +1156,8 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             </div>
                                         )}
                                         <div className="flex flex-col gap-2">
-                                            <Button size="full" onClick={() => saveRoleOnly(m.uid)}>Save to Role Only</Button>
-                                            <Button size="full" color="gray" onClick={() => saveRoleAndGlobal(m.uid)}>Save to Role + Global</Button>
+                                            <Button size="full" onClick={() => saveRoleOnly(m.uid)}>{isAdmin ? "Save to Role Only" : "Save"}</Button>
+                                            {isAdmin && <Button size="full" color="gray" onClick={() => saveRoleAndGlobal(m.uid)}>Save to Role + Global</Button>}
                                             <button onClick={() => setEditingMember(null)} className="text-xs text-gray-400 hover:text-gray-600 transition-colors py-1 hover:cursor-pointer">Cancel</button>
                                         </div>
                                     </motion.div>
@@ -1166,11 +1168,75 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                 </motion.div>
             )}
 
+            {/* Instructors */}
+            {page === "instructors" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Running this role</h2>
+                        <p className="text-sm text-gray-500">Instructors here can give and review tasks, edit points, accept members and request resets. Admins can always run every role.</p>
+                        {roleInstructors.length === 0 ? (
+                            <p className="text-sm text-gray-400">No instructors yet.</p>
+                        ) : roleInstructors.map(uid => {
+                            const person = instructorProfiles.find(p => p.uid === uid);
+                            const lostAccess = !allInstructors.includes(uid);
+                            return (
+                                <div key={uid} className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <ProfileImg src={person?.photoURL} alt={person?.name} size="xxs" />
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium truncate">{person?.name ?? "Loading..."}{uid === user.uid ? " (you)" : ""}</p>
+                                            <p className="text-xs text-gray-400">
+                                                {role.createdBy === uid ? "Created this role" : "Instructor"}
+                                                {lostAccess ? " · No longer an Instructor" : ""}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {(isAdmin || uid === user.uid || role.createdBy !== uid) && (
+                                        <Button onClick={() => removeInstructor(uid, person?.name ?? "This instructor")} size="xsm" color="red" extraClasses="shrink-0">Remove</Button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Add an instructor</h2>
+                        {addableInstructors.length === 0 ? (
+                            <p className="text-sm text-gray-400">Every instructor already has access. Admins can make more people Instructors from the Admin page.</p>
+                        ) : (
+                            <>
+                                <select
+                                    value={addInstructorUid}
+                                    onChange={e => setAddInstructorUid(e.target.value)}
+                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                                >
+                                    <option value="">Select an instructor</option>
+                                    {addableInstructors.map(p => <option key={p.uid} value={p.uid}>{p.name}</option>)}
+                                </select>
+                                <Button onClick={addInstructor} size="sm" disabled={!addInstructorUid}>Give Access</Button>
+                            </>
+                        )}
+                    </div>
+                </motion.div>
+            )}
+
             {/* Rewards */}
-            {page.match("rewards") && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            {page === "rewards" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
+                    <form onSubmit={saveRewardsTitle} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Rewards title</h2>
+                        <p className="text-sm text-gray-500">The heading on the Rewards tab. Leave it empty to show the current month.</p>
+                        <input
+                            value={rewardsTitle}
+                            onChange={e => setRewardsTitle(e.target.value)}
+                            maxLength={48}
+                            placeholder={`${new Date().toLocaleString("en-US", { month: "long" })} Rewards`}
+                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                        />
+                        <Button type="submit" size="sm">Save Title</Button>
+                        <Alert value={phrase5} setValue={setPhrase5} />
+                    </form>
                     <form onSubmit={setReward} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
-                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Set monthly rewards</h2>
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Set rewards</h2>
                         {[
                             { name: "first", label: "1st Place" },
                             { name: "second", label: "2nd Place" },
@@ -1204,7 +1270,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
 
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
                         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Global Leaderboard</h2>
-                        <p className="text-sm text-gray-500">When enabled, members of this role can see the global leaderboard on the home page.</p>
+                        <p className="text-sm text-gray-500">When enabled, every member of this role can see the global leaderboard on the home page.</p>
                         <div className="flex items-center justify-between">
                             <span className={`text-sm font-medium ${showInGlobal ? "text-green-600" : "text-gray-400"}`}>
                                 {showInGlobal ? "Enabled" : "Disabled"}
@@ -1216,17 +1282,29 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                     </div>
 
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
-                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Force reset</h2>
-                        <p className="text-sm text-gray-500">Saves a leaderboard snapshot, then clears all tasks, submissions, and resets every member's points and task count for this role.</p>
-                        <Button onClick={() => resetRole(role.id)} size="sm">Force Reset</Button>
+                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Reset role</h2>
+                        <p className="text-sm text-gray-500">
+                            Saves every member's points and tasks completed under a name you choose (shown with the date on the Saved Data tab), then clears this role's tasks, submissions and prizes and sets everyone back to 0.
+                            {!isAdmin && " An admin has to approve it first."}
+                        </p>
+                        {pendingReset ? (
+                            <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                                <p className="text-sm text-amber-700">Reset requested as "{pendingReset.saveName}". Waiting for an admin.</p>
+                                {!isAdmin && <Button onClick={cancelResetRequest} size="xsm" color="cancel" extraClasses="shrink-0">Cancel</Button>}
+                            </div>
+                        ) : (
+                            <Button onClick={resetRole} size="sm">{isAdmin ? "Reset Role" : "Request Reset"}</Button>
+                        )}
                         <Alert value={phrase2} setValue={setPhrase2} />
                     </div>
 
-                    <div className="bg-white border border-red-100 rounded-2xl p-5 flex flex-col gap-3">
-                        <h2 className="text-sm font-semibold uppercase tracking-widest text-red-400">Danger Zone</h2>
-                        <p className="text-sm text-gray-500">Permanently deletes this role and all associated data.</p>
-                        <Button onClick={() => deleteRole(role.id)} color="red" size="sm">Delete Role</Button>
-                    </div>
+                    {isAdmin && (
+                        <div className="bg-white border border-red-100 rounded-2xl p-5 flex flex-col gap-3">
+                            <h2 className="text-sm font-semibold uppercase tracking-widest text-red-400">Danger Zone</h2>
+                            <p className="text-sm text-gray-500">Permanently deletes this role and all associated data, including its saved data.</p>
+                            <Button onClick={deleteRole} color="red" size="sm">Delete Role</Button>
+                        </div>
+                    )}
                 </motion.div>
             )}
 

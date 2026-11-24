@@ -1,5 +1,7 @@
 // pages/SettingsPage.tsx as it renders on a phone (including its mobile-only
 // "App" card), plus a "Reduce glass effects" switch for the native tab bar.
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -72,6 +74,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (name.isEmpty) return;
     setState(() => _saving = true);
     try {
+      if (name != me.name && !await AuthService.isNameAllowed(name)) {
+        if (mounted) await alertDialog(context, title: 'Name not saved', message: AuthService.blockedNameMessage);
+        return;
+      }
       await AuthService.setAccountInformation(name: name, photo: _photo, contentType: _photoType, userData: me);
       setState(() => _photo = null);
       if (mounted) showToast(context, 'Changes saved successfully!');
@@ -241,6 +247,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
+
+        // ── Access level: User < Instructor < Admin ──
+        const _AccessCard(),
 
         // ── App ──
         _Card(
@@ -431,6 +440,132 @@ class _InsetRow extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Shows the person's access level. Users can ask to become an Instructor;
+/// Instructors can hide the global leaderboard on Home.
+class _AccessCard extends StatefulWidget {
+  const _AccessCard();
+
+  @override
+  State<_AccessCard> createState() => _AccessCardState();
+}
+
+class _AccessCardState extends State<_AccessCard> {
+  final _reason = TextEditingController();
+  StreamSubscription<List<StemRequest>>? _sub;
+  StemRequest? _request;
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Only Users can have an open Instructor request (and tests run with no signed-in user)
+    final app = context.read<AppState>();
+    final uid = app.user?.uid;
+    if (uid == null || app.access != AccessLevel.user) return;
+    _sub = Db.myRequestsStream(uid).listen(
+      (r) {
+        if (mounted) setState(() => _request = r.where((x) => x.type == RequestType.instructor).firstOrNull);
+      },
+      onError: (_) {},
+    );
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send(AppState app) async {
+    if (_reason.text.trim().isEmpty) {
+      await alertDialog(context, title: 'Reason needed', message: "Please tell the admins why you'd like to be an Instructor.");
+      return;
+    }
+    setState(() => _sending = true);
+    try {
+      final uid = app.user?.uid;
+      if (uid == null) return;
+      await Db.requestInstructor(uid, app.userData?.name ?? '', _reason.text);
+      _reason.clear();
+    } catch (_) {
+      if (mounted) showToast(context, "Couldn't send your request. Please try again.", error: true);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final access = app.access;
+    final request = _request;
+    return _Card(
+      title: 'Access',
+      children: [
+        _InsetRow(label: 'Your role', action: AccessTag(access)),
+        Muted(switch (access) {
+          AccessLevel.admin => 'You can join any role, run every role from the Admin tab, and make people Instructors.',
+          AccessLevel.instructor => "You can request new roles, run the roles you've been given, and add other instructors to them.",
+          AccessLevel.user => 'You can join roles, complete tasks and earn points. Instructors create and run roles.',
+        }),
+        if (access == AccessLevel.instructor)
+          _InsetRow(
+            label: 'Show the global leaderboard on Home',
+            action: CupertinoSwitch(
+              value: app.userData?.showGlobalLeaderboard ?? true,
+              activeTrackColor: Palette.green500,
+              onChanged: (v) => Db.setShowGlobalLeaderboard(app.userData!.uid, v),
+            ),
+          ),
+        if (access == AccessLevel.user)
+          if (request != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: Palette.amber50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Your request to become an Instructor is waiting for an admin.',
+                      style: TextStyle(fontSize: 14, color: Palette.amber700),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AppButton(label: 'Withdraw', size: AppButtonSize.xsm, style: AppButtonStyle.gray, onPressed: () => Db.deleteRequest(request.id)),
+                ],
+              ),
+            )
+          else
+            _Field(
+              label: 'Become an Instructor',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AppTextField(controller: _reason, placeholder: 'Why would you like to be an Instructor?', maxLines: 3, maxLength: 500),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: AppButton(
+                      label: 'Send Request',
+                      style: AppButtonStyle.blue,
+                      size: AppButtonSize.sm,
+                      loading: _sending,
+                      onPressed: () => _send(app),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
 }
 
 String _themeLabel(ThemePref t) => switch (t) {

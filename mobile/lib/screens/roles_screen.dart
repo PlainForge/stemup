@@ -1,4 +1,6 @@
 // pages/RolesSelectorPage.tsx + components/RoleJoinButton.tsx.
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +12,7 @@ import '../state/app_state.dart';
 import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 import '../widgets/glass_tab_bar.dart' show PingDot;
 import '../widgets/page_scaffold.dart';
 
@@ -22,21 +25,52 @@ class RolesScreen extends StatefulWidget {
 
 class _RolesScreenState extends State<RolesScreen> {
   final _newRole = TextEditingController();
+  final _purpose = TextEditingController();
   bool _creating = false;
+  StreamSubscription<List<StemRequest>>? _requestsSub;
+  List<StemRequest> _myRoleRequests = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    // The instructor's own role requests still waiting for an admin
+    _requestsSub = Db.myRequestsStream(context.read<AppState>().user!.uid).listen(
+      (r) {
+        if (mounted) setState(() => _myRoleRequests = r.where((x) => x.type == RequestType.createRole).toList());
+      },
+      onError: (_) {},
+    );
+  }
 
   @override
   void dispose() {
     _newRole.dispose();
+    _purpose.dispose();
+    _requestsSub?.cancel();
     super.dispose();
   }
 
+  // Admins create roles straight away; instructors send the name and purpose to an admin
   Future<void> _createRole(AppState app) async {
     final name = _newRole.text.trim();
     if (name.isEmpty) return;
+    if (!app.isAdmin && _purpose.text.trim().isEmpty) {
+      await alertDialog(context, title: 'Purpose needed', message: 'Please describe what this role is for, so an admin can review it.');
+      return;
+    }
     setState(() => _creating = true);
     try {
-      await Db.createRole(name, app.admins);
+      if (app.isAdmin) {
+        await Db.createRole(name, purpose: _purpose.text.trim());
+        if (mounted) showToast(context, 'Created "$name"');
+      } else {
+        await Db.requestRoleCreation(app.user!.uid, app.userData?.name ?? '', name, _purpose.text);
+        if (mounted) showToast(context, 'Sent "$name" to an admin for review');
+      }
       _newRole.clear();
+      _purpose.clear();
+    } catch (_) {
+      if (mounted) showToast(context, "Couldn't send that. Please try again.", error: true);
     } finally {
       if (mounted) setState(() => _creating = false);
     }
@@ -69,11 +103,11 @@ class _RolesScreenState extends State<RolesScreen> {
                 uid: uid,
                 isAdmin: app.isAdmin,
                 isCurrent: app.userData?.currentRole == roles[i].id,
-                todoCount: !app.isAdmin && (app.userData?.roles.any((r) => r.id == roles[i].id) ?? false) ? (todo[roles[i].id] ?? 0) : 0,
-                needsAttention: app.isAdmin && (attention[roles[i].id] ?? 0) > 0,
+                todoCount: !app.canManage(roles[i]) && (app.userData?.roles.any((r) => r.id == roles[i].id) ?? false) ? (todo[roles[i].id] ?? 0) : 0,
+                needsAttention: (attention[roles[i].id] ?? 0) > 0,
               ),
             ),
-        if (app.isAdmin)
+        if (app.access != AccessLevel.user)
           Container(
             margin: const EdgeInsets.only(top: 12),
             padding: const EdgeInsets.only(top: 24),
@@ -83,14 +117,57 @@ class _RolesScreenState extends State<RolesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Heading('Create a Role', size: 16),
+                Heading(app.isAdmin ? 'Create a Role' : 'Request a New Role', size: 16),
+                if (!app.isAdmin) ...[
+                  const SizedBox(height: 4),
+                  const Muted("An admin reviews it first. Once approved, you'll run the new role as its instructor."),
+                ],
                 const SizedBox(height: 12),
-                AppTextField(controller: _newRole, placeholder: 'Role name', maxLength: 32, onSubmitted: (_) => _createRole(app)),
+                AppTextField(controller: _newRole, placeholder: 'Role name', maxLength: 32, textInputAction: TextInputAction.next),
+                const SizedBox(height: 12),
+                AppTextField(
+                  controller: _purpose,
+                  placeholder: app.isAdmin ? 'Purpose (optional)' : 'What is this role for?',
+                  maxLines: 3,
+                  maxLength: 500,
+                ),
                 const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: AppButton(label: 'Create', size: AppButtonSize.sm, loading: _creating, onPressed: () => _createRole(app)),
+                  child: AppButton(
+                    label: app.isAdmin ? 'Create' : 'Send Request',
+                    size: AppButtonSize.sm,
+                    loading: _creating,
+                    onPressed: () => _createRole(app),
+                  ),
                 ),
+                if (!app.isAdmin && _myRoleRequests.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const SectionLabel('Waiting for an admin', size: 12, padding: EdgeInsets.only(bottom: 8)),
+                  for (final r in _myRoleRequests)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Palette.fill(context),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Palette.separator(context)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              r.roleName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.label(context)),
+                            ),
+                          ),
+                          LinkText('Withdraw', size: 13, onPressed: () => Db.deleteRequest(r.id)),
+                        ],
+                      ),
+                    ),
+                ],
               ],
             ),
           ),

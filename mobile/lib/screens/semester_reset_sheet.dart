@@ -121,7 +121,7 @@ class _SemesterResetState extends State<_SemesterReset> {
             const Heading('Semester Reset', size: 18),
             const SizedBox(height: 6),
             const Muted(
-              'Choose which roles to remove. Users whose only roles are removed will be archived to an Alumni record and removed '
+              'Choose which roles to remove. Users whose only roles are removed will be archived under Inactive Users and removed '
               'from active rosters; everyone else keeps their account, but their points and completed tasks reset to 0.',
               size: 14,
             ),
@@ -183,7 +183,7 @@ class _SemesterResetState extends State<_SemesterReset> {
           children: [
             const Heading('Name this Archive', size: 18),
             const SizedBox(height: 6),
-            const Muted('Archived users will be saved under this name in the Alumni tab, e.g. "Fall 2025".'),
+            const Muted('Archived users will be saved under this name in Admin → Inactive Users, e.g. "Fall 2025".'),
             const SizedBox(height: 14),
             AppTextField(
               controller: _batchName,
@@ -288,12 +288,12 @@ class _SemesterResetState extends State<_SemesterReset> {
             ),
             const SizedBox(height: 16),
             AppButton(
-              label: 'View Alumni Page',
+              label: 'View Inactive Users',
               size: AppButtonSize.full,
               onPressed: () {
                 final router = GoRouter.of(context);
                 Navigator.pop(context);
-                router.go('/alumni/${r.batchId}');
+                router.go('/admin/inactive/${r.batchId}');
               },
             ),
             const SizedBox(height: 6),

@@ -9,6 +9,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import LinkButton from "../components/LinkButton";
 import ErrorMessage from "../components/ErrorMessage";
+import { BLOCKED_NAME_MESSAGE, isProfaneName } from "../lib/nameFilter";
 
 export default function RegisterPage() {
     const [email, setEmail] = useState("");
@@ -21,6 +22,10 @@ export default function RegisterPage() {
     const isLogin = location.pathname === '/login';
 
     const registerWithEmail = async () => {
+        if (isProfaneName(name)) {
+            setPhrase(BLOCKED_NAME_MESSAGE);
+            return;
+        }
         try {
             await firebaseAuthService.registerWithEmail(email, password, name);
             navigate("/");

@@ -3,7 +3,7 @@ import { alertDialog, confirmDialog, promptDialog } from "../lib/confirm";
 import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
 import { firebaseAuthService } from "../lib/firebaseService";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { signOut } from "firebase/auth";
 import Loading from "./Loading";
@@ -17,6 +17,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBug, faCircleHalfStroke, faMoon, faRightFromBracket, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
 import Dropdown from "../components/Dropdown";
 import type { ThemeMode } from "../context/MainProvider";
+import type { StemRequest } from "../myDataTypes";
+import { roleService } from "../lib/roleService";
+import { BLOCKED_NAME_MESSAGE, isProfaneName } from "../lib/nameFilter";
+import { AccessBadge } from "./AdminPage";
 
 export default function Settings() {
     const context = useContext(MainContext);
@@ -32,12 +36,16 @@ export default function Settings() {
     const [phrase, setPhrase] = useState("");
     const [showResetModal, setShowResetModal] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [instructorRequest, setInstructorRequest] = useState<StemRequest | null>(null);
+    const [reason, setReason] = useState("");
+    const [requesting, setRequesting] = useState(false);
 
     const admins = context?.admins ?? [];
     const themeMode = context?.themeMode ?? "system";
     const setThemeMode = context?.setThemeMode;
     const setBugReportOpen = context?.setBugReportOpen;
     const isAdmin = user ? admins.includes(user.uid) : false;
+    const access = context?.access ?? "user";
 
     const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -51,7 +59,42 @@ export default function Settings() {
         loadRole();
     }, [userData?.currentRole]);
 
+    // A User's open request to become an Instructor
+    useEffect(() => {
+        if (!user || access !== "user") {
+            setInstructorRequest(null);
+            return;
+        }
+        const q = query(collection(db, "requests"), where("uid", "==", user.uid));
+        return onSnapshot(q, (snap) => {
+            const found = snap.docs.map(d => ({ id: d.id, ...d.data() } as StemRequest)).find(r => r.type === "instructor");
+            setInstructorRequest(found ?? null);
+        }, (err) => console.error("Error loading your request:", err));
+    }, [user, access]);
+
     if (!user || !userData || loading || !context) return <Loading />;
+
+    const requestInstructor = async () => {
+        if (!reason.trim()) {
+            await alertDialog("Please tell the admins why you'd like to be an Instructor.", "Reason needed");
+            return;
+        }
+        setRequesting(true);
+        try {
+            await roleService.requestInstructor(user.uid, userData.name, reason);
+            setReason("");
+        } catch (err) {
+            console.error(err);
+            await alertDialog("Couldn't send your request. Please try again.", "Request not sent");
+        } finally {
+            setRequesting(false);
+        }
+    };
+
+    const showGlobal = userData.showGlobalLeaderboard !== false;
+    const toggleGlobal = async () => {
+        await updateDoc(doc(db, "users", user.uid), { showGlobalLeaderboard: !showGlobal });
+    };
 
     // Image preview
     const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,6 +108,10 @@ export default function Settings() {
 
     // Save changes
     const handleSave = async () => {
+        if (isProfaneName(name)) {
+            await alertDialog(BLOCKED_NAME_MESSAGE, "Name not saved");
+            return;
+        }
         const result = await firebaseAuthService.setAccountInformation(name, file, user, userData);
 
         if (!result) return;
@@ -202,6 +249,66 @@ export default function Settings() {
                             <Alert value={phrase} setValue={setPhrase} />
                         </div>
                     )}
+                </div>
+
+                {/* Access level: User < Instructor < Admin */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">Access</h2>
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
+                            <span className="text-sm">Your role</span>
+                            <AccessBadge level={access} />
+                        </div>
+                        <p className="text-sm text-gray-500 -mt-1">
+                            {access === "admin" && "You can join any role, run every role from the Admin page, and make people Instructors."}
+                            {access === "instructor" && "You can request new roles, run the roles you've been given, and add other instructors to them."}
+                            {access === "user" && "You can join roles, complete tasks and earn points. Instructors create and run roles."}
+                        </p>
+
+                        {access === "instructor" && (
+                            <div className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
+                                <div className="min-w-0">
+                                    <p className="text-sm">Global leaderboard</p>
+                                    <p className="text-xs text-gray-400">Show it on the Home page</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={showGlobal}
+                                    aria-label="Show the global leaderboard on Home"
+                                    onClick={toggleGlobal}
+                                    className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors hover:cursor-pointer ${showGlobal ? "bg-green-500" : "bg-gray-300"}`}
+                                >
+                                    <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform ${showGlobal ? "translate-x-6" : "translate-x-1"}`} />
+                                </button>
+                            </div>
+                        )}
+
+                        {access === "user" && (instructorRequest ? (
+                            <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 px-4 py-3 rounded-xl">
+                                <p className="text-sm text-amber-700">Your request to become an Instructor is waiting for an admin.</p>
+                                <Button onClick={() => roleService.deleteRequest(instructorRequest.id)} color="gray" size="xsm" type="button" extraClasses="shrink-0">Withdraw</Button>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="instructor-reason" className="text-sm font-medium text-gray-600">Become an Instructor</label>
+                                <textarea
+                                    id="instructor-reason"
+                                    value={reason}
+                                    onChange={e => setReason(e.target.value)}
+                                    placeholder="Why would you like to be an Instructor?"
+                                    maxLength={500}
+                                    rows={3}
+                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors resize-none"
+                                />
+                                <div>
+                                    <Button onClick={requestInstructor} color="blue" size="sm" type="button" disabled={requesting}>
+                                        {requesting ? "Sending..." : "Send Request"}
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 {/* App (all screen sizes; desktop also has the floating theme/bug-report buttons) */}

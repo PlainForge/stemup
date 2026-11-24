@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MainContext } from './MainContext';
 import { firebaseAuthService } from '../lib/firebaseService';
 import type { User } from 'firebase/auth';
-import {type UserData } from '../myDataTypes';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { type AccessLevel, type UserData } from '../myDataTypes';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 export interface MainContextType {
@@ -14,6 +14,12 @@ export interface MainContextType {
     userData: UserData | null;
     setUserData: React.Dispatch<React.SetStateAction<UserData | null>>;
     admins: string[];
+    /** Users given Instructor access (admins/instructors doc) */
+    instructors: string[];
+    /** The signed-in user's level: User < Instructor < Admin */
+    access: AccessLevel;
+    /** Requests waiting for an admin (admins only; 0 for everyone else) */
+    adminRequestCount: number;
     needsVerification: boolean;
     justLoggedIn: boolean;
     setJustLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
@@ -52,6 +58,8 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     const [userData, setUserData] = useState<UserData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [admins, setAdmins] = useState<string[]>([]);
+    const [instructors, setInstructors] = useState<string[]>([]);
+    const [adminRequestCount, setAdminRequestCount] = useState(0);
     const [needsVerification, setNeedsVerification] = useState<boolean>(false);
     const [justLoggedIn, setJustLoggedIn] = useState(false);
     const [showAccount, setShowAccount] = useState<UserData | null>(null);
@@ -171,6 +179,39 @@ export default function MainProvider({ children }: { children: React.ReactNode }
         return () => unsub();
     }, [user, needsVerification]);
 
+    // Get all instructors (set by admins, same shape as the admins doc)
+    useEffect(() => {
+        if (!user || needsVerification) return;
+        const unsub = onSnapshot(
+            doc(db, "admins", "instructors"),
+            (snap) => {
+                const ids = snap.exists() ? snap.data().ids : [];
+                setInstructors(Array.isArray(ids) ? ids : []);
+            },
+            (error) => {
+                console.warn("Error loading instructors doc:", error);
+                setInstructors([]);
+            }
+        );
+        return () => unsub();
+    }, [user, needsVerification]);
+
+    const isAdminUser = !!user && admins.includes(user.uid);
+    useEffect(() => {
+        if (!isAdminUser) {
+            setAdminRequestCount(0);
+            return;
+        }
+        return onSnapshot(collection(db, "requests"), (snap) => setAdminRequestCount(snap.size), (err) => {
+            console.warn("Error loading requests:", err);
+        });
+    }, [isAdminUser]);
+
+    const access: AccessLevel = !user ? "user"
+        : admins.includes(user.uid) ? "admin"
+        : instructors.includes(user.uid) ? "instructor"
+        : "user";
+
     useEffect(() => {
         if (!user || user.emailVerified) return;
 
@@ -189,8 +230,8 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     }, [user]);
 
     const val = useMemo(
-        () => ({ user, setUser, loading, setLoading, userData, setUserData, admins, needsVerification, justLoggedIn, setJustLoggedIn, showAccount, setShowAccount, roleNotification, setRoleNotification, dark, setDark, themeMode, setThemeMode, bugReportOpen, setBugReportOpen }),
-        [user, loading, userData, admins, needsVerification, justLoggedIn, showAccount, roleNotification, dark, setDark, themeMode, bugReportOpen]
+        () => ({ user, setUser, loading, setLoading, userData, setUserData, admins, instructors, access, adminRequestCount, needsVerification, justLoggedIn, setJustLoggedIn, showAccount, setShowAccount, roleNotification, setRoleNotification, dark, setDark, themeMode, setThemeMode, bugReportOpen, setBugReportOpen }),
+        [user, loading, userData, admins, instructors, access, adminRequestCount, needsVerification, justLoggedIn, showAccount, roleNotification, dark, setDark, themeMode, bugReportOpen]
     );
 
     return (

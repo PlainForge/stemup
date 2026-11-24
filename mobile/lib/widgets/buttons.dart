@@ -8,7 +8,7 @@ import '../theme/palette.dart';
 
 /// Button.tsx `color` prop.
 /// [apple] follows Apple's Sign in with Apple guidelines: black in light mode, white in dark.
-enum AppButtonStyle { neutral, blue, gray, red, green, apple }
+enum AppButtonStyle { neutral, blue, gray, red, green, apple, cancel }
 
 /// Button.tsx `size` prop, for phone widths: xsm = 88, sm = 128, md = 208, full = stretch.
 enum AppButtonSize { xsm, sm, md, full }
@@ -38,6 +38,11 @@ class AppButton extends StatelessWidget {
       AppButtonStyle.neutral => (Palette.resolve(context, Palette.buttonNeutral), Palette.resolve(context, Palette.buttonNeutralText)),
       AppButtonStyle.blue => (Palette.blue600, const Color(0xFFFFFFFF)),
       AppButtonStyle.gray => (Palette.buttonGray, const Color(0xFF000000)),
+      // Soft and secondary, so Cancel never competes with the main action (follows dark mode)
+      AppButtonStyle.cancel => (
+        Palette.resolve(context, Palette.gray100),
+        Palette.resolve(context, const CupertinoDynamicColor.withBrightness(color: Color(0xFF374151), darkColor: Color(0xFFD1D5DB))),
+      ),
       AppButtonStyle.red => (Palette.buttonRed, const Color(0xFFFFFFFF)),
       AppButtonStyle.green => (Palette.green600, const Color(0xFFFFFFFF)),
       AppButtonStyle.apple => (

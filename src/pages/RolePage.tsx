@@ -1,7 +1,9 @@
 import { useContext, useEffect, useState } from "react";
 import { db } from "../lib/firebase";
-import { collection, doc, onSnapshot, query, Timestamp, updateDoc, where } from "firebase/firestore";
-import { type Task, type Role, type UserData, type UserRoleData, type SubmittedTask } from "../myDataTypes";
+import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
+import { type Task, type UserData, type SubmittedTask, type SavedData } from "../myDataTypes";
+import { useRole } from "../lib/useRole";
+import { canManageRole, isRoleStaff } from "../lib/roleService";
 import { motion } from "motion/react";
 import RoleAdminPage from "../components/RoleAdmin";
 import DoneButton from "../components/TaskDoneButton";
@@ -14,114 +16,49 @@ import ProfileImg from "../components/ProfileImg";
 import MedalIcon from "../components/MedalIcon";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 
+
+/** Stable fallback so hooks that depend on these lists don't re-run every render */
+const NO_IDS: string[] = [];
 export default function RolePage() {
     const context = useContext(MainContext);
     const navigate = useNavigate();
 
     const { id: roleId } = useParams<{ id: string }>();
-    const [members, setMembers] = useState<string[]>([]);
-    const [membersWithData, setMembersWithData] = useState<UserData[]>([]);
+    const { role: liveRole, membersWithData, requested } = useRole(roleId);
+    const role = liveRole ?? null;
     const [leaders, setLeaders] = useState<UserData[]>([]);
     const [userTasks, setUserTasks] = useState<Task[]>([]);
     const [pageState, setPageState] = useState("leaderboard");
     const tabBar = useSlidingIndicator(pageState);
-    const [role, setRole] = useState<Role | null>(null);
     const [rewards, setRewards] = useState<string[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
-    const [isMember, setIsMember] = useState<boolean | null>(null);
 
-    const [requested, setRequested] = useState<string[]>([]);
     const [submittedTasks, setSubmittedTasks] = useState<SubmittedTask[]>([]);
     const [taskSearch, setTaskSearch] = useState("");
     const [taskMonthFilter, setTaskMonthFilter] = useState("all");
     const [taskSort, setTaskSort] = useState("date-desc");
     const [taskStatusFilter, setTaskStatusFilter] = useState<"all" | "complete" | "incomplete">("all");
     const [seenTaskIds, setSeenTaskIds] = useState<Set<string>>(new Set());
-
-    interface SnapshotEntry { uid: string; name: string; photoURL: string; points: number; taskCompleted: number; rank: number; }
-    interface LeaderboardSnapshot { id: string; roleId: string; month: string; createdAt: Timestamp; entries: SnapshotEntry[]; }
-    const [snapshots, setSnapshots] = useState<LeaderboardSnapshot[]>([]);
+    const [savedData, setSavedData] = useState<SavedData[]>([]);
 
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
 
     const user = context?.user ?? null;
     const userData = context?.userData ?? null;
     const loading = context?.loading ?? true;
-    const admins = context?.admins ?? [];
+    const admins = context?.admins ?? NO_IDS;
+    const instructors = context?.instructors ?? NO_IDS;
     const setRoleNotification = context?.setRoleNotification ?? null;
     const isCurrentRole = !!roleId && userData?.currentRole === roleId;
-
-    useEffect(() => {
-        if (!roleId || !user) return;
-
-        const roleRef = doc(db, "roles", roleId);
-
-        const unsub = onSnapshot(roleRef, (snap) => {
-            if (!snap.exists()) {
-                setRole(null);
-                setMembers([]);
-                setIsMember(false);
-                return;
-            }
-
-            const data = snap.data() as Omit<Role, "id"> & { members: string[]; pendingRequests: string[] };
-
-            setRole({ id: snap.id, ...data });
-            setMembers(data.members || []);
-            setIsMember((data.members || []).includes(user.uid));
-            setRequested(data.pendingRequests || []);
-        });
-
-        return unsub;
-    }, [roleId, user]);
-
-    useEffect(() => {
-        setMembersWithData((prev) =>
-            prev.filter((m) => members.includes(m.uid))
-        );
-    }, [members]);
-
-    // Get Members
-    useEffect(() => {
-        if (members.length === 0 || !roleId) {
-            setMembersWithData([]);
-            return;
-        }
-
-        const unsubs = members.map((uid) => {
-            const userRef = doc(db, "users", uid);
-            return onSnapshot(userRef, (snap) => {
-                if (snap.exists()) {
-                    const data = snap.data();
-                    setMembersWithData((prev) => {
-                        const updated = prev.filter((m) => m.id !== uid);
-                        const roleData = Array.isArray(data.roles)
-                        ? data.roles.find((r: UserRoleData) => r.id === roleId) || {}
-                        : {};
-                        return [
-                            ...updated,
-                            {
-                                id: uid,
-                                uid,
-                                name: data.name || "Unknown User",
-                                roles: data.roles || [],
-                                points: roleData.points || 0,
-                                taskCompleted: roleData.taskCompleted || 0,
-                                photoURL: data.photoURL || "",
-                                currentRole: data.currentRole || "",
-                            },
-                        ];
-                    });
-                }
-            });
-        });
-
-        return () => unsubs.forEach((unsub) => unsub());
-    }, [members, roleId]);
+    const isMember = liveRole === undefined ? null : !!user && !!liveRole && (liveRole.members ?? []).includes(user.uid);
+    const isAdmin = !!user && admins.includes(user.uid);
+    const canManage = canManageRole(role, user?.uid, admins, instructors);
+    // Admins and this role's instructors run it rather than take part, so they get no Tasks tab and no ranking
+    const isStaff = !!user && isRoleStaff(role, user.uid, admins);
 
     // Get role rewards
     useEffect(() => {
-        if (!role) return;
+        if (!role?.id) return;
 
         const rewardRef = doc(db, "rewards", role.id);
         const unsub = onSnapshot(rewardRef, (snap) => {
@@ -138,16 +75,15 @@ export default function RolePage() {
         });
 
         return () => unsub();
-    }, [role])
+    }, [role?.id])
 
-    // Update Leaderboard
+    // Update Leaderboard (admins and the role's instructors aren't ranked)
     useEffect(() => {
-        if (!membersWithData.length) return;
-        const sorted = [...membersWithData].sort(
-            (a, b) => (b.points || 0) - (a.points || 0)
-        );
+        const sorted = membersWithData
+            .filter(m => !isRoleStaff(role, m.uid, admins))
+            .sort((a, b) => (b.points || 0) - (a.points || 0));
         setLeaders(sorted);
-    }, [membersWithData]);
+    }, [membersWithData, role, admins]);
 
     // Get User Tasks
     useEffect(() => {
@@ -185,10 +121,10 @@ export default function RolePage() {
 
     // Getting the current role's submitted tasks
     useEffect(() => {
-        if (!role) return;
+        if (!roleId) return;
         const q = query(
             collection(db, "tasksSubmitted"),
-            where("roleId", "==", role.id),
+            where("roleId", "==", roleId),
             where("complete", "==", false)
         )
 
@@ -201,31 +137,28 @@ export default function RolePage() {
             )
         })
         return () => unsub();
-    }, [role, setSubmittedTasks]);
+    }, [roleId]);
 
-    // Get leaderboard snapshots for this role
+    // Saved Data: leaderboards saved each time the role was reset
     useEffect(() => {
         if (!roleId) return;
         // Sorted client-side (rather than via orderBy) so this doesn't need a composite index on roleId+createdAt
-        const q = query(
-            collection(db, "leaderboardSnapshots"),
-            where("roleId", "==", roleId)
-        );
+        const q = query(collection(db, "leaderboardSnapshots"), where("roleId", "==", roleId));
         const unsub = onSnapshot(q, (snap) => {
-            const results = snap.docs.map(d => ({ id: d.id, ...d.data() } as LeaderboardSnapshot));
-            results.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-            setSnapshots(results);
+            const results = snap.docs.map(d => ({ id: d.id, ...d.data() } as SavedData));
+            results.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
+            setSavedData(results);
         }, (error) => {
-            console.error("Error loading leaderboard snapshots:", error);
+            console.error("Error loading saved data:", error);
         });
         return () => unsub();
     }, [roleId]);
 
     useEffect(() => {
-        if (!loading && role && !isMember) {
+        if (!loading && liveRole !== undefined && !isMember) {
             navigate("/roles", { replace: true });
         }
-    }, [isMember, role, loading, navigate]);
+    }, [isMember, liveRole, loading, navigate]);
 
     useEffect(() => {
         if (!user) return;
@@ -235,13 +168,12 @@ export default function RolePage() {
 
     useEffect(() => {
         if (!user || !setRoleNotification) return;
-        const isAdmin = admins.includes(user.uid);
-        if (isAdmin) {
+        if (canManage) {
             setRoleNotification(requested.length > 0 || submittedTasks.length > 0);
         } else {
             setRoleNotification(userTasks.some(t => !t.complete && !seenTaskIds.has(t.id) && !submittedTasks.some(s => s.id === t.id)));
         }
-    }, [user, admins, requested, submittedTasks, userTasks, seenTaskIds, setRoleNotification]);
+    }, [user, canManage, requested, submittedTasks, userTasks, seenTaskIds, setRoleNotification]);
 
     useEffect(() => {
         return () => { setRoleNotification?.(false); };
@@ -290,8 +222,14 @@ export default function RolePage() {
     if (loading || isMember === null) return <Loading />;
     if (!isMember || !user || !role ) return null;
 
+    // The role's instructors who still have Instructor access, in the order they were added
+    const roleInstructors = (role.instructors ?? [])
+        .filter(uid => instructors.includes(uid))
+        .map(uid => membersWithData.find(m => m.uid === uid))
+        .filter((m): m is UserData => !!m);
+
     const taskCount = userTasks.filter(task => !task.complete && !submittedTasks.some(s => s.id === task.id)).length;
-    const hasNewTasks = !admins.includes(user.uid) && userTasks.some(t => !t.complete && !seenTaskIds.has(t.id) && !submittedTasks.some(s => s.id === t.id));
+    const hasNewTasks = !isStaff && userTasks.some(t => !t.complete && !seenTaskIds.has(t.id) && !submittedTasks.some(s => s.id === t.id));
 
     return (
         <div className="w-full max-w-3xl mx-auto flex flex-col gap-4 px-4 pb-10">
@@ -323,7 +261,7 @@ export default function RolePage() {
                 </div>
                 <div className="flex items-center gap-3">
                     {membersWithData.map((m) => {
-                        if (m.id === user.uid && !admins.includes(user.uid)) {
+                        if (m.id === user.uid && !isStaff) {
                             return Object.values(m.roles || {}).map((x) => {
                                 if (x.id === role.id) {
                                     return (
@@ -338,9 +276,11 @@ export default function RolePage() {
                         }
                         return null;
                     })}
-                    {admins.includes(user.uid) && (
-                        <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Admin View</span>
-                    )}
+                    {isAdmin ? (
+                        <Button size="xsm" color="blue" onClick={() => navigate(`/admin/roles/${role.id}`)}>Manage</Button>
+                    ) : canManage ? (
+                        <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Instructor</span>
+                    ) : null}
                     {isCurrentRole ?
                         <motion.span
                             initial={{ scale: 0 }}
@@ -355,17 +295,34 @@ export default function RolePage() {
                 </div>
             </div>
 
+            {/* Who runs this role */}
+            {roleInstructors.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 -mt-1">
+                    <span className="text-xs text-gray-400 uppercase tracking-widest mr-1">
+                        Instructor{roleInstructors.length === 1 ? "" : "s"}
+                    </span>
+                    {roleInstructors.map(m => (
+                        <button
+                            key={m.uid}
+                            onClick={() => context?.setShowAccount(m)}
+                            className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-700 pl-1 pr-2.5 py-1 rounded-full text-sm font-medium hover:border-purple-400 transition-colors hover:cursor-pointer"
+                        >
+                            <ProfileImg src={m.photoURL} alt={m.name} size="xxs" />
+                            <span className="truncate max-w-40">{m.name}{m.uid === user.uid ? " (you)" : ""}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Tab bar */}
             <div ref={tabBar.ref} className="relative flex items-center gap-0.5 sm:gap-1 border-b border-gray-200 overflow-x-auto scrollbar-hide w-full pt-2">
                 <span aria-hidden className={`${tabBar.indicatorClass} bg-blue-600`} style={tabBar.indicatorStyle} />
                 {[
                     { key: "leaderboard", label: "Leaderboard" },
                     { key: "rewards", label: "Rewards" },
-                    { key: "pastmonths", label: "Past Months" },
-                    ...(!admins.includes(user.uid)
-                        ? [{ key: "tasks", label: "Tasks" }]
-                        : [{ key: "admin", label: "Admin" }]
-                    ),
+                    { key: "saved", label: "Saved Data" },
+                    ...(!isStaff ? [{ key: "tasks", label: "Tasks" }] : []),
+                    ...(canManage && !isAdmin ? [{ key: "admin", label: "Instructor" }] : []),
                 ].map((tab) => (
                     <div key={tab.key} data-active={pageState === tab.key ? "true" : "false"} className="relative shrink-0">
                         <button
@@ -406,7 +363,7 @@ export default function RolePage() {
 
                     {/* Podium for top 3 */}
                     {(() => {
-                        const top = leaders.filter(u => !admins.includes(u.id)).slice(0, 3);
+                        const top = leaders.slice(0, 3);
                         if (top.length === 0) return null;
 
                         const podiumOrder = [top[1], top[0], top[2]]; // 2nd, 1st, 3rd
@@ -473,7 +430,7 @@ export default function RolePage() {
                     })()}
 
                     {/* Rest of the list (4th+) */}
-                    {leaders.filter(u => !admins.includes(u.id)).slice(3).map((u, idx) => {
+                    {leaders.slice(3).map((u, idx) => {
                         const rank = idx + 4;
                         return (
                             <div
@@ -505,10 +462,9 @@ export default function RolePage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="flex flex-col gap-3"
                 >
-                    <h2 className="text-lg font-semibold">{currentMonth} Rewards</h2>
+                    <h2 className="text-lg font-semibold">{role.rewardsTitle?.trim() || `${currentMonth} Rewards`}</h2>
                     {["First", "Second", "Third"].map((label, idx) => {
-                        const filteredLeaders = leaders.filter((l) => !admins.includes(l.uid));
-                        const winner = filteredLeaders[idx];
+                        const winner = leaders[idx];
                         return (
                             <div key={label} className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-5 py-4">
                                 <div className="flex items-center gap-3">
@@ -525,36 +481,39 @@ export default function RolePage() {
                 </motion.div>
             )}
 
-            {/* Past Months */}
-            {pageState === "pastmonths" && (
+            {/* Saved Data */}
+            {pageState === "saved" && (
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="flex flex-col gap-4"
                 >
-                    {snapshots.length === 0 ? (
-                        <p className="text-gray-400 text-sm text-center py-8">No previous leaderboards yet.</p>
-                    ) : snapshots.map(snap => (
-                        <div key={snap.id} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
-                            <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-400">{snap.month}</h3>
-                            {snap.entries.length === 0 ? (
+                    {savedData.length === 0 ? (
+                        <p className="text-gray-400 text-sm text-center py-8">Nothing saved yet. Each time this role is reset, its leaderboard is saved here.</p>
+                    ) : savedData.map(save => (
+                        <div key={save.id} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                            <div>
+                                <h3 className="font-semibold">{save.name || save.month || "Saved Data"}</h3>
+                                <p className="text-xs text-gray-400">
+                                    Reset {save.createdAt?.toDate().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                                </p>
+                            </div>
+                            {(save.entries ?? []).length === 0 ? (
                                 <p className="text-sm text-gray-400">No entries.</p>
-                            ) : snap.entries.map(entry => {
-                                return (
-                                    <div key={entry.uid} className="flex items-center justify-between px-2 py-1.5">
-                                        <div className="flex items-center gap-3">
-                                            <span className="w-6 text-center text-sm font-bold text-gray-400">
-                                                {entry.rank <= 3 ? <MedalIcon rank={entry.rank - 1} /> : entry.rank}
-                                            </span>
-                                            <span className="font-medium text-sm">{entry.name}</span>
-                                        </div>
-                                        <div className="flex gap-3 text-sm text-gray-600">
-                                            <span><strong className="text-black">{entry.points}</strong> pts</span>
-                                            <span className="hidden sm:inline"><strong className="text-black">{entry.taskCompleted}</strong> tasks</span>
-                                        </div>
+                            ) : save.entries.map(entry => (
+                                <div key={entry.uid} className="flex items-center justify-between px-2 py-1.5">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <span className="w-6 text-center text-sm font-bold text-gray-400">
+                                            {entry.rank <= 3 ? <MedalIcon rank={entry.rank - 1} /> : entry.rank}
+                                        </span>
+                                        <span className="font-medium text-sm truncate">{entry.name}</span>
                                     </div>
-                                );
-                            })}
+                                    <div className="flex gap-3 text-sm text-gray-600 shrink-0">
+                                        <span><strong className="text-black">{entry.points}</strong> pts</span>
+                                        <span><strong className="text-black">{entry.taskCompleted}</strong> tasks</span>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     ))}
                 </motion.div>
@@ -651,7 +610,7 @@ export default function RolePage() {
                             const bMs = b.createdOn?.toDate().getTime() ?? 0;
                             return taskSort === "date-asc" ? aMs - bMs : bMs - aMs;
                         });
-                        if (sorted.length === 0 || admins.includes(user.uid)) return (
+                        if (sorted.length === 0 || isStaff) return (
                             <p className="text-gray-400 text-sm py-8 text-center">No tasks assigned to you yet.</p>
                         );
                         return (
@@ -734,12 +693,11 @@ export default function RolePage() {
             )}
 
             {/* Admin */}
-            {pageState.match("admin") && (
+            {pageState === "admin" && canManage && !isAdmin && (
                 <RoleAdminPage
                     role={role}
                     membersWithData={membersWithData}
                     requested={requested}
-                    setRequested={setRequested}
                 />
             )}
         </div>
