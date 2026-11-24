@@ -1,4 +1,4 @@
-import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, onSnapshot, query, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, onSnapshot, query, Timestamp, updateDoc, where } from "firebase/firestore";
 import { alertDialog, confirmDialog, promptDialog } from "../lib/confirm";
 import { roleService, isRoleStaff } from "../lib/roleService";
 import { useNavigate } from "react-router-dom";
@@ -272,12 +272,11 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         }
 
         try {
+            // One write, so the notification function sees them join rather than a decline
             await updateDoc(doc(db, "roles", role.id), {
-                pendingRequests: arrayRemove(id)
+                pendingRequests: arrayRemove(id),
+                members: arrayUnion(thisUser.uid),
             })
-            await setDoc(doc(db, "roles", role.id), {
-                members: arrayUnion(thisUser.uid)
-            }, {merge:true})
             await updateDoc(doc(db, "users", id), {
                 roles: arrayUnion({
                     id: role.id, 

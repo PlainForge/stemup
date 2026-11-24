@@ -131,18 +131,14 @@ Widget _appleButton(VoidCallback onPressed, bool loading) => AppButton(
 );
 
 /// Sign in with Apple (iOS only) stacked above Google, as App Review expects.
-Widget _oauthButtons({
-  required VoidCallback onApple,
-  required bool appleBusy,
-  required VoidCallback onGoogle,
-  required bool googleBusy,
-}) => Column(
-  crossAxisAlignment: CrossAxisAlignment.stretch,
-  children: [
-    if (AuthService.appleSupported) ...[_appleButton(onApple, appleBusy), const SizedBox(height: 12)],
-    _googleButton(onGoogle, googleBusy),
-  ],
-);
+Widget _oauthButtons({required VoidCallback onApple, required bool appleBusy, required VoidCallback onGoogle, required bool googleBusy}) =>
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (AuthService.appleSupported) ...[_appleButton(onApple, appleBusy), const SizedBox(height: 12)],
+        _googleButton(onGoogle, googleBusy),
+      ],
+    );
 
 /// Shown when an Apple/Google sign-in hits an email that already has an account.
 String _linkMessage() {
@@ -254,7 +250,8 @@ class _LoginScreenState extends State<LoginScreen> {
       await alertDialog(
         context,
         title: 'Check your email',
-        message: "If an account with a password exists for ${email.trim()}, a reset link is on its way. Check your spam folder if you don't see it.",
+        message:
+            "If an account with a password exists for ${email.trim()}, a reset link is on its way. Check your spam folder if you don't see it.",
       );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;

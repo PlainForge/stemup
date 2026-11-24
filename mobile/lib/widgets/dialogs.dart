@@ -140,7 +140,12 @@ Future<String?> promptText(
         Row(
           children: [
             Expanded(
-              child: AppButton(label: 'Cancel', style: AppButtonStyle.cancel, size: AppButtonSize.full, onPressed: () => Navigator.pop(ctx)),
+              child: AppButton(
+                label: 'Cancel',
+                style: AppButtonStyle.cancel,
+                size: AppButtonSize.full,
+                onPressed: () => Navigator.pop(ctx),
+              ),
             ),
             const SizedBox(width: 8),
             Expanded(

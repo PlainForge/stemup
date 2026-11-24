@@ -218,8 +218,18 @@ class Db {
     'saveName': saveName.trim(),
   });
 
-  /// Withdraws or declines a request.
+  /// Withdraws your own request (no notification is sent).
   static Future<void> deleteRequest(String id) => _db.doc('requests/$id').delete();
+
+  /// Removes a request after recording the admin's decision on it, so the
+  /// notifyOnRequestDecision Cloud Function can tell the person.
+  static Future<void> _settleRequest(String id, String status) async {
+    final ref = _db.doc('requests/$id');
+    await ref.update({'status': status}).catchError((_) {});
+    await ref.delete();
+  }
+
+  static Future<void> declineAccessRequest(String id) => _settleRequest(id, 'declined');
 
   /// Carries out the request, then removes it.
   static Future<void> approveRequest(StemRequest r) async {
@@ -236,7 +246,7 @@ class Db {
       case null:
         break;
     }
-    await deleteRequest(r.id);
+    await _settleRequest(r.id, 'approved');
   }
 
   static Future<void> grantInstructor(String uid) async {
@@ -245,7 +255,7 @@ class Db {
     }, SetOptions(merge: true));
     // Any instructor request they had open is now settled
     final open = await _db.collection('requests').where('uid', isEqualTo: uid).where('type', isEqualTo: 'instructor').get();
-    await Future.wait(open.docs.map((d) => d.reference.delete()));
+    await Future.wait(open.docs.map((d) => _settleRequest(d.id, 'approved')));
   }
 
   /// Takes Instructor access away. They stay a member of their roles, but no longer run them.
@@ -281,6 +291,21 @@ class Db {
   static Future<void> setRewardsTitle(String roleId, String title) => _role(roleId).update({'rewardsTitle': title.trim()});
 
   static Future<void> setShowGlobalLeaderboard(String uid, bool value) => _user(uid).update({'showGlobalLeaderboard': value});
+
+  // ── Notifications ──────────────────────────────────────────────────────
+
+  /// Turns push or email notifications on or off ([channel] is 'push' or 'email').
+  static Future<void> setNotificationChannel(String uid, String channel, bool on) => _user(uid).update({'notifications.$channel': on});
+
+  /// Turns one kind of notification on or off.
+  static Future<void> setNotificationType(String uid, NotifyType type, bool on) =>
+      _user(uid).update({'notifications.types.${type.name}': on});
+
+  /// Remembers this phone's push token so Cloud Functions can reach it.
+  static Future<void> saveDevice(String uid, String token) =>
+      _db.doc('users/$uid/devices/$token').set({'token': token, 'platform': 'ios', 'updatedAt': Timestamp.now()});
+
+  static Future<void> removeDevice(String uid, String token) => _db.doc('users/$uid/devices/$token').delete();
 
   // ── Tasks (member side) ────────────────────────────────────────────────
 
@@ -337,12 +362,11 @@ class Db {
 
   static Future<void> acceptRequest(Role role, String uid) async {
     if (!(await _user(uid).get()).exists) return;
+    // One write, so the notification function sees them join rather than a decline
     await _role(role.id).update({
       'pendingRequests': FieldValue.arrayRemove([uid]),
-    });
-    await _role(role.id).set({
       'members': FieldValue.arrayUnion([uid]),
-    }, SetOptions(merge: true));
+    });
     await _user(uid).update({
       'roles': FieldValue.arrayUnion([UserRoleData(id: role.id, name: role.name).toMap()]),
     });
@@ -453,8 +477,9 @@ class Db {
     final role = Role.fromDoc(roleSnap);
     final admins = await _admins();
     final members = await getUsers(role.members);
-    final ranked = members.where((u) => !admins.contains(u.uid) && !role.instructors.contains(u.uid)).map((u) => u.withRoleStats(roleId)).toList()
-      ..sort((a, b) => b.points.compareTo(a.points));
+    final ranked =
+        members.where((u) => !admins.contains(u.uid) && !role.instructors.contains(u.uid)).map((u) => u.withRoleStats(roleId)).toList()
+          ..sort((a, b) => b.points.compareTo(a.points));
 
     await _db.collection('leaderboardSnapshots').add({
       'roleId': roleId,

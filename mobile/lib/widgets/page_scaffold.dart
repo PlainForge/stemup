@@ -44,13 +44,7 @@ class PageScaffold extends StatelessWidget {
         Row(
           children: [
             if (backLabel != null)
-              LinkText(
-                backLabel!,
-                icon: CupertinoIcons.chevron_left,
-                size: 14,
-                color: Palette.gray400,
-                onPressed: () => context.canPop() ? context.pop() : context.go(backPath ?? '/'),
-              ),
+              _BackPill(label: backLabel!, onPressed: () => context.canPop() ? context.pop() : context.go(backPath ?? '/')),
             const Spacer(),
             ?trailing,
           ],
@@ -82,6 +76,41 @@ class PageScaffold extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The "‹ Roles" back button: a blue pill so it's easy to spot.
+class _BackPill extends StatelessWidget {
+  const _BackPill({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Palette.resolve(context, Palette.navActive);
+    return Pressable(
+      onPressed: onPressed,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
+        decoration: BoxDecoration(
+          color: Palette.resolve(context, Palette.blue50),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: .35)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(CupertinoIcons.chevron_left, size: 16, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: color),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -4,7 +4,7 @@ export default function PrivacyPolicyPage() {
             <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-col gap-6">
                 <div>
                     <h1 className="text-2xl font-bold">Privacy Policy</h1>
-                    <p className="text-sm text-gray-400 mt-1">Last updated: November 23, 2026</p>
+                    <p className="text-sm text-gray-400 mt-1">Last updated: November 24, 2026</p>
                 </div>
 
                 <p className="text-sm text-gray-600 leading-relaxed">
@@ -20,7 +20,36 @@ export default function PrivacyPolicyPage() {
                         <li>A profile photo, if you provide one or sign in with Google (Apple doesn&apos;t share a photo)</li>
                         <li>App activity: tasks assigned and completed, points earned, and which roles/teams you belong to</li>
                         <li>Bug reports you choose to send, including the text you write</li>
+                        <li>Your notification settings, and, if you turn on push notifications, a push token for each device you use</li>
                     </ul>
+                </section>
+
+                <section className="flex flex-col gap-2">
+                    <h2 className="text-base font-semibold">Notifications</h2>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                        StemUP can tell you when you get a new task, when an instructor or admin changes one of your tasks,
+                        and when something you asked for is approved or declined (task submissions, extensions, joining a
+                        role, Instructor access, new roles and role resets). Push notifications and email notifications are
+                        both off until you turn them on, and you can turn each kind on or off in Settings &rarr; Notifications.
+                    </p>
+                    <ul className="list-disc list-inside text-sm text-gray-600 leading-relaxed flex flex-col gap-1">
+                        <li>
+                            <strong>Push notifications (iOS app):</strong> when you turn them on, iOS asks for your permission
+                            and gives the app a push token, an identifier for your device that lets us send it notifications.
+                            We store this token with your account and send notifications through Google&apos;s Firebase Cloud
+                            Messaging and Apple&apos;s Push Notification service. A notification contains a short message, such as
+                            a task&apos;s title and role, and the page to open. The token is removed when you sign out, turn push
+                            notifications off, or delete your account. You can also block notifications at any time in your
+                            iPhone&apos;s Settings.
+                        </li>
+                        <li>
+                            <strong>Email notifications:</strong> when you turn them on, we send the same messages to the email
+                            address on your account through Google&apos;s Gmail service.
+                        </li>
+                    </ul>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                        Notifications are only about your own activity in StemUP. We don&apos;t use them for advertising.
+                    </p>
                 </section>
 
                 <section className="flex flex-col gap-2">
@@ -80,8 +109,9 @@ export default function PrivacyPolicyPage() {
                         data processor and doesn't use your information for its own purposes.
                     </p>
                     <p className="text-sm text-gray-600 leading-relaxed">
-                        Account emails, such as email verification and password reset links, are sent through Google&apos;s
-                        Gmail service. If you sign in with Apple or Google, that company handles the sign-in itself under its
+                        Account emails, such as email verification and password reset links, and any email notifications
+                        you turn on, are sent through Google&apos;s Gmail service. Push notifications are delivered through
+                        Firebase Cloud Messaging and Apple&apos;s Push Notification service. If you sign in with Apple or Google, that company handles the sign-in itself under its
                         own privacy policy and tells us only the details listed above.
                     </p>
                 </section>
@@ -100,7 +130,8 @@ export default function PrivacyPolicyPage() {
                     <h2 className="text-base font-semibold">Your choices</h2>
                     <p className="text-sm text-gray-600 leading-relaxed">
                         You can delete your account and all associated data at any time from Settings &rarr; Delete My
-                        Account. This permanently removes your profile, tasks, and role memberships. If you signed in with
+                        Account. This permanently removes your profile, tasks, role memberships, notification settings, and
+                        push tokens. You can turn notifications off at any time in Settings &rarr; Notifications. If you signed in with
                         Apple, deleting your account in the iOS app also revokes StemUP&apos;s access to your Apple ID.
                     </p>
                 </section>

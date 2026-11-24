@@ -1110,8 +1110,9 @@ class _InstructorsTabState extends State<_InstructorsTab> {
     _sync(app);
     final role = widget.role;
     final byId = {for (final p in _people) p.uid: p};
-    final addable = _people.where((p) => app.instructors.contains(p.uid) && !role.instructors.contains(p.uid) && !app.admins.contains(p.uid)).toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final addable =
+        _people.where((p) => app.instructors.contains(p.uid) && !role.instructors.contains(p.uid) && !app.admins.contains(p.uid)).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1171,7 +1172,10 @@ class _InstructorsTabState extends State<_InstructorsTab> {
           title: 'Add an instructor',
           children: [
             if (addable.isEmpty)
-              const Muted('Every instructor already has access. Admins can make more people Instructors from the Admin page.', color: Palette.gray400)
+              const Muted(
+                'Every instructor already has access. Admins can make more people Instructors from the Admin page.',
+                color: Palette.gray400,
+              )
             else
               PickerRow(value: 'Select an instructor', placeholder: true, onTap: () => _add(addable)),
           ],
@@ -1200,12 +1204,9 @@ class _ConfigTabState extends State<_ConfigTab> {
   void initState() {
     super.initState();
     // A reset this role is waiting on an admin to approve
-    _resetSub = Db.roleRequestsStream(widget.role.id).listen(
-      (r) {
-        if (mounted) setState(() => _pendingReset = r.where((x) => x.type == RequestType.resetRole).firstOrNull);
-      },
-      onError: (_) {},
-    );
+    _resetSub = Db.roleRequestsStream(widget.role.id).listen((r) {
+      if (mounted) setState(() => _pendingReset = r.where((x) => x.type == RequestType.resetRole).firstOrNull);
+    }, onError: (_) {});
   }
 
   @override
@@ -1340,7 +1341,12 @@ class _ConfigTabState extends State<_ConfigTab> {
                     ),
                     if (!isAdmin) ...[
                       const SizedBox(width: 8),
-                      AppButton(label: 'Cancel', size: AppButtonSize.xsm, style: AppButtonStyle.cancel, onPressed: () => Db.deleteRequest(pending.id)),
+                      AppButton(
+                        label: 'Cancel',
+                        size: AppButtonSize.xsm,
+                        style: AppButtonStyle.cancel,
+                        onPressed: () => Db.deleteRequest(pending.id),
+                      ),
                     ],
                   ],
                 ),
@@ -1348,7 +1354,12 @@ class _ConfigTabState extends State<_ConfigTab> {
             else
               Align(
                 alignment: Alignment.centerLeft,
-                child: AppButton(label: isAdmin ? 'Reset Role' : 'Request Reset', size: AppButtonSize.sm, loading: _resetting, onPressed: _reset),
+                child: AppButton(
+                  label: isAdmin ? 'Reset Role' : 'Request Reset',
+                  size: AppButtonSize.sm,
+                  loading: _resetting,
+                  onPressed: _reset,
+                ),
               ),
           ],
         ),

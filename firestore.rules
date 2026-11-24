@@ -46,10 +46,15 @@ service cloud.firestore {
       allow delete: if signedIn() && me() == userId;
       // Your own profile, but not your own points, tasks completed or role list
       allow update: if signedIn() && me() == userId
-        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email']);
+        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email', 'notifications']);
       // Instructors award points, edit stats, accept members and remove them
       allow update: if isInstructor()
         && changes().hasOnly(['roles', 'points', 'taskCompleted', 'currentRole']);
+
+      // Push tokens for your own phones (read by Cloud Functions to send notifications)
+      match /devices/{deviceId} {
+        allow read, write: if signedIn() && me() == userId;
+      }
     }
 
     match /admins/{docId} {

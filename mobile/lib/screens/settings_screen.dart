@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/db.dart';
+import '../services/push_service.dart';
 import '../state/app_state.dart';
 import '../theme/palette.dart';
 import '../widgets/buttons.dart';
@@ -244,6 +245,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
         // ── Access level: User < Instructor < Admin ──
         const _AccessCard(),
+
+        // ── Notifications ──
+        _NotificationsCard(me),
 
         // ── App ──
         _Card(
@@ -562,6 +566,85 @@ class _AccessCardState extends State<_AccessCard> {
       ],
     );
   }
+}
+
+/// Push and email (both off until turned on), then a switch for each kind of notification.
+class _NotificationsCard extends StatelessWidget {
+  const _NotificationsCard(this.me);
+
+  final UserData me;
+
+  Future<void> _setPush(BuildContext context, bool on) async {
+    if (on && !await PushService.requestPermission()) {
+      if (!context.mounted) return;
+      final open = await confirmDialog(
+        context,
+        title: 'Notifications are off',
+        message: 'To get push notifications, allow notifications for StemUP in your iPhone Settings.',
+        confirmLabel: 'Open Settings',
+      );
+      if (open) await launchUrl(Uri.parse('app-settings:'));
+      return;
+    }
+    await Db.setNotificationChannel(me.uid, 'push', on);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final prefs = me.notifications;
+    final anyOn = prefs.push || prefs.email;
+    return _Card(
+      title: 'Notifications',
+      children: [
+        _SwitchRow(label: 'Push notifications', hint: 'On this iPhone', value: prefs.push, onChanged: (v) => _setPush(context, v)),
+        _SwitchRow(
+          label: 'Email notifications',
+          hint: me.email.isEmpty ? 'No email on this account' : me.email,
+          value: prefs.email,
+          onChanged: me.email.isEmpty && !prefs.email ? null : (v) => Db.setNotificationChannel(me.uid, 'email', v),
+        ),
+        Muted(anyOn ? 'Choose what to be notified about:' : 'Turn on push or email to be notified about:', size: 13),
+        for (final t in NotifyType.values)
+          _SwitchRow(label: t.label, hint: t.hint, value: prefs.isOn(t), onChanged: (v) => Db.setNotificationType(me.uid, t, v)),
+      ],
+    );
+  }
+}
+
+/// An inset row with a title, a gray hint under it, and a switch.
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({required this.label, required this.hint, required this.value, required this.onChanged});
+
+  final String label;
+  final String hint;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    decoration: BoxDecoration(
+      color: Palette.fill(context),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Palette.separator(context)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(fontSize: 14, color: Palette.label(context))),
+              const SizedBox(height: 2),
+              Text(hint, style: TextStyle(fontSize: 12, color: Palette.tertiary(context))),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        CupertinoSwitch(value: value, activeTrackColor: Palette.green500, onChanged: onChanged),
+      ],
+    ),
+  );
 }
 
 String _themeLabel(ThemePref t) => switch (t) {

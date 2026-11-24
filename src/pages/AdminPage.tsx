@@ -220,7 +220,7 @@ export default function AdminPage() {
                                 <Button onClick={() => approve(req)} size="xsm" color="green" disabled={busy === req.id}>
                                     {busy === req.id ? "Working..." : "Approve"}
                                 </Button>
-                                <Button onClick={() => run(req.id, () => roleService.deleteRequest(req.id), "Couldn't decline the request.")} size="xsm" color="red" disabled={busy === req.id}>
+                                <Button onClick={() => run(req.id, () => roleService.declineRequest(req.id), "Couldn't decline the request.")} size="xsm" color="red" disabled={busy === req.id}>
                                     Decline
                                 </Button>
                                 {req.type === "resetRole" && req.roleId && (

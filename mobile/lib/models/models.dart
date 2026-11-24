@@ -23,6 +23,55 @@ extension AccessLevelLabel on AccessLevel {
   };
 }
 
+/// Kinds of notification, each with its own switch in Settings. Names match
+/// NotifyType in functions/src/notifications.ts.
+enum NotifyType { newTask, taskEdited, taskReviewed, extension, joinRole, accessRequest }
+
+extension NotifyTypeText on NotifyType {
+  String get label => switch (this) {
+    NotifyType.newTask => 'New tasks',
+    NotifyType.taskEdited => 'Task changes',
+    NotifyType.taskReviewed => 'Task submissions',
+    NotifyType.extension => 'Extension requests',
+    NotifyType.joinRole => 'Role join requests',
+    NotifyType.accessRequest => 'Instructor and role requests',
+  };
+
+  String get hint => switch (this) {
+    NotifyType.newTask => 'A task is assigned or handed to you',
+    NotifyType.taskEdited => 'An instructor edits one of your tasks',
+    NotifyType.taskReviewed => 'A task you submitted is approved or declined',
+    NotifyType.extension => 'An extension you asked for is approved or declined',
+    NotifyType.joinRole => 'A request to join a role is accepted or declined',
+    NotifyType.accessRequest => 'Instructor access, new roles and role resets',
+  };
+}
+
+/// The profile's `notifications` map. Push and email are off until turned on;
+/// each kind is on unless switched off.
+class NotificationPrefs {
+  final bool push;
+  final bool email;
+  final Set<NotifyType> off;
+
+  const NotificationPrefs({this.push = false, this.email = false, this.off = const {}});
+
+  factory NotificationPrefs.fromMap(dynamic m) {
+    if (m is! Map) return const NotificationPrefs();
+    final types = m['types'] is Map ? m['types'] as Map : const {};
+    return NotificationPrefs(
+      push: m['push'] == true,
+      email: m['email'] == true,
+      off: {
+        for (final t in NotifyType.values)
+          if (types[t.name] == false) t,
+      },
+    );
+  }
+
+  bool isOn(NotifyType t) => !off.contains(t);
+}
+
 class UserRoleData {
   final String id;
   final String name;
@@ -53,6 +102,8 @@ class UserData {
   /// Instructors can hide the global leaderboard on Home; shown when unset.
   final bool showGlobalLeaderboard;
 
+  final NotificationPrefs notifications;
+
   const UserData({
     required this.uid,
     required this.name,
@@ -63,6 +114,7 @@ class UserData {
     this.roles = const [],
     this.currentRole = '',
     this.showGlobalLeaderboard = true,
+    this.notifications = const NotificationPrefs(),
   });
 
   factory UserData.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) => UserData.fromMap(doc.id, doc.data() ?? {});
@@ -79,6 +131,7 @@ class UserData {
         : const [],
     currentRole: _str(m['currentRole']),
     showGlobalLeaderboard: m['showGlobalLeaderboard'] != false,
+    notifications: NotificationPrefs.fromMap(m['notifications']),
   );
 
   UserRoleData? roleData(String roleId) {
@@ -108,6 +161,7 @@ class UserData {
         roles: roles ?? this.roles,
         currentRole: currentRole ?? this.currentRole,
         showGlobalLeaderboard: showGlobalLeaderboard,
+        notifications: notifications,
       );
 }
 

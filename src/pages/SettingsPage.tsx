@@ -14,13 +14,42 @@ import ProfileImg from "../components/ProfileImg";
 import Input from "../components/Input";
 import SemesterResetModal from "../components/SemesterResetModal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBug, faCircleHalfStroke, faMoon, faRightFromBracket, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
+import { faBug, faCheck, faCopy, faCircleHalfStroke, faMoon, faRightFromBracket, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
 import Dropdown from "../components/Dropdown";
 import type { ThemeMode } from "../context/MainProvider";
-import type { StemRequest } from "../myDataTypes";
+import { NOTIFICATION_TYPES, type StemRequest } from "../myDataTypes";
 import { roleService } from "../lib/roleService";
 import { BLOCKED_NAME_MESSAGE, isProfaneName } from "../lib/nameFilter";
 import { AccessBadge } from "./AdminPage";
+
+/** A gray inset row with a title, a hint under it, and an on/off switch. */
+function SwitchRow({ label, hint, checked, onChange, disabled = false }: {
+    label: string;
+    hint: string;
+    checked: boolean;
+    onChange: (on: boolean) => void;
+    disabled?: boolean;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
+            <div className="min-w-0">
+                <p className="text-sm">{label}</p>
+                <p className="text-xs text-gray-400 break-words">{hint}</p>
+            </div>
+            <button
+                type="button"
+                role="switch"
+                aria-checked={checked}
+                aria-label={label}
+                disabled={disabled}
+                onClick={() => onChange(!checked)}
+                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${disabled ? "opacity-50 cursor-not-allowed" : "hover:cursor-pointer"} ${checked ? "bg-green-500" : "bg-gray-300"}`}
+            >
+                <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
+            </button>
+        </div>
+    );
+}
 
 export default function Settings() {
     const context = useContext(MainContext);
@@ -96,6 +125,17 @@ export default function Settings() {
             await alertDialog("Couldn't send your request. Please try again.", "Request not sent");
         } finally {
             setRequesting(false);
+        }
+    };
+
+    const notifyPrefs = userData.notifications ?? {};
+    // field is "email", "push" or "types.<kind>"
+    const setNotify = async (field: string, on: boolean) => {
+        try {
+            await updateDoc(doc(db, "users", user.uid), { [`notifications.${field}`]: on });
+        } catch (err) {
+            console.error(err);
+            await alertDialog("Couldn't save your notification settings. Please try again.", "Not saved");
         }
     };
 
@@ -197,7 +237,7 @@ export default function Settings() {
                     className="mt-2 inline-flex items-center gap-1.5 max-w-full text-xs text-gray-400 font-mono bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 cursor-pointer hover:border-gray-300 hover:text-gray-500 transition-colors"
                 >
                     <span className="break-all text-left">{user.uid}</span>
-                    <span className="shrink-0 font-sans">{uidCopied ? "Copied" : "Copy"}</span>
+                    <FontAwesomeIcon icon={uidCopied ? faCheck : faCopy} className={`shrink-0 ${uidCopied ? "text-green-500" : ""}`} aria-label={uidCopied ? "Copied" : "Copy"} />
                 </button>
             </div>
 
@@ -323,6 +363,38 @@ export default function Settings() {
                                     </Button>
                                 </div>
                             </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Notifications: email here, push from the iOS app; both off until turned on */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                    <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">Notifications</h2>
+                    <div className="flex flex-col gap-4">
+                        <SwitchRow
+                            label="Email notifications"
+                            hint={userData.email || user.email || "No email on this account"}
+                            checked={notifyPrefs.email === true}
+                            onChange={(v) => setNotify("email", v)}
+                        />
+                        <SwitchRow
+                            label="Push notifications"
+                            hint={notifyPrefs.push ? "On for your iPhone. Turn them off here or in the iOS app." : "Turn them on in the StemUP iOS app."}
+                            checked={notifyPrefs.push === true}
+                            disabled={!notifyPrefs.push}
+                            onChange={(v) => setNotify("push", v)}
+                        />
+                        <p className="text-sm text-gray-500 -mb-1">
+                            {notifyPrefs.email || notifyPrefs.push ? "Choose what to be notified about:" : "Turn on email or push to be notified about:"}
+                        </p>
+                        {NOTIFICATION_TYPES.map(t => (
+                            <SwitchRow
+                                key={t.key}
+                                label={t.label}
+                                hint={t.hint}
+                                checked={notifyPrefs.types?.[t.key] !== false}
+                                onChange={(v) => setNotify(`types.${t.key}`, v)}
+                            />
                         ))}
                     </div>
                 </div>

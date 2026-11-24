@@ -75,9 +75,23 @@ export const roleService = {
         });
     },
 
-    /** Withdraws or declines a request. */
+    /** Withdraws your own request (no notification is sent). */
     async deleteRequest(id: string) {
         await deleteDoc(doc(db, "requests", id));
+    },
+
+    /**
+     * Removes a request after recording the admin's decision on it, so the
+     * notifyOnRequestDecision Cloud Function can tell the person.
+     */
+    async settleRequest(id: string, status: "approved" | "declined") {
+        const ref = doc(db, "requests", id);
+        await updateDoc(ref, { status }).catch(() => {});
+        await deleteDoc(ref);
+    },
+
+    async declineRequest(id: string) {
+        await this.settleRequest(id, "declined");
     },
 
     /** Carries out the request, then removes it. */
@@ -97,7 +111,7 @@ export const roleService = {
                 break;
             }
         }
-        await deleteDoc(doc(db, "requests", req.id));
+        await this.settleRequest(req.id, "approved");
     },
 
     // ── Instructor access ────────────────────────────────────────────────
@@ -106,7 +120,7 @@ export const roleService = {
         await setDoc(instructorsRef(), { ids: arrayUnion(uid) }, { merge: true });
         // Any instructor request they had open is now settled
         const open = await getDocs(query(collection(db, "requests"), where("uid", "==", uid), where("type", "==", "instructor")));
-        await Promise.all(open.docs.map(d => deleteDoc(d.ref)));
+        await Promise.all(open.docs.map(d => this.settleRequest(d.id, "approved")));
     },
 
     /** Takes Instructor access away. They stay a member of their roles, but no longer run them. */

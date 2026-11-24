@@ -48,6 +48,10 @@
 	<string>Used to take a new profile photo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Used to choose a profile photo from your library.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UISupportedInterfaceOrientations~ipad</key>

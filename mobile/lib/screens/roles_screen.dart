@@ -34,12 +34,9 @@ class _RolesScreenState extends State<RolesScreen> {
   void initState() {
     super.initState();
     // The instructor's own role requests still waiting for an admin
-    _requestsSub = Db.myRequestsStream(context.read<AppState>().user!.uid).listen(
-      (r) {
-        if (mounted) setState(() => _myRoleRequests = r.where((x) => x.type == RequestType.createRole).toList());
-      },
-      onError: (_) {},
-    );
+    _requestsSub = Db.myRequestsStream(context.read<AppState>().user!.uid).listen((r) {
+      if (mounted) setState(() => _myRoleRequests = r.where((x) => x.type == RequestType.createRole).toList());
+    }, onError: (_) {});
   }
 
   @override
@@ -103,7 +100,9 @@ class _RolesScreenState extends State<RolesScreen> {
                 uid: uid,
                 isAdmin: app.isAdmin,
                 isCurrent: app.userData?.currentRole == roles[i].id,
-                todoCount: !app.canManage(roles[i]) && (app.userData?.roles.any((r) => r.id == roles[i].id) ?? false) ? (todo[roles[i].id] ?? 0) : 0,
+                todoCount: !app.canManage(roles[i]) && (app.userData?.roles.any((r) => r.id == roles[i].id) ?? false)
+                    ? (todo[roles[i].id] ?? 0)
+                    : 0,
                 needsAttention: (attention[roles[i].id] ?? 0) > 0,
               ),
             ),

@@ -77,7 +77,8 @@ class _AdminScreenState extends State<AdminScreen> {
       final ok = await confirmDialog(
         context,
         title: 'Approve Reset',
-        message: 'Reset "${r.roleName}"? Its leaderboard is saved as "${r.saveName}", then all tasks, prizes and members\' points in it are cleared.',
+        message:
+            'Reset "${r.roleName}"? Its leaderboard is saved as "${r.saveName}", then all tasks, prizes and members\' points in it are cleared.',
         confirmLabel: 'Reset',
         destructive: true,
       );
@@ -97,7 +98,11 @@ class _AdminScreenState extends State<AdminScreen> {
       );
       if (!ok) return;
     }
-    await _run(u.uid, () => make ? Db.grantInstructor(u.uid) : Db.revokeInstructor(u.uid), "Couldn't change their access. Please try again.");
+    await _run(
+      u.uid,
+      () => make ? Db.grantInstructor(u.uid) : Db.revokeInstructor(u.uid),
+      "Couldn't change their access. Please try again.",
+    );
   }
 
   Future<void> _restore(OldUserRow row) async {
@@ -171,22 +176,23 @@ class _AdminScreenState extends State<AdminScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SectionLabel(switch (r.type) {
-                      RequestType.instructor => 'Instructor access',
-                      RequestType.createRole => 'New role',
-                      RequestType.resetRole => 'Role reset',
-                      null => 'Request',
-                    }, size: 12, padding: EdgeInsets.zero),
-                    const SizedBox(height: 4),
-                    Text(
+                    SectionLabel(
                       switch (r.type) {
-                        RequestType.instructor => '${_who(r, 'Someone')} wants to be an Instructor',
-                        RequestType.createRole => '${_who(r, 'An instructor')} wants to create "${r.roleName}"',
-                        RequestType.resetRole => '${_who(r, 'An instructor')} wants to reset "${r.roleName}"',
-                        null => '',
+                        RequestType.instructor => 'Instructor access',
+                        RequestType.createRole => 'New role',
+                        RequestType.resetRole => 'Role reset',
+                        null => 'Request',
                       },
-                      style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                      size: 12,
+                      padding: EdgeInsets.zero,
                     ),
+                    const SizedBox(height: 4),
+                    Text(switch (r.type) {
+                      RequestType.instructor => '${_who(r, 'Someone')} wants to be an Instructor',
+                      RequestType.createRole => '${_who(r, 'An instructor')} wants to create "${r.roleName}"',
+                      RequestType.resetRole => '${_who(r, 'An instructor')} wants to reset "${r.roleName}"',
+                      null => '',
+                    }, style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context))),
                     if (r.createdAt != null) Muted(DateFormat('MMM d', 'en_US').format(r.createdAt!), size: 12, color: Palette.gray400),
                     if (r.type == RequestType.instructor && r.reason.isNotEmpty) ...[const SizedBox(height: 10), _Quote(r.reason)],
                     if (r.type == RequestType.createRole) ...[
@@ -210,7 +216,9 @@ class _AdminScreenState extends State<AdminScreen> {
                           label: 'Decline',
                           size: AppButtonSize.xsm,
                           style: AppButtonStyle.red,
-                          onPressed: _busy == r.id ? null : () => _run(r.id, () => Db.deleteRequest(r.id), "Couldn't decline the request."),
+                          onPressed: _busy == r.id
+                              ? null
+                              : () => _run(r.id, () => Db.declineAccessRequest(r.id), "Couldn't decline the request."),
                         ),
                         if (r.type == RequestType.resetRole && r.roleId.isNotEmpty)
                           AppButton(

@@ -7,10 +7,33 @@ export type UserData = {
     points: number,
     taskCompleted: number,
     photoURL: string;
+    email?: string,
     id: string,
     currentRole: string,
     /** Instructors can hide the global leaderboard on Home; shown when unset */
     showGlobalLeaderboard?: boolean,
+    /** How to tell them about their tasks and requests; push and email are off when unset */
+    notifications?: NotificationPrefs,
+}
+
+/** Kinds of notification, each with its own switch in Settings (kept in sync with functions/src/notifications.ts) */
+export const NOTIFICATION_TYPES = [
+    { key: "newTask", label: "New tasks", hint: "A task is assigned or handed to you" },
+    { key: "taskEdited", label: "Task changes", hint: "An instructor edits one of your tasks" },
+    { key: "taskReviewed", label: "Task submissions", hint: "A task you submitted is approved or declined" },
+    { key: "extension", label: "Extension requests", hint: "An extension you asked for is approved or declined" },
+    { key: "joinRole", label: "Role join requests", hint: "A request to join a role is accepted or declined" },
+    { key: "accessRequest", label: "Instructor and role requests", hint: "Instructor access, new roles and role resets" },
+] as const;
+
+export type NotifyType = (typeof NOTIFICATION_TYPES)[number]["key"];
+
+export type NotificationPrefs = {
+    /** iOS push notifications (turned on from the iOS app) */
+    push?: boolean,
+    email?: boolean,
+    /** A kind set to false is off; missing kinds are on */
+    types?: Partial<Record<NotifyType, boolean>>,
 }
 
 export type RoleUserData = {
@@ -55,6 +78,8 @@ export type StemRequest = {
   /** resetRole: which role, and the name to save its data under */
   roleId?: string;
   saveName?: string;
+  /** Set by an admin just before removing the request, so the person can be told the outcome */
+  status?: "approved" | "declined";
 };
 
 /** A role's leaderboard saved when it was reset (shown on the Saved Data tab) */

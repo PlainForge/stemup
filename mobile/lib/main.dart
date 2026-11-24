@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'router.dart';
 import 'services/auth_service.dart';
+import 'services/push_service.dart';
 import 'state/app_state.dart';
 import 'theme/palette.dart';
 
@@ -32,6 +33,36 @@ class StemUpApp extends StatefulWidget {
 
 class _StemUpAppState extends State<StemUpApp> {
   late final GoRouter _router = buildRouter(widget.state);
+
+  /// The user this phone is registered for push with, if any.
+  String? _pushUid;
+
+  @override
+  void initState() {
+    super.initState();
+    PushService.init(_router, widget.state);
+    widget.state.addListener(_syncPush);
+  }
+
+  @override
+  void dispose() {
+    widget.state.removeListener(_syncPush);
+    super.dispose();
+  }
+
+  /// Registers this phone while the signed-in user has push turned on.
+  void _syncPush() {
+    final me = widget.state.userData;
+    final want = me != null && me.notifications.push ? me.uid : null;
+    if (want == _pushUid) return;
+    _pushUid = want;
+    if (want != null) {
+      PushService.register(want);
+    } else if (me != null) {
+      // Switched off in Settings (signing out unregisters in AuthService.signOut)
+      PushService.unregister();
+    }
+  }
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider.value(

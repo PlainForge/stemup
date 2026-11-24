@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 
 import '../firebase_options.dart';
 import '../models/models.dart';
+import 'push_service.dart';
 
 class AuthService {
   AuthService._();
@@ -23,7 +24,8 @@ class AuthService {
   /// The native google_sign_in flow only exists on iOS/Android. Web uses
   /// Firebase's popup flow instead (like the React app), and desktop has no
   /// Google sign-in support in FlutterFire at all.
-  static bool get _nativeGoogle => !kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
+  static bool get _nativeGoogle =>
+      !kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
 
   static bool get googleSupported => kIsWeb || _nativeGoogle;
 
@@ -263,6 +265,8 @@ class AuthService {
   }
 
   static Future<void> signOut() async {
+    // Stop this phone getting the account's notifications (needs to be signed in)
+    await PushService.unregister();
     if (_nativeGoogle) await GoogleSignIn.instance.signOut().catchError((_) {});
     await _auth.signOut();
   }

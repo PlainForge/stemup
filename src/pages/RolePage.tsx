@@ -237,9 +237,9 @@ export default function RolePage() {
             <div className="flex items-center justify-between pt-1">
                 <button
                     onClick={() => navigate("/roles")}
-                    className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition-colors hover:cursor-pointer group"
+                    className="flex items-center gap-1.5 pl-2.5 pr-4 py-1.5 rounded-full text-sm font-semibold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors hover:cursor-pointer group"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                     </svg>
                     Roles
