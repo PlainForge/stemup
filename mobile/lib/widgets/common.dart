@@ -311,6 +311,8 @@ class AppTextField extends StatelessWidget {
     textInputAction: textInputAction,
     autofillHints: autofillHints,
     prefix: prefix,
+    // Multi-line fields have no Done key, so tapping anywhere else closes the keyboard.
+    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     style: TextStyle(fontSize: 16, color: Palette.label(context)),
     placeholderStyle: TextStyle(fontSize: 16, color: Palette.tertiary(context)),

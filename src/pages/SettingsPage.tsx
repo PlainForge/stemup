@@ -39,6 +39,14 @@ export default function Settings() {
     const [instructorRequest, setInstructorRequest] = useState<StemRequest | null>(null);
     const [reason, setReason] = useState("");
     const [requesting, setRequesting] = useState(false);
+    const [uidCopied, setUidCopied] = useState(false);
+
+    const copyUid = async () => {
+        if (!user) return;
+        await navigator.clipboard.writeText(user.uid);
+        setUidCopied(true);
+        setTimeout(() => setUidCopied(false), 1500);
+    };
 
     const admins = context?.admins ?? [];
     const themeMode = context?.themeMode ?? "system";
@@ -182,7 +190,15 @@ export default function Settings() {
         >
             <div className="mb-6">
                 <h1 className="text-2xl font-bold">Account Settings</h1>
-                <p className="text-xs text-gray-400 mt-1 font-mono break-all">{user.uid}</p>
+                <button
+                    type="button"
+                    title="User ID (click to copy)"
+                    onClick={copyUid}
+                    className="mt-2 inline-flex items-center gap-1.5 max-w-full text-xs text-gray-400 font-mono bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 cursor-pointer hover:border-gray-300 hover:text-gray-500 transition-colors"
+                >
+                    <span className="break-all text-left">{user.uid}</span>
+                    <span className="shrink-0 font-sans">{uidCopied ? "Copied" : "Copy"}</span>
+                </button>
             </div>
 
             <div className="flex flex-col gap-4">
