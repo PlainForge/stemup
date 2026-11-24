@@ -1,14 +1,11 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
-import { defineSecret } from "firebase-functions/params";
+import { gmailUser, gmailAppPassword, gmailCredentials } from "./secrets";
 import { logger } from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import * as nodemailer from "nodemailer";
 
 initializeApp();
-
-const gmailUser = defineSecret("GMAIL_USER");
-const gmailAppPassword = defineSecret("GMAIL_APP_PASSWORD");
 
 /**
  * Emails every admin whenever a member submits a task for approval.
@@ -46,14 +43,11 @@ export const notifyAdminsOnTaskSubmission = onDocumentCreated(
 
     const transporter = nodemailer.createTransport({
       service: "gmail",
-      auth: {
-        user: gmailUser.value(),
-        pass: gmailAppPassword.value(),
-      },
+      auth: gmailCredentials(),
     });
 
     await transporter.sendMail({
-      from: `StemUP <${gmailUser.value()}>`,
+      from: `StemUP <${gmailCredentials().user}>`,
       to: adminEmails.join(","),
       subject: `New task submission: ${submission.title}`,
       text:
@@ -70,3 +64,5 @@ export const notifyAdminsOnTaskSubmission = onDocumentCreated(
     logger.info(`Notified ${adminEmails.length} admin(s) of task submission "${submission.title}"`);
   }
 );
+
+export { sendVerificationEmail, sendPasswordResetEmail } from "./authEmails";

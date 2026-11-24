@@ -120,11 +120,13 @@ Future<String?> promptText(
   required String title,
   String? message,
   String placeholder = '',
+  String? initialValue,
+  TextInputType? keyboardType,
   bool obscure = false,
   String confirmLabel = 'OK',
   bool destructive = false,
 }) {
-  final controller = TextEditingController();
+  final controller = TextEditingController(text: initialValue);
   return showModalCard<String>(
     context,
     maxWidth: 320,
@@ -133,7 +135,7 @@ Future<String?> promptText(
         Heading(title, maxLines: null),
         if (message != null) ...[const SizedBox(height: 12), Muted(message, center: true)],
         const SizedBox(height: 16),
-        AppTextField(controller: controller, placeholder: placeholder, obscure: obscure, autofocus: true),
+        AppTextField(controller: controller, placeholder: placeholder, keyboardType: keyboardType, obscure: obscure, autofocus: true),
         const SizedBox(height: 16),
         Row(
           children: [

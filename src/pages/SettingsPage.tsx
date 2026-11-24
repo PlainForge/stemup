@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState } from "react";
-import { confirmDialog } from "../lib/confirm";
+import { alertDialog, confirmDialog, promptDialog } from "../lib/confirm";
 import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
 import { firebaseAuthService } from "../lib/firebaseService";
@@ -14,7 +14,9 @@ import ProfileImg from "../components/ProfileImg";
 import Input from "../components/Input";
 import SemesterResetModal from "../components/SemesterResetModal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBug, faMoon, faRightFromBracket, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
+import { faBug, faCircleHalfStroke, faMoon, faRightFromBracket, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
+import Dropdown from "../components/Dropdown";
+import type { ThemeMode } from "../context/MainProvider";
 
 export default function Settings() {
     const context = useContext(MainContext);
@@ -29,10 +31,11 @@ export default function Settings() {
     const [preview, setPreview] = useState<string | null>(userData?.photoURL ?? null);
     const [phrase, setPhrase] = useState("");
     const [showResetModal, setShowResetModal] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     const admins = context?.admins ?? [];
-    const dark = context?.dark ?? false;
-    const setDark = context?.setDark;
+    const themeMode = context?.themeMode ?? "system";
+    const setThemeMode = context?.setThemeMode;
     const setBugReportOpen = context?.setBugReportOpen;
     const isAdmin = user ? admins.includes(user.uid) : false;
 
@@ -49,7 +52,6 @@ export default function Settings() {
     }, [userData?.currentRole]);
 
     if (!user || !userData || loading || !context) return <Loading />;
-    const setLoading = context.setLoading;
 
     // Image preview
     const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,14 +106,24 @@ export default function Settings() {
         const result = await confirmDialog("This permanently deletes your account, tasks, and role memberships. This cannot be undone.", { title: "Delete Account?", confirmLabel: "Delete", danger: true })
         if (!result) return;
 
+        // Progress shows on the button, not the app-wide loading screen: that screen
+        // replaces the whole app, including the password dialog, which then never appears
         try {
-            setLoading(true);
-            await firebaseAuthService.deleteAccount(user, userData);
-            navigate("/"); // OR redirect after deletion
+            setDeleting(true);
+            const deleted = await firebaseAuthService.deleteAccount(user, userData, () =>
+                promptDialog("Please enter your password to confirm deletion:", {
+                    title: "Confirm Deletion",
+                    confirmLabel: "Delete",
+                    danger: true,
+                    input: { type: "password", placeholder: "Password", autoComplete: "current-password" },
+                })
+            );
+            if (deleted) navigate("/login");
         } catch (err) {
             console.error("Delete error:", err);
+            await alertDialog(err instanceof Error ? err.message : "Couldn't delete your account. Please try again.", "Account not deleted");
         } finally {
-            setLoading(false);
+            setDeleting(false);
         }
     };
 
@@ -192,20 +204,26 @@ export default function Settings() {
                     )}
                 </div>
 
-                {/* App (mobile only — desktop has the floating theme/bug-report buttons) */}
-                <div className="sm:hidden bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                {/* App (all screen sizes; desktop also has the floating theme/bug-report buttons) */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                     <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">App</h2>
                     <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
-                            <span className="text-sm">Theme</span>
-                            <Button onClick={() => setDark?.(d => !d)} color="gray" size="sm" type="button" extraClasses="flex items-center justify-center gap-2 whitespace-nowrap shrink-0">
-                                <FontAwesomeIcon icon={dark ? faSun : faMoon} />
-                                {dark ? "Light" : "Dark"}
-                            </Button>
+                            <span className="text-sm">Appearance</span>
+                            <Dropdown<ThemeMode>
+                                label="Appearance"
+                                value={themeMode}
+                                onChange={(mode) => setThemeMode?.(mode)}
+                                options={[
+                                    { value: "system", label: "Device Theme", icon: faCircleHalfStroke },
+                                    { value: "light", label: "Light", icon: faSun },
+                                    { value: "dark", label: "Dark", icon: faMoon },
+                                ]}
+                            />
                         </div>
                         <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
                             <span className="text-sm">{isAdmin ? "Bug Reports" : "Report a bug"}</span>
-                            <Button onClick={() => setBugReportOpen?.(true)} color="gray" size="sm" type="button" extraClasses="flex items-center justify-center gap-2 whitespace-nowrap shrink-0">
+                            <Button onClick={() => setBugReportOpen?.(true)} color="blue" size="sm" type="button" extraClasses="flex items-center justify-center gap-2 whitespace-nowrap shrink-0">
                                 <FontAwesomeIcon icon={isAdmin ? faWrench : faBug} />
                                 {isAdmin ? "View" : "Report"}
                             </Button>
@@ -218,7 +236,7 @@ export default function Settings() {
                     <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">Account</h2>
                     <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
                         <span className="text-sm">Sign out of this device</span>
-                        <Button onClick={handleSignOut} color="gray" size="sm" type="button" extraClasses="flex items-center justify-center gap-2 whitespace-nowrap shrink-0">
+                        <Button onClick={handleSignOut} color="blue" size="sm" type="button" extraClasses="flex items-center justify-center gap-2 whitespace-nowrap shrink-0">
                             <FontAwesomeIcon icon={faRightFromBracket} />
                             Sign Out
                         </Button>
@@ -229,8 +247,8 @@ export default function Settings() {
                 <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-6 mt-2">
                     <h2 className="text-sm font-semibold uppercase tracking-widest text-red-400 mb-1">Danger Zone</h2>
                     <p className="text-sm text-gray-500 mb-4">Once you delete your account, there is no going back.</p>
-                    <Button onClick={deleteAccount} color="red" size="sm">
-                        Delete My Account
+                    <Button onClick={deleteAccount} color="red" size="sm" disabled={deleting}>
+                        {deleting ? "Deleting..." : "Delete My Account"}
                     </Button>
                 </div>
 

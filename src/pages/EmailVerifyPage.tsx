@@ -1,6 +1,7 @@
-import { sendEmailVerification } from "firebase/auth";
+import { FirebaseError } from "firebase/app";
 import { useContext, useState } from "react";
 import { MainContext } from "../context/MainContext";
+import { sendVerification } from "../lib/firebaseService";
 import { motion } from "motion/react";
 import Button from "../components/Button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -9,13 +10,27 @@ import { faEnvelope } from "@fortawesome/free-solid-svg-icons";
 export default function VerifyEmailPage() {
     const context = useContext(MainContext);
     const user = context?.user ?? null;
-    const [sent, setSent] = useState(false);
+    const [sending, setSending] = useState(false);
+    const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
 
     const resend = async () => {
-        if (!user) return;
-        await sendEmailVerification(user);
-        setSent(true);
-        setTimeout(() => setSent(false), 5000);
+        if (!user || sending) return;
+        setSending(true);
+        setStatus(null);
+        try {
+            await sendVerification(user);
+            setStatus({ ok: true, text: `Verification email resent to ${user.email}. It can take a few minutes to arrive.` });
+        } catch (err) {
+            const code = err instanceof FirebaseError ? err.code : "";
+            setStatus({
+                ok: false,
+                text: code === "auth/too-many-requests"
+                    ? "You've requested a few emails already. Please wait a minute before resending."
+                    : "Couldn't resend the email. Please try again.",
+            });
+        } finally {
+            setSending(false);
+        }
     };
 
     return (
@@ -35,8 +50,11 @@ export default function VerifyEmailPage() {
                     </p>
                 </div>
                 <Button onClick={resend} color="blue" size="sm">
-                    {sent ? "Email sent!" : "Resend email"}
+                    {sending ? "Sending..." : "Resend email"}
                 </Button>
+                {status && (
+                    <p role="status" className={`text-sm ${status.ok ? "text-green-600" : "text-red-500"}`}>{status.text}</p>
+                )}
                 <p className="text-xs text-gray-400">Don't see it? Check your spam or junk folder.</p>
                 <p className="text-xs text-gray-400">This page will update automatically once verified.</p>
             </motion.div>

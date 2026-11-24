@@ -3,6 +3,7 @@
 // the Capacitor plugin did.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -57,7 +58,12 @@ class AuthService {
     final user = cred.user!;
     // Send the verification email first, so a failed profile write below can
     // never leave a new user without their link (App Review guideline 2.1).
-    await user.sendEmailVerification();
+    // A failed send must not stop sign-up: they can use "Resend email" next.
+    try {
+      await sendVerification(user);
+    } catch (e) {
+      debugPrint('Verification email not sent during sign-up: $e');
+    }
     await _db.doc('users/${user.uid}').set(_starterProfile(email: user.email, name: name, photoURL: defaultAvatar));
     await _db.doc('roles/$globalRoleId').update({
       'members': FieldValue.arrayUnion([user.uid]),
@@ -107,6 +113,49 @@ class AuthService {
   static Future<void> loginWithEmail(String email, String password) async {
     final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
     await _linkPending(cred.user!);
+  }
+
+  // ---- Verification / password-reset emails ----
+  //
+  // Sent from StemUp's Gmail by Cloud Functions (functions/src/authEmails.ts),
+  // because Yahoo and school inboxes drop Firebase's built-in noreply emails.
+  // If a function is unavailable we fall back to Firebase's own email.
+
+  static final _functions = FirebaseFunctions.instance;
+
+  /// Maps a function error onto the Auth error code the screens already
+  /// handle; null means "fall back to Firebase's built-in email".
+  static FirebaseAuthException? _emailFunctionError(Object e) {
+    if (e is! FirebaseFunctionsException) return null;
+    return switch (e.code) {
+      'resource-exhausted' => FirebaseAuthException(code: 'too-many-requests', message: e.message),
+      'invalid-argument' => FirebaseAuthException(code: 'invalid-email', message: e.message),
+      _ => null,
+    };
+  }
+
+  static Future<void> sendVerification(User user) async {
+    try {
+      await _functions.httpsCallable('sendVerificationEmail').call<void>();
+    } catch (e) {
+      final mapped = _emailFunctionError(e);
+      if (mapped != null) throw mapped;
+      debugPrint('sendVerificationEmail function failed, using Firebase email: $e');
+      await user.sendEmailVerification();
+    }
+  }
+
+  /// Emails a password-reset link. Never reveals whether the email has an
+  /// account, so callers should word the confirmation accordingly.
+  static Future<void> sendPasswordReset(String email) async {
+    try {
+      await _functions.httpsCallable('sendPasswordResetEmail').call<void>({'email': email.trim()});
+    } catch (e) {
+      final mapped = _emailFunctionError(e);
+      if (mapped != null) throw mapped;
+      debugPrint('sendPasswordResetEmail function failed, using Firebase email: $e');
+      await _auth.sendPasswordResetEmail(email: email.trim());
+    }
   }
 
   static Future<OAuthCredential> _googleCredential() async {

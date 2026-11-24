@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, initializeAuth, setPersistence, signOut } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 import { Capacitor } from "@capacitor/core";
 
 const firebaseConfig = {
@@ -25,6 +26,7 @@ export const auth = Capacitor.isNativePlatform()
 
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+export const functions = getFunctions(app);
 
 export const logout = () => signOut(auth);
 

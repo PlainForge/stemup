@@ -132,7 +132,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     for (final r in app.roles) {
       if (r.id == me.currentRole) currentRoleName = r.name;
     }
-    final dark = Palette.isDark(context);
 
     return PageScaffold(
       title: 'Account Settings',
@@ -248,13 +247,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: 'App',
           children: [
             _InsetRow(
-              label: 'Theme',
+              label: 'Appearance',
               action: AppButton(
-                label: dark ? 'Light' : 'Dark',
-                icon: (dark ? FontAwesomeIcons.sun : FontAwesomeIcons.moon).data,
+                label: _themeLabel(app.themePref),
+                icon: switch (app.themePref) {
+                  ThemePref.system => FontAwesomeIcons.circleHalfStroke,
+                  ThemePref.light => FontAwesomeIcons.sun,
+                  ThemePref.dark => FontAwesomeIcons.moon,
+                }.data,
                 style: AppButtonStyle.gray,
                 size: AppButtonSize.sm,
-                onPressed: () => app.setThemePref(dark ? ThemePref.light : ThemePref.dark),
+                onPressed: () async {
+                  final picked = await pickOption<ThemePref>(
+                    context,
+                    title: 'Appearance',
+                    selected: app.themePref,
+                    options: [for (final t in ThemePref.values) (t, _themeLabel(t))],
+                  );
+                  if (picked != null) app.setThemePref(picked);
+                },
               ),
             ),
             _InsetRow(
@@ -421,3 +432,9 @@ class _InsetRow extends StatelessWidget {
     ),
   );
 }
+
+String _themeLabel(ThemePref t) => switch (t) {
+  ThemePref.system => 'Device Theme',
+  ThemePref.light => 'Light',
+  ThemePref.dark => 'Dark',
+};

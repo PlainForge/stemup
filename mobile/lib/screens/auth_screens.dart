@@ -12,6 +12,7 @@ import '../services/auth_service.dart';
 import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 
 final privacyPolicyUrl = Uri.parse('https://stemup.web.app/privacy');
 
@@ -236,6 +237,37 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _forgotPassword() async {
+    final email = await promptText(
+      context,
+      title: 'Reset password',
+      message: "Enter your account's email and we'll send you a link to set a new password.",
+      placeholder: 'Email',
+      initialValue: _email.text.trim(),
+      keyboardType: TextInputType.emailAddress,
+      confirmLabel: 'Send link',
+    );
+    if (email == null || email.trim().isEmpty || !mounted) return;
+    try {
+      await AuthService.sendPasswordReset(email);
+      if (!mounted) return;
+      await alertDialog(
+        context,
+        title: 'Check your email',
+        message: "If an account with a password exists for ${email.trim()}, a reset link is on its way. Check your spam folder if you don't see it.",
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(
+        () => _error = switch (e.code) {
+          'invalid-email' => "That email address doesn't look right.",
+          'too-many-requests' => 'Too many attempts. Please wait a bit and try again.',
+          _ => "Couldn't send the reset email. Please try again.",
+        },
+      );
+    }
+  }
+
   Future<void> _apple() async {
     setState(() {
       _appleBusy = true;
@@ -296,6 +328,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   textInputAction: TextInputAction.go,
                   autofillHints: const [AutofillHints.password],
                   onSubmitted: (_) => _login(),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: LinkText('Forgot password?', size: 13, color: Palette.gray500, onPressed: _forgotPassword),
                 ),
                 if (_error.isNotEmpty) _ErrorMessage(_error),
                 AppButton(label: 'Sign In', size: AppButtonSize.full, loading: _busy, onPressed: _login),
@@ -492,14 +528,29 @@ class VerifyEmailScreen extends StatefulWidget {
 }
 
 class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
-  bool _sent = false;
+  bool _sending = false;
+  String? _status;
+  bool _statusOk = true;
 
   Future<void> _resend() async {
-    await FirebaseAuth.instance.currentUser?.sendEmailVerification();
-    setState(() => _sent = true);
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted) setState(() => _sent = false);
+    if (_sending) return;
+    final user = FirebaseAuth.instance.currentUser;
+    setState(() {
+      _sending = true;
+      _status = null;
     });
+    try {
+      if (user != null) await AuthService.sendVerification(user);
+      _statusOk = true;
+      _status = 'Verification email resent to ${user?.email}. It can take a few minutes to arrive.';
+    } on FirebaseAuthException catch (e) {
+      _statusOk = false;
+      _status = e.code == 'too-many-requests'
+          ? "You've requested a few emails already. Please wait a minute before resending."
+          : "Couldn't resend the email. Please try again.";
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   @override
@@ -550,11 +601,18 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                       ],
                     ),
                     AppButton(
-                      label: _sent ? 'Email sent!' : 'Resend email',
+                      label: 'Resend email',
                       style: AppButtonStyle.blue,
                       size: AppButtonSize.sm,
+                      loading: _sending,
                       onPressed: _resend,
                     ),
+                    if (_status != null)
+                      Text(
+                        _status!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 13, color: Palette.resolve(context, _statusOk ? Palette.green600 : Palette.red500)),
+                      ),
                     Column(
                       children: [
                         Muted("Don't see it? Check your spam or junk folder.", size: 12, center: true, color: Palette.gray400),

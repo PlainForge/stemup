@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MainContext } from './MainContext';
 import { firebaseAuthService } from '../lib/firebaseService';
 import type { User } from 'firebase/auth';
@@ -21,18 +21,31 @@ export interface MainContextType {
     setShowAccount: React.Dispatch<React.SetStateAction<UserData | null>>;
     roleNotification: boolean;
     setRoleNotification: React.Dispatch<React.SetStateAction<boolean>>;
+    /** Whether the dark theme is showing right now (resolved from themeMode) */
     dark: boolean;
+    /** Quick toggle (floating button): switches to an explicit Light or Dark mode */
     setDark: React.Dispatch<React.SetStateAction<boolean>>;
+    themeMode: ThemeMode;
+    setThemeMode: React.Dispatch<React.SetStateAction<ThemeMode>>;
     bugReportOpen: boolean;
     setBugReportOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-function getInitialDark() {
-    if (typeof window === "undefined") return false;
-    const stored = localStorage.getItem("theme");
-    if (stored) return stored === "dark";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+/** "system" follows the device's light/dark setting */
+export type ThemeMode = "light" | "dark" | "system";
+
+function getInitialThemeMode(): ThemeMode {
+    try {
+        const stored = localStorage.getItem("theme");
+        if (stored === "light" || stored === "dark" || stored === "system") return stored;
+    } catch {
+        // Storage unavailable (private mode, blocked site data): follow the device
+    }
+    return "system";
 }
+
+const systemDarkQuery = () =>
+    typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
 export default function MainProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
@@ -43,18 +56,40 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     const [justLoggedIn, setJustLoggedIn] = useState(false);
     const [showAccount, setShowAccount] = useState<UserData | null>(null);
     const [roleNotification, setRoleNotification] = useState(false);
-    const [dark, setDark] = useState<boolean>(getInitialDark);
+    const [themeMode, setThemeMode] = useState<ThemeMode>(getInitialThemeMode);
+    const [systemDark, setSystemDark] = useState<boolean>(() => systemDarkQuery()?.matches ?? false);
+    const dark = themeMode === "system" ? systemDark : themeMode === "dark";
+
+    // Follow the device if it switches between light and dark while the app is open
+    useEffect(() => {
+        const query = systemDarkQuery();
+        if (!query) return;
+        const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+        query.addEventListener("change", onChange);
+        return () => query.removeEventListener("change", onChange);
+    }, []);
+
+    const setDark = useCallback<React.Dispatch<React.SetStateAction<boolean>>>((value) => {
+        const next = typeof value === "function" ? value(dark) : value;
+        setThemeMode(next ? "dark" : "light");
+    }, [dark]);
     const [bugReportOpen, setBugReportOpen] = useState(false);
 
     useEffect(() => {
         if (dark) {
             document.documentElement.setAttribute("data-theme", "dark");
-            localStorage.setItem("theme", "dark");
         } else {
             document.documentElement.removeAttribute("data-theme");
-            localStorage.setItem("theme", "light");
         }
     }, [dark]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem("theme", themeMode);
+        } catch {
+            // Not saved; the choice still applies for this visit
+        }
+    }, [themeMode]);
 
     // Get current logged in user
     useEffect(() => {
@@ -154,8 +189,8 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     }, [user]);
 
     const val = useMemo(
-        () => ({ user, setUser, loading, setLoading, userData, setUserData, admins, needsVerification, justLoggedIn, setJustLoggedIn, showAccount, setShowAccount, roleNotification, setRoleNotification, dark, setDark, bugReportOpen, setBugReportOpen }),
-        [user, loading, userData, admins, needsVerification, justLoggedIn, showAccount, roleNotification, dark, bugReportOpen]
+        () => ({ user, setUser, loading, setLoading, userData, setUserData, admins, needsVerification, justLoggedIn, setJustLoggedIn, showAccount, setShowAccount, roleNotification, setRoleNotification, dark, setDark, themeMode, setThemeMode, bugReportOpen, setBugReportOpen }),
+        [user, loading, userData, admins, needsVerification, justLoggedIn, showAccount, roleNotification, dark, setDark, themeMode, bugReportOpen]
     );
 
     return (

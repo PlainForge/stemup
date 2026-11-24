@@ -1,5 +1,6 @@
-import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, linkWithCredential, OAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
-import { auth, db, storage } from "./firebase";
+import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, linkWithCredential, OAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
+import { auth, db, functions, storage } from "./firebase";
+import { httpsCallable } from "firebase/functions";
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, query, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { Capacitor } from "@capacitor/core";
@@ -136,6 +137,34 @@ export function pendingLinkProvider() {
     }
 }
 
+/**
+ * Maps a callable-function error onto the matching Auth error code so screens
+ * can keep handling auth/too-many-requests and auth/invalid-email as before.
+ * Returns null for errors that should fall back to Firebase's built-in email.
+ */
+function emailFunctionError(err: unknown): FirebaseError | null {
+    if (!(err instanceof FirebaseError)) return null;
+    if (err.code === "functions/resource-exhausted") return new FirebaseError("auth/too-many-requests", err.message);
+    if (err.code === "functions/invalid-argument") return new FirebaseError("auth/invalid-email", err.message);
+    return null;
+}
+
+/**
+ * Sends the verification email from StemUp's Gmail (the sendVerificationEmail
+ * function), which Yahoo and school inboxes accept. Falls back to Firebase's
+ * built-in email if the function is unavailable.
+ */
+export async function sendVerification(user: User) {
+    try {
+        await httpsCallable(functions, "sendVerificationEmail")();
+    } catch (err) {
+        const mapped = emailFunctionError(err);
+        if (mapped) throw mapped;
+        console.warn("sendVerificationEmail function failed, using Firebase's email:", err);
+        await sendEmailVerification(user);
+    }
+}
+
 async function removeUserRole(userId: string, roleId: string) {
   const userRef = doc(db, "users", userId);
   const snap = await getDoc(userRef);
@@ -167,8 +196,13 @@ export const firebaseAuthService = {
 
         const userCred = await createUserWithEmailAndPassword(auth, email, password);
         // Send the verification email first, so a failed profile write below
-        // can never leave a new user without their link
-        await sendEmailVerification(userCred.user);
+        // can never leave a new user without their link. A failed send must not
+        // stop sign-up either: they can use "Resend email" on the next screen.
+        try {
+            await sendVerification(userCred.user);
+        } catch (err) {
+            console.warn("Verification email not sent during sign-up:", err);
+        }
         const userRef = doc(db, "users", userCred.user.uid);
         // Add starter data for new user
         await setDoc(userRef, {
@@ -198,6 +232,21 @@ export const firebaseAuthService = {
 
         const cred = await signInWithEmailAndPassword(auth, email, password);
         await linkPending(cred.user);
+    },
+
+    /**
+     * Emails a password-reset link. Firebase doesn't reveal whether the email has
+     * an account, so the confirmation should be worded accordingly.
+     */
+    async sendPasswordReset(email: string) {
+        try {
+            await httpsCallable(functions, "sendPasswordResetEmail")({ email: email.trim() });
+        } catch (err) {
+            const mapped = emailFunctionError(err);
+            if (mapped) throw mapped;
+            console.warn("sendPasswordResetEmail function failed, using Firebase's email:", err);
+            await sendPasswordResetEmail(auth, email.trim());
+        }
     },
 
     /**
@@ -301,59 +350,70 @@ export const firebaseAuthService = {
     },
 
     /**
-     * Delete user account
-     * @param user 
-     * @param userData 
+     * Delete user account. askPassword is shown for email/password accounts.
+     * Returns false if the person cancels; throws (with a readable message) if re-authentication or the
+     * final Auth deletion fails. Data cleanup is best-effort so one rejected
+     * write can't stop the account itself from being deleted.
      */
-    async deleteAccount(user: User, userData: UserData) {
+    async deleteAccount(user: User, userData: UserData, askPassword: () => Promise<string | null>) {
+        const providerIds = user.providerData.map(p => p.providerId);
         try {
-            const providerIds = user.providerData.map(p => p.providerId);
             if (providerIds.includes("google.com")) {
                 await reauthenticateWithPopup(user, new GoogleAuthProvider());
             } else if (providerIds.includes("apple.com")) {
                 await reauthenticateWithPopup(user, appleProvider());
             } else {
-                const password = window.prompt("Please enter your password to confirm deletion:");
+                const password = await askPassword();
                 if (!password) return false;
                 await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email!, password));
             }
+        } catch (err) {
+            const code = err instanceof FirebaseError ? err.code : "";
+            if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return false;
+            if (code === "auth/wrong-password" || code === "auth/invalid-credential") throw new Error("That password is incorrect.");
+            if (code === "auth/too-many-requests") throw new Error("Too many attempts. Please wait a bit and try again.");
+            console.error("Re-authentication failed:", err);
+            throw new Error(`Couldn't confirm it's you (${code || "unknown error"}).`);
+        }
 
-            const batchUpdates: Promise<void>[] = [];
+        // Best-effort cleanup of the user's data; failures are logged, not fatal
+        const cleanup: { label: string; run: () => Promise<unknown> }[] = [];
+        const userRoles: { id: string }[] = Array.isArray(userData?.roles) ? userData.roles : [];
+        userRoles.forEach(r => cleanup.push({
+            label: `roles/${r.id} membership`,
+            run: () => updateDoc(doc(db, "roles", r.id), { members: arrayRemove(user.uid) }),
+        }));
+        cleanup.push({
+            label: "tasks",
+            run: async () => {
+                const [tasksSnap, submittedSnap] = await Promise.all([
+                    getDocs(query(collection(db, "tasks"), where("assignedTo", "==", user.uid))),
+                    getDocs(query(collection(db, "tasksSubmitted"), where("assignedTo", "==", user.uid))),
+                ]);
+                await Promise.all([
+                    ...tasksSnap.docs.map(d => deleteDoc(d.ref)),
+                    ...submittedSnap.docs.map(d => deleteDoc(d.ref)),
+                ]);
+            },
+        });
+        if (userData?.photoURL && userData.photoURL !== DEFAULT_AVATAR) {
+            cleanup.push({ label: "profile picture", run: () => deleteObject(ref(storage, `profilePictures/${user.uid}`)) });
+        }
+        const results = await Promise.allSettled(cleanup.map(c => c.run()));
+        results.forEach((r, i) => {
+            if (r.status === "rejected") console.warn(`Couldn't delete ${cleanup[i].label}:`, r.reason);
+        });
+        // Profile doc last, so the membership/task cleanup above can still read it if rules need to
+        await deleteDoc(doc(db, "users", user.uid)).catch(err => console.warn("Couldn't delete profile:", err));
 
-            // Remove user from their roles using userData.roles (avoids scanning all roles)
-            const userRoles: { id: string }[] = Array.isArray(userData.roles) ? userData.roles : [];
-            userRoles.forEach(r => {
-                batchUpdates.push(updateDoc(doc(db, "roles", r.id), { members: arrayRemove(user.uid) }));
-            });
-
-            const [tasksSnap, submittedSnap] = await Promise.all([
-                getDocs(query(collection(db, "tasks"), where("assignedTo", "==", user.uid))),
-                getDocs(query(collection(db, "tasksSubmitted"), where("assignedTo", "==", user.uid))),
-            ]);
-            tasksSnap.forEach(taskDoc => batchUpdates.push(deleteDoc(doc(db, "tasks", taskDoc.id))));
-            submittedSnap.forEach(taskDoc => batchUpdates.push(deleteDoc(doc(db, "tasksSubmitted", taskDoc.id))));
-
-            if (userData?.photoURL && userData.photoURL !== DEFAULT_AVATAR) {
-                try {
-                    const oldRef = ref(storage, `profilePictures/${user.uid}`);
-                    await deleteObject(oldRef);
-                } catch (err) {
-                    console.warn("No profile picture to delete or already removed:", err);
-                }
-            }
-
-            batchUpdates.push(deleteDoc(doc(db, "users", user.uid)));
-
-            await Promise.all(batchUpdates);
-
+        try {
             await deleteUser(user);
-
-            console.log("User account and related data deleted.");
-            return true;
         } catch (err) {
             console.error("Error deleting account:", err);
-            return false;
+            const code = err instanceof FirebaseError ? err.code : "unknown error";
+            throw new Error(`Couldn't delete the account (${code}). Please try again.`);
         }
+        return true;
     },
 
     /**
