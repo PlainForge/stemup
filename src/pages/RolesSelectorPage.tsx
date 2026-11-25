@@ -135,7 +135,7 @@ export default function RolesSelectorPage() {
         setCreating(true);
         try {
             if (isAdmin) {
-                await roleService.createRole(name, purpose.trim());
+                await roleService.createRole(name, "");
                 setCreateStatus(`Created "${name}".`);
             } else {
                 await roleService.requestRoleCreation(user.uid, userData?.name ?? "", name, purpose);
@@ -235,14 +235,17 @@ export default function RolesSelectorPage() {
                             required={true}
                             autocomplete="false"
                         />
-                        <textarea
-                            value={purpose}
-                            onChange={e => setPurpose(e.target.value)}
-                            placeholder={isAdmin ? "Purpose (optional)" : "What is this role for?"}
-                            maxLength={500}
-                            rows={3}
-                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors resize-none"
-                        />
+                        {/* Admins create roles directly, so only instructors explain what a role is for */}
+                        {!isAdmin && (
+                            <textarea
+                                value={purpose}
+                                onChange={e => setPurpose(e.target.value)}
+                                placeholder="What is this role for?"
+                                maxLength={500}
+                                rows={3}
+                                className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors resize-none"
+                            />
+                        )}
                         <div className="flex items-center gap-3">
                             <Button type="submit" size="sm" disabled={creating}>{creating ? "Sending..." : isAdmin ? "Create" : "Send Request"}</Button>
                             {createStatus && <p className="text-sm text-green-600">{createStatus}</p>}

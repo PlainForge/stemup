@@ -58,7 +58,7 @@ class _RolesScreenState extends State<RolesScreen> {
     setState(() => _creating = true);
     try {
       if (app.isAdmin) {
-        await Db.createRole(name, purpose: _purpose.text.trim());
+        await Db.createRole(name);
         if (mounted) showToast(context, 'Created "$name"');
       } else {
         await Db.requestRoleCreation(app.user!.uid, app.userData?.name ?? '', name, _purpose.text);
@@ -122,15 +122,18 @@ class _RolesScreenState extends State<RolesScreen> {
                   const Muted("An admin reviews it first. Once approved, you'll run the new role as its instructor."),
                 ],
                 const SizedBox(height: 12),
-                AppTextField(controller: _newRole, placeholder: 'Role name', maxLength: 32, textInputAction: TextInputAction.next),
-                const SizedBox(height: 12),
                 AppTextField(
-                  controller: _purpose,
-                  placeholder: app.isAdmin ? 'Purpose (optional)' : 'What is this role for?',
-                  maxLines: 3,
-                  maxLength: 500,
+                  controller: _newRole,
+                  placeholder: 'Role name',
+                  maxLength: 32,
+                  textInputAction: app.isAdmin ? TextInputAction.done : TextInputAction.next,
                 ),
                 const SizedBox(height: 12),
+                // Admins create roles directly, so only instructors explain what a role is for
+                if (!app.isAdmin) ...[
+                  AppTextField(controller: _purpose, placeholder: 'What is this role for?', maxLines: 3, maxLength: 500),
+                  const SizedBox(height: 12),
+                ],
                 Align(
                   alignment: Alignment.centerLeft,
                   child: AppButton(

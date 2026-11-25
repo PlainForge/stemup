@@ -161,6 +161,64 @@ class AuthService {
     }
   }
 
+  /// True when the account signs in with an email and password (Google and
+  /// Apple accounts get their email from that sign-in).
+  static bool get hasPasswordSignIn => _auth.currentUser?.providerData.any((p) => p.providerId == 'password') ?? false;
+
+  /// Starts an email change after the person re-enters their password: a link
+  /// goes to [newEmail], and the account's email only changes once it's clicked
+  /// (until then users/{uid}.pendingEmail holds it). Returns false if the
+  /// password prompt is cancelled; throws an [EmailChangeException] with a
+  /// readable message on failure.
+  static Future<bool> requestEmailChange(String newEmail, Future<String?> Function() askPassword) async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) return false;
+    final email = newEmail.trim().toLowerCase();
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) throw const EmailChangeException("That email address doesn't look right.");
+    if (email == user.email!.toLowerCase()) throw const EmailChangeException("That's already your email.");
+
+    final password = await askPassword();
+    if (password == null || password.isEmpty) return false;
+    try {
+      await user.reauthenticateWithCredential(EmailAuthProvider.credential(email: user.email!, password: password));
+    } on FirebaseAuthException catch (e) {
+      throw EmailChangeException(switch (e.code) {
+        'wrong-password' || 'invalid-credential' => 'That password is incorrect.',
+        'too-many-requests' => 'Too many attempts. Please wait a bit and try again.',
+        _ => "Couldn't confirm it's you (${e.code}).",
+      });
+    }
+
+    try {
+      await _functions.httpsCallable('requestEmailChange').call<void>({'email': email});
+      return true;
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'invalid-argument' || e.code == 'already-exists') throw EmailChangeException(e.message ?? "That email can't be used.");
+      if (e.code == 'resource-exhausted') {
+        throw const EmailChangeException("You've requested a link already. Please wait a minute before trying again.");
+      }
+      // The function is unavailable (e.g. the Gmail account failed): use Firebase's own email instead
+      debugPrint('requestEmailChange function failed, using Firebase email: $e');
+    } catch (e) {
+      debugPrint('requestEmailChange function failed, using Firebase email: $e');
+    }
+    try {
+      await user.verifyBeforeUpdateEmail(email);
+    } on FirebaseAuthException catch (e) {
+      throw EmailChangeException(switch (e.code) {
+        'email-already-in-use' => 'Another account already uses that email.',
+        'invalid-email' => "That email address doesn't look right.",
+        'too-many-requests' => "You've requested a few links already. Please wait a bit and try again.",
+        _ => "Couldn't send the link (${e.code}). Please try again.",
+      });
+    }
+    await _db.doc('users/${user.uid}').update({'pendingEmail': email});
+    return true;
+  }
+
+  /// Stops showing a pending email change (a link already sent still works until it expires).
+  static Future<void> cancelEmailChange(String uid) => _db.doc('users/$uid').update({'pendingEmail': FieldValue.delete()});
+
   /// Emails a password-reset link. Never reveals whether the email has an
   /// account, so callers should word the confirmation accordingly.
   static Future<void> sendPasswordReset(String email) async {
@@ -239,24 +297,41 @@ class AuthService {
   /// Name given to Apple accounts when Apple doesn't share one.
   static const appleFallbackName = 'StemUp Member';
 
+  /// Copies a Google profile photo into Storage and returns its URL. If the
+  /// copy fails, returns Google's own photo URL (which still shows the photo)
+  /// instead of falling back to the initials avatar.
+  static Future<String> _copyOAuthPhoto(String uid, String source) async {
+    try {
+      final res = await http.get(Uri.parse(source));
+      if (res.statusCode != 200) throw Exception('Photo download failed (${res.statusCode})');
+      final storageRef = _storage.ref('profilePictures/$uid');
+      await storageRef.putData(res.bodyBytes, SettableMetadata(contentType: res.headers['content-type'] ?? 'image/jpeg'));
+      return await storageRef.getDownloadURL();
+    } catch (e) {
+      debugPrint("Couldn't copy the sign-in photo; using it from Google directly: $e");
+      return source;
+    }
+  }
+
   /// Creates users/{uid} (and adds them to the global role) on a first-time
   /// Google or Apple sign-in. No-op if the profile already exists.
   static Future<void> _provisionOAuthUser(User user, String? photoOverride, {String? name}) async {
     final ref = _db.doc('users/${user.uid}');
-    if ((await ref.get()).exists) return;
-
-    var photoURL = defaultAvatar;
+    final snap = await ref.get();
     final source = photoOverride ?? user.photoURL;
-    if (source != null) {
-      try {
-        final res = await http.get(Uri.parse(source));
-        final storageRef = _storage.ref('profilePictures/${user.uid}');
-        await storageRef.putData(res.bodyBytes, SettableMetadata(contentType: res.headers['content-type'] ?? 'image/jpeg'));
-        photoURL = await storageRef.getDownloadURL();
-      } catch (_) {
-        // Fall back to the default avatar rather than blocking sign-up
+
+    if (snap.exists) {
+      // Accounts whose photo copy failed at sign-up got the initials avatar; give them their photo now
+      final current = snap.data()?['photoURL'] as String?;
+      if (source != null && (current == null || current.isEmpty || current == defaultAvatar)) {
+        await ref.update({'photoURL': await _copyOAuthPhoto(user.uid, source)}).catchError((Object e) {
+          debugPrint("Couldn't update the profile photo: $e");
+        });
       }
+      return;
     }
+
+    final photoURL = source == null ? defaultAvatar : await _copyOAuthPhoto(user.uid, source);
 
     await ref.set(_starterProfile(email: user.email, name: name ?? user.displayName, photoURL: photoURL));
     await _db.doc('roles/$globalRoleId').update({
@@ -336,8 +411,10 @@ class AuthService {
     if (userData.photoURL.isNotEmpty && userData.photoURL != defaultAvatar) {
       await _storage.ref('profilePictures/${user.uid}').delete().catchError((_) {});
     }
-    writes.add(_db.doc('users/${user.uid}').delete());
-    await Future.wait(writes);
+    // Best effort: one failed write (e.g. a role that was since deleted) must not stop the
+    // account itself being deleted. The cleanUpDeletedAccount function clears anything left.
+    await Future.wait(writes.map((w) => w.catchError((Object e) => debugPrint('Account cleanup step failed: $e'))));
+    await _db.doc('users/${user.uid}').delete().catchError((Object e) => debugPrint("Couldn't delete profile: $e"));
     // Apple requires revoking the app's Sign in with Apple tokens on deletion
     if (appleAuthCode != null) {
       await _auth.revokeTokenWithAuthorizationCode(appleAuthCode).catchError((_) {});
@@ -346,4 +423,14 @@ class AuthService {
     if (_nativeGoogle) await GoogleSignIn.instance.signOut().catchError((_) {});
     return true;
   }
+}
+
+/// A failed email change, with a message to show as is.
+class EmailChangeException implements Exception {
+  const EmailChangeException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

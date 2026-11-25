@@ -3,8 +3,8 @@ import { MainContext } from './MainContext';
 import { firebaseAuthService } from '../lib/firebaseService';
 import type { User } from 'firebase/auth';
 import { type AccessLevel, type UserData } from '../myDataTypes';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, deleteField, doc, onSnapshot, updateDoc, type FieldValue } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 
 export interface MainContextType {
     user: User | null;
@@ -156,6 +156,39 @@ export default function MainProvider({ children }: { children: React.ReactNode }
         return () => unsub();
     }, [user])
 
+
+    // Keeps the profile's email in step with the sign-in email: after a new email is
+    // confirmed (its link clicked), save it and clear the "not verified" pending one
+    const authEmail = user?.email ?? "";
+    const savedEmail = userData?.email ?? "";
+    const pendingEmail = userData?.pendingEmail ?? "";
+    const hasUserData = !!userData;
+    useEffect(() => {
+        if (!user || !hasUserData || !authEmail) return;
+        const updates: { email?: string; pendingEmail?: FieldValue } = {};
+        if (savedEmail !== authEmail) updates.email = authEmail;
+        if (pendingEmail && pendingEmail.toLowerCase() === authEmail.toLowerCase()) updates.pendingEmail = deleteField();
+        if (Object.keys(updates).length === 0) return;
+        updateDoc(doc(db, "users", user.uid), updates).catch(err => console.warn("Couldn't sync email:", err));
+    }, [user, hasUserData, authEmail, savedEmail, pendingEmail]);
+
+    // While a new email waits on its link, check every few seconds whether it was clicked.
+    // (Firebase signs the account out after an email change, so this usually ends at the login page.)
+    useEffect(() => {
+        if (!user || !pendingEmail) return;
+        const interval = setInterval(async () => {
+            try {
+                await user.reload();
+                const current = auth.currentUser;
+                if (current && current.email?.toLowerCase() === pendingEmail.toLowerCase()) {
+                    await updateDoc(doc(db, "users", current.uid), { email: current.email, pendingEmail: deleteField() });
+                }
+            } catch (err) {
+                console.warn("Couldn't check the email change:", err);
+            }
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [user, pendingEmail]);
 
     // Get all admins
     useEffect(() => {

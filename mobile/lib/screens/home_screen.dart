@@ -161,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ?rewardsCard,
         // Admins always; instructors unless they turned it off in Settings; members of a role with it switched on
-        if (app.isAdmin || (app.isInstructor && me.showGlobalLeaderboard) || _canSeeGlobal)
+        if (app.isAdmin || (app.isInstructor && me.showGlobalLeaderboard) || _canSeeGlobal || me.canSeeGlobal)
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

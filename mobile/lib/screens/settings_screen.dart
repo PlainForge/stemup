@@ -27,7 +27,7 @@ import 'semester_reset_sheet.dart';
 
 /// Settings is a list of sections; each opens its own page at `/settings/<name>`.
 enum _SettingsTab {
-  profile('Profile', 'Photo, display name and current role'),
+  profile('Profile', 'Photo, display name, email and current role'),
   access('Access', 'Your access level and Instructor requests'),
   notifications('Notifications', 'Push, email and what to be notified about'),
   app('App', 'Appearance, bug reports and glass effects'),
@@ -220,6 +220,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: 'Display Name',
                 child: AppTextField(controller: _name, placeholder: '', maxLength: 16),
               ),
+              _Field(label: 'Email', child: _EmailField(me)),
               _Field(
                 label: 'Current Role',
                 child: _InsetRow(
@@ -428,6 +429,191 @@ class _Card extends StatelessWidget {
   );
 }
 
+/// The sign-in email, with a "Change" flow: a link goes to the new address and
+/// the email only changes once it's clicked. Until then the new address shows
+/// as not verified.
+class _EmailField extends StatefulWidget {
+  const _EmailField(this.me);
+
+  final UserData me;
+
+  @override
+  State<_EmailField> createState() => _EmailFieldState();
+}
+
+class _EmailFieldState extends State<_EmailField> {
+  final _email = TextEditingController();
+  bool _editing = false;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send(String target) async {
+    if (target.trim().isEmpty || _busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final sent = await AuthService.requestEmailChange(
+        target,
+        () => promptText(
+          context,
+          title: "Confirm It's You",
+          message: 'Enter your password to change your email.',
+          placeholder: 'Password',
+          obscure: true,
+          confirmLabel: 'Continue',
+        ),
+      );
+      if (sent && mounted) {
+        setState(() {
+          _editing = false;
+          _email.clear();
+        });
+        showToast(context, 'Link sent to ${target.trim().toLowerCase()}');
+      }
+    } on EmailChangeException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = "Couldn't send the link. Please try again.");
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = FirebaseAuth.instance.currentUser?.email ?? widget.me.email;
+    final pending = widget.me.pendingEmail;
+    final canChange = AuthService.hasPasswordSignIn;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!_editing)
+          _InsetRow(
+            label: current,
+            action: canChange
+                ? AppButton(
+                    label: 'Change',
+                    style: AppButtonStyle.gray,
+                    size: AppButtonSize.xsm,
+                    onPressed: () => setState(() {
+                      _editing = true;
+                      _error = null;
+                      _email.text = pending;
+                    }),
+                  )
+                : const SizedBox.shrink(),
+          )
+        else ...[
+          AppTextField(
+            controller: _email,
+            placeholder: 'New email',
+            keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            textInputAction: TextInputAction.send,
+            autofocus: true,
+            maxLength: 320,
+            onSubmitted: _send,
+          ),
+          const SizedBox(height: 6),
+          const Muted(
+            "We'll email a link to the new address. Your email stays the same until you tap it.",
+            size: 12,
+            color: Palette.gray400,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              AppButton(
+                label: 'Send Link',
+                style: AppButtonStyle.blue,
+                size: AppButtonSize.xsm,
+                loading: _busy,
+                onPressed: () => _send(_email.text),
+              ),
+              const SizedBox(width: 8),
+              AppButton(
+                label: 'Cancel',
+                style: AppButtonStyle.gray,
+                size: AppButtonSize.xsm,
+                onPressed: _busy ? null : () => setState(() => _editing = false),
+              ),
+            ],
+          ),
+        ],
+        if (!canChange) ...[
+          const SizedBox(height: 6),
+          const Muted('Your email comes from the account you sign in with (Google or Apple).', size: 12, color: Palette.gray400),
+        ],
+        if (_error != null) ...[
+          const SizedBox(height: 6),
+          Text(_error!, style: TextStyle(fontSize: 13, color: Palette.resolve(context, Palette.red500))),
+        ],
+        if (pending.isNotEmpty && !_editing) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Palette.resolve(context, const Color(0xFFFFFBEB)),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: .4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: pending,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const TextSpan(
+                        text: " isn't verified yet. Tap the link we sent to it to start using it, then sign in again with the new email.",
+                      ),
+                    ],
+                  ),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFFB45309)),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    AppButton(
+                      label: 'Resend Link',
+                      style: AppButtonStyle.gray,
+                      size: AppButtonSize.xsm,
+                      loading: _busy,
+                      onPressed: () => _send(pending),
+                    ),
+                    const SizedBox(width: 8),
+                    AppButton(
+                      label: 'Cancel Change',
+                      style: AppButtonStyle.gray,
+                      size: AppButtonSize.xsm,
+                      onPressed: _busy
+                          ? null
+                          : () => AuthService.cancelEmailChange(widget.me.uid).catchError((Object _) {
+                              if (mounted) setState(() => _error = "Couldn't cancel. Please try again.");
+                            }),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _Field extends StatelessWidget {
   const _Field({required this.label, required this.child});
 
@@ -632,8 +818,8 @@ class _NotificationsCard extends StatelessWidget {
     return _Card(
       title: 'Notifications',
       children: [
-        _SwitchRow(label: 'Push notifications', hint: 'On this iPhone', value: prefs.push, onChanged: (v) => _setPush(context, v)),
-        _SwitchRow(
+        SwitchRow(label: 'Push notifications', hint: 'On this iPhone', value: prefs.push, onChanged: (v) => _setPush(context, v)),
+        SwitchRow(
           label: 'Email notifications',
           hint: me.email.isEmpty ? 'No email on this account' : me.email,
           value: prefs.email,
@@ -641,7 +827,7 @@ class _NotificationsCard extends StatelessWidget {
         ),
         Muted(anyOn ? 'Choose what to be notified about:' : 'Turn on push or email to be notified about:', size: 13),
         for (final t in NotifyType.values)
-          _SwitchRow(label: t.label, hint: t.hint, value: prefs.isOn(t), onChanged: (v) => Db.setNotificationType(me.uid, t, v)),
+          SwitchRow(label: t.label, hint: t.hint, value: prefs.isOn(t), onChanged: (v) => Db.setNotificationType(me.uid, t, v)),
       ],
     );
   }
@@ -703,41 +889,6 @@ class _SectionButton extends StatelessWidget {
 }
 
 /// An inset row with a title, a gray hint under it, and a switch.
-class _SwitchRow extends StatelessWidget {
-  const _SwitchRow({required this.label, required this.hint, required this.value, required this.onChanged});
-
-  final String label;
-  final String hint;
-  final bool value;
-  final ValueChanged<bool>? onChanged;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-    decoration: BoxDecoration(
-      color: Palette.fill(context),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Palette.separator(context)),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: TextStyle(fontSize: 14, color: Palette.label(context))),
-              const SizedBox(height: 2),
-              Text(hint, style: TextStyle(fontSize: 12, color: Palette.tertiary(context))),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        CupertinoSwitch(value: value, activeTrackColor: Palette.green500, onChanged: onChanged),
-      ],
-    ),
-  );
-}
-
 String _themeLabel(ThemePref t) => switch (t) {
   ThemePref.system => 'Device Theme',
   ThemePref.light => 'Light',

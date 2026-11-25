@@ -2,7 +2,7 @@ import { useContext, useEffect } from "react";
 import { motion } from "motion/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faArrowRight } from "@fortawesome/free-solid-svg-icons";
 import { MainContext } from "../context/MainContext";
 import { useRole } from "../lib/useRole";
 import RoleAdminPage from "../components/RoleAdmin";
@@ -58,7 +58,15 @@ export default function AdminRolePage() {
                     {role.purpose && <p className="text-sm text-gray-500 mt-1">{role.purpose}</p>}
                 </div>
                 {isMember && (
-                    <Button size="xsm" color="blue" onClick={() => navigate(`/roles/${role.id}`)}>Open Role Page</Button>
+                    <button
+                        type="button"
+                        onClick={() => navigate(`/roles/${role.id}`)}
+                        title="Open the role page"
+                        className="group flex items-center gap-2 pl-4 pr-3.5 py-1.5 rounded-full text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors hover:cursor-pointer"
+                    >
+                        Open
+                        <FontAwesomeIcon icon={faArrowRight} className="text-xs transition-transform group-hover:translate-x-0.5" />
+                    </button>
                 )}
             </div>
             <RoleAdminPage role={role} membersWithData={membersWithData} requested={requested} />

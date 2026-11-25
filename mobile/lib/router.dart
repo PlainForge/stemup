@@ -5,9 +5,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/admin_screen.dart';
+import 'screens/admin_user_screen.dart';
 import 'screens/alumni_batch_screen.dart';
 import 'screens/auth_screens.dart';
 import 'screens/home_screen.dart';
+import 'screens/role_member_screen.dart';
 import 'screens/role_screen.dart';
 import 'screens/roles_screen.dart';
 import 'screens/settings_screen.dart';
@@ -16,6 +18,12 @@ import 'state/app_state.dart';
 import 'widgets/page_scaffold.dart';
 
 Page<void> _page(Widget child, GoRouterState state) => CupertinoPage<void>(key: state.pageKey, child: child);
+
+/// A role member's page, under both the role page and the admin role page.
+final _memberRoute = GoRoute(
+  path: 'members/:uid',
+  pageBuilder: (_, s) => _page(RoleMemberScreen(roleId: s.pathParameters['id']!, uid: s.pathParameters['uid']!), s),
+);
 
 const _authPaths = {'/splash', '/login', '/register', '/verify'};
 const _adminPrefixes = ['/admin'];
@@ -60,6 +68,7 @@ GoRouter buildRouter(AppState app) => GoRouter(
                 GoRoute(
                   path: ':id',
                   pageBuilder: (_, s) => _page(RoleScreen(roleId: s.pathParameters['id']!), s),
+                  routes: [_memberRoute],
                 ),
               ],
             ),
@@ -74,6 +83,11 @@ GoRouter buildRouter(AppState app) => GoRouter(
                 GoRoute(
                   path: 'roles/:id',
                   pageBuilder: (_, s) => _page(AdminRoleScreen(roleId: s.pathParameters['id']!), s),
+                  routes: [_memberRoute],
+                ),
+                GoRoute(
+                  path: 'users/:uid',
+                  pageBuilder: (_, s) => _page(AdminUserScreen(uid: s.pathParameters['uid']!), s),
                 ),
                 GoRoute(
                   path: 'inactive/:id',

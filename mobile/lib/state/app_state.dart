@@ -28,6 +28,7 @@ class AppState extends ChangeNotifier {
   StreamSubscription<List<String>>? _instructorSub;
   final List<StreamSubscription> _badgeSubs = [];
   Timer? _verifyTimer;
+  Timer? _emailTimer;
 
   User? user;
   UserData? userData;
@@ -82,6 +83,8 @@ class AppState extends ChangeNotifier {
     _adminSub?.cancel();
     _instructorSub?.cancel();
     _verifyTimer?.cancel();
+    _emailTimer?.cancel();
+    _emailTimer = null;
     _cancelBadgeSubs();
 
     user = usr;
@@ -116,6 +119,7 @@ class AppState extends ChangeNotifier {
         userData = data;
         initializing = false;
         notifyListeners();
+        _syncEmail(data);
       },
       onError: (_) {
         initializing = false;
@@ -265,8 +269,39 @@ class AppState extends ChangeNotifier {
     ThemePref.dark => Brightness.dark,
   };
 
+  /// Keeps the profile's email in step with the sign-in email: once a new email
+  /// is confirmed (its link clicked), save it and clear the pending one. While a
+  /// change is pending, checks every few seconds whether the link was clicked
+  /// (Firebase usually signs the account out after an email change).
+  void _syncEmail(UserData? data) {
+    final current = FirebaseAuth.instance.currentUser;
+    final authEmail = current?.email ?? '';
+    if (data == null || current == null || authEmail.isEmpty) return;
+    final changed = data.email != authEmail;
+    final confirmed = data.pendingEmail.isNotEmpty && data.pendingEmail.toLowerCase() == authEmail.toLowerCase();
+    if (changed || confirmed) {
+      Db.syncEmail(current.uid, email: changed ? authEmail : null, clearPending: confirmed).catchError((Object e) {
+        debugPrint("Couldn't sync email: $e");
+      });
+    }
+    if (data.pendingEmail.isEmpty || confirmed) {
+      _emailTimer?.cancel();
+      _emailTimer = null;
+    } else {
+      _emailTimer ??= Timer.periodic(const Duration(seconds: 5), (_) async {
+        try {
+          await FirebaseAuth.instance.currentUser?.reload();
+          _syncEmail(userData);
+        } catch (e) {
+          debugPrint("Couldn't check the email change: $e");
+        }
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _emailTimer?.cancel();
     _authSub?.cancel();
     _userSub?.cancel();
     _adminSub?.cancel();

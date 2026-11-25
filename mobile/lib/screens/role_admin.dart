@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -143,27 +144,33 @@ class _RoleAdminViewState extends State<RoleAdminView> {
   }
 
   /// `bg-white border border-gray-100 rounded-2xl px-4 py-3` row that slides in from the left.
-  Widget _personRow(int i, UserData u, {required Widget info, required List<Widget> actions}) => Padding(
+  Widget _personRow(int i, UserData u, {required Widget info, required List<Widget> actions, VoidCallback? onPressed}) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: FadeSlideIn(
       key: ValueKey(u.uid),
       delay: stagger(i),
       dx: -10,
       offset: 0,
-      child: AppCard(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shadow: false,
-        child: Row(
-          children: [
-            Avatar(u.photoURL, name: u.name, size: Avatar.xs),
-            const SizedBox(width: 12),
-            Expanded(child: info),
-            for (var j = 0; j < actions.length; j++) ...[if (j > 0) const SizedBox(width: 8), actions[j]],
-          ],
+      child: _maybePressable(
+        onPressed,
+        AppCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shadow: false,
+          child: Row(
+            children: [
+              Avatar(u.photoURL, name: u.name, size: Avatar.xs),
+              const SizedBox(width: 12),
+              Expanded(child: info),
+              for (var j = 0; j < actions.length; j++) ...[if (j > 0) const SizedBox(width: 8), actions[j]],
+            ],
+          ),
         ),
       ),
     ),
   );
+
+  Widget _maybePressable(VoidCallback? onPressed, Widget child) =>
+      onPressed == null ? child : Pressable(scale: .98, onPressed: onPressed, child: child);
 
   // ── Requests ──
 
@@ -293,32 +300,8 @@ class _RoleAdminViewState extends State<RoleAdminView> {
                 Muted('${list[i].points} pts · ${list[i].taskCompleted} tasks', size: 12, color: Palette.gray400),
               ],
             ),
-            actions: [
-              AppButton(
-                label: 'Edit',
-                size: AppButtonSize.xsm,
-                style: AppButtonStyle.blue,
-                onPressed: () => showModalCard<void>(
-                  context,
-                  builder: (_) => _EditMemberCard(member: list[i], roleId: role.id),
-                ),
-              ),
-              AppButton(
-                label: 'Kick',
-                size: AppButtonSize.xsm,
-                style: AppButtonStyle.red,
-                onPressed: () async {
-                  final ok = await confirmDialog(
-                    context,
-                    title: 'Kick Member',
-                    message: 'Remove ${list[i].name} from this role?',
-                    confirmLabel: 'Kick',
-                    destructive: true,
-                  );
-                  if (ok) await Db.kickUserFromRole(role.id, list[i].uid);
-                },
-              ),
-            ],
+            actions: [Icon(FontAwesomeIcons.chevronRight.data, size: 14, color: Palette.resolve(context, Palette.gray300))],
+            onPressed: () => context.push('${GoRouterState.of(context).uri.path}/members/${list[i].uid}'),
           ),
       ],
     );
@@ -385,8 +368,15 @@ class _AssignTaskFormState extends State<_AssignTaskForm> {
   }
 
   Future<void> _addMember() async {
-    final uid = await pickOption<String>(context, title: 'Select a member', options: [for (final m in widget.members) (m.uid, m.name)]);
-    if (uid != null && !_selected.contains(uid)) setState(() => _selected.add(uid));
+    final uid = await pickPerson(
+      context,
+      title: 'Select a member',
+      emptyText: 'No members in this role yet.',
+      chosen: _selected.toSet(),
+      people: [for (final m in widget.members) (uid: m.uid, name: m.name, photoURL: m.photoURL, hint: '${m.points} pts')],
+    );
+    if (uid == null) return;
+    setState(() => _selected.contains(uid) ? _selected.remove(uid) : _selected.add(uid));
   }
 
   Future<void> _assign() async {
@@ -782,11 +772,15 @@ class _AdminTaskCardState extends State<_AdminTaskCard> {
                   value: widget.members.where((m) => m.uid == _reassignTo).firstOrNull?.name ?? 'Reassign to…',
                   placeholder: _reassignTo == null,
                   onTap: () async {
-                    final uid = await pickOption<String>(
+                    final uid = await pickPerson(
                       context,
                       title: 'Reassign to…',
-                      options: [for (final m in widget.members.where((m) => m.uid != t.assignedTo)) (m.uid, m.name)],
-                      selected: _reassignTo,
+                      emptyText: 'No one else in this role.',
+                      chosen: {?_reassignTo},
+                      people: [
+                        for (final m in widget.members.where((m) => m.uid != t.assignedTo))
+                          (uid: m.uid, name: m.name, photoURL: m.photoURL, hint: null),
+                      ],
                     );
                     if (uid != null) setState(() => _reassignTo = uid);
                   },
@@ -835,17 +829,18 @@ class _AdminTaskCardState extends State<_AdminTaskCard> {
 
 // ── Members ─────────────────────────────────────────────────────────────
 
-class _EditMemberCard extends StatefulWidget {
-  const _EditMemberCard({required this.member, required this.roleId});
+/// Edits a member's stats in one role (opened from their member page).
+class EditMemberCard extends StatefulWidget {
+  const EditMemberCard({super.key, required this.member, required this.roleId});
 
   final UserData member;
   final String roleId;
 
   @override
-  State<_EditMemberCard> createState() => _EditMemberCardState();
+  State<EditMemberCard> createState() => EditMemberCardState();
 }
 
-class _EditMemberCardState extends State<_EditMemberCard> {
+class EditMemberCardState extends State<EditMemberCard> {
   late final _points = TextEditingController(text: '${widget.member.points}');
   late final _tasks = TextEditingController(text: '${widget.member.taskCompleted}');
   UserData? _global;
@@ -1098,7 +1093,14 @@ class _InstructorsTabState extends State<_InstructorsTab> {
   }
 
   Future<void> _add(List<UserData> addable) async {
-    final uid = await pickOption<String>(context, title: 'Give access to', options: [for (final p in addable) (p.uid, p.name)]);
+    final uid = await pickPerson(
+      context,
+      title: 'Give access to',
+      people: [
+        for (final p in addable)
+          (uid: p.uid, name: p.name, photoURL: p.photoURL, hint: widget.role.members.contains(p.uid) ? 'Already a member' : null),
+      ],
+    );
     if (uid == null) return;
     await Db.addRoleInstructor(widget.role, uid);
     if (mounted) showToast(context, 'Instructor added');
@@ -1123,6 +1125,12 @@ class _InstructorsTabState extends State<_InstructorsTab> {
             const Muted(
               'Instructors here can give and review tasks, edit points, accept members and request resets. Admins can always run every role.',
             ),
+            if (!app.isAdmin && role.createdBy != app.user!.uid)
+              const Muted(
+                'Only the instructor who created this role, or an admin, can remove other instructors. You can always step down yourself.',
+                size: 12,
+                color: Palette.gray400,
+              ),
             if (role.instructors.isEmpty) const Muted('No instructors yet.', color: Palette.gray400),
             for (final uid in role.instructors)
               Container(
@@ -1155,7 +1163,7 @@ class _InstructorsTabState extends State<_InstructorsTab> {
                         ],
                       ),
                     ),
-                    if (app.isAdmin || uid == app.user!.uid || role.createdBy != uid)
+                    if (app.isAdmin || uid == app.user!.uid || (role.createdBy.isNotEmpty && role.createdBy == app.user!.uid))
                       AppButton(
                         label: 'Remove',
                         size: AppButtonSize.xsm,

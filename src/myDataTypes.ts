@@ -12,6 +12,10 @@ export type UserData = {
     currentRole: string,
     /** Instructors can hide the global leaderboard on Home; shown when unset */
     showGlobalLeaderboard?: boolean,
+    /** Set by an admin so this person sees the global leaderboard on Home (admins and instructors already do) */
+    canSeeGlobal?: boolean,
+    /** A new email waiting on its verification link; email changes only once it's clicked */
+    pendingEmail?: string,
     /** How to tell them about their tasks and requests; push and email are off when unset */
     notifications?: NotificationPrefs,
 }

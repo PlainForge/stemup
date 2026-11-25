@@ -1,7 +1,7 @@
-import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, linkWithCredential, OAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
+import { createUserWithEmailAndPassword, deleteUser, EmailAuthProvider, GoogleAuthProvider, linkWithCredential, OAuthProvider, onAuthStateChanged, reauthenticateWithCredential, reauthenticateWithPopup, sendEmailVerification, sendPasswordResetEmail, signInWithCredential, verifyBeforeUpdateEmail, signInWithEmailAndPassword, signInWithPopup, type User } from "firebase/auth";
 import { auth, db, functions, storage } from "./firebase";
 import { httpsCallable } from "firebase/functions";
-import { arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, query, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
+import { arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, increment, query, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { Capacitor } from "@capacitor/core";
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
@@ -60,20 +60,42 @@ export function classifySemesterReset(users: ResetUser[], removeRoleIds: Set<str
  * photoOverride lets callers pass a higher-res
  * photo URL than what's on the Auth user object (e.g. Google's upscaled photo).
  */
+/**
+ * Copies a Google profile photo into Storage and returns its URL. If the copy
+ * fails (the browser blocks the download, or Storage refuses the upload), it
+ * returns Google's own photo URL, which still shows the photo, instead of
+ * falling back to the initials avatar.
+ */
+async function copyOAuthPhoto(uid: string, source: string): Promise<string> {
+    try {
+        const response = await fetch(source);
+        if (!response.ok) throw new Error(`Photo download failed (${response.status})`);
+        const blob = await response.blob();
+        const storageRef = ref(storage, `profilePictures/${uid}`);
+        await uploadBytes(storageRef, blob, { contentType: blob.type || "image/jpeg" });
+        return await getDownloadURL(storageRef);
+    } catch (err) {
+        console.warn("Couldn't copy the sign-in photo; using it from Google directly:", err);
+        return source;
+    }
+}
+
 async function provisionOAuthUser(user: User, photoOverride?: string, name?: string) {
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) return;
-
-    let photoURL = DEFAULT_AVATAR;
     const sourcePhoto = photoOverride ?? user.photoURL;
-    if (sourcePhoto) {
-        const response = await fetch(sourcePhoto);
-        const blob = await response.blob();
-        const storageRef = ref(storage, `profilePictures/${user.uid}`);
-        await uploadBytes(storageRef, blob);
-        photoURL = await getDownloadURL(storageRef);
+
+    if (userSnap.exists()) {
+        // Accounts whose photo copy failed at sign-up got the initials avatar; give them their photo now
+        const current = userSnap.data().photoURL as string | undefined;
+        if (sourcePhoto && (!current || current === DEFAULT_AVATAR)) {
+            await updateDoc(userRef, { photoURL: await copyOAuthPhoto(user.uid, sourcePhoto) })
+                .catch(err => console.warn("Couldn't update the profile photo:", err));
+        }
+        return;
     }
+
+    const photoURL = sourcePhoto ? await copyOAuthPhoto(user.uid, sourcePhoto) : DEFAULT_AVATAR;
 
     await setDoc(userRef, {
         email: user.email,
@@ -165,6 +187,62 @@ export async function sendVerification(user: User) {
         console.warn("sendVerificationEmail function failed, using Firebase's email:", err);
         await sendEmailVerification(user);
     }
+}
+
+/** True when the account signs in with an email and password (Google and Apple accounts get their email from that sign-in). */
+export function hasPasswordSignIn(user: User) {
+    return user.providerData.some(p => p.providerId === "password");
+}
+
+/**
+ * Starts an email change after the person re-enters their password: a link goes
+ * to [newEmail], and the account's email only changes once it's clicked (until
+ * then users/{uid}.pendingEmail holds it). Returns false if they cancel the
+ * password prompt; throws an Error with a readable message on failure.
+ */
+export async function requestEmailChange(user: User, newEmail: string, askPassword: () => Promise<string | null>) {
+    const email = newEmail.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("That email address doesn't look right.");
+    if (email === user.email?.toLowerCase()) throw new Error("That's already your email.");
+
+    const password = await askPassword();
+    if (!password) return false;
+    try {
+        await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email!, password));
+    } catch (err) {
+        const code = err instanceof FirebaseError ? err.code : "";
+        if (code === "auth/wrong-password" || code === "auth/invalid-credential") throw new Error("That password is incorrect.");
+        if (code === "auth/too-many-requests") throw new Error("Too many attempts. Please wait a bit and try again.");
+        throw new Error(`Couldn't confirm it's you (${code || "unknown error"}).`);
+    }
+
+    try {
+        await httpsCallable(functions, "requestEmailChange")({ email });
+        return true;
+    } catch (err) {
+        if (err instanceof FirebaseError) {
+            if (err.code === "functions/invalid-argument" || err.code === "functions/already-exists") throw new Error(err.message);
+            if (err.code === "functions/resource-exhausted") throw new Error("You've requested a link already. Please wait a minute before trying again.");
+        }
+        // The function is unavailable (e.g. the Gmail account failed): use Firebase's own email instead
+        console.warn("requestEmailChange function failed, using Firebase's email:", err);
+    }
+    try {
+        await verifyBeforeUpdateEmail(user, email);
+    } catch (err) {
+        const code = err instanceof FirebaseError ? err.code : "";
+        if (code === "auth/email-already-in-use") throw new Error("Another account already uses that email.");
+        if (code === "auth/invalid-email") throw new Error("That email address doesn't look right.");
+        if (code === "auth/too-many-requests") throw new Error("You've requested a few links already. Please wait a bit and try again.");
+        throw new Error(`Couldn't send the link (${code || "unknown error"}). Please try again.`);
+    }
+    await updateDoc(doc(db, "users", user.uid), { pendingEmail: email });
+    return true;
+}
+
+/** Stops showing a pending email change (a link already sent still works until it expires). */
+export async function cancelEmailChange(uid: string) {
+    await updateDoc(doc(db, "users", uid), { pendingEmail: deleteField() });
 }
 
 async function removeUserRole(userId: string, roleId: string) {

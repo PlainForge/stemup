@@ -102,6 +102,12 @@ class UserData {
   /// Instructors can hide the global leaderboard on Home; shown when unset.
   final bool showGlobalLeaderboard;
 
+  /// Set by an admin so this person sees the global leaderboard on Home (admins and instructors already do).
+  final bool canSeeGlobal;
+
+  /// A new email waiting on its verification link; [email] changes only once it's clicked.
+  final String pendingEmail;
+
   final NotificationPrefs notifications;
 
   const UserData({
@@ -114,6 +120,8 @@ class UserData {
     this.roles = const [],
     this.currentRole = '',
     this.showGlobalLeaderboard = true,
+    this.canSeeGlobal = false,
+    this.pendingEmail = '',
     this.notifications = const NotificationPrefs(),
   });
 
@@ -131,6 +139,8 @@ class UserData {
         : const [],
     currentRole: _str(m['currentRole']),
     showGlobalLeaderboard: m['showGlobalLeaderboard'] != false,
+    canSeeGlobal: m['canSeeGlobal'] == true,
+    pendingEmail: _str(m['pendingEmail']),
     notifications: NotificationPrefs.fromMap(m['notifications']),
   );
 
@@ -161,6 +171,8 @@ class UserData {
         roles: roles ?? this.roles,
         currentRole: currentRole ?? this.currentRole,
         showGlobalLeaderboard: showGlobalLeaderboard,
+        canSeeGlobal: canSeeGlobal,
+        pendingEmail: pendingEmail,
         notifications: notifications,
       );
 }

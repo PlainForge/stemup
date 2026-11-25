@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState } from "react";
 import { alertDialog, confirmDialog, promptDialog } from "../lib/confirm";
 import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
-import { firebaseAuthService } from "../lib/firebaseService";
+import { cancelEmailChange, firebaseAuthService, hasPasswordSignIn, requestEmailChange } from "../lib/firebaseService";
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { signOut } from "firebase/auth";
@@ -52,7 +52,7 @@ function SwitchRow({ label, hint, checked, onChange, disabled = false }: {
 }
 
 const SETTINGS_SECTIONS = [
-    { key: "profile", label: "Profile", hint: "Photo, display name and current role", icon: faUser },
+    { key: "profile", label: "Profile", hint: "Photo, display name, email and current role", icon: faUser },
     { key: "access", label: "Access", hint: "Your access level and Instructor requests", icon: faUserShield },
     { key: "notifications", label: "Notifications", hint: "Push, email and what to be notified about", icon: faBell },
     { key: "app", label: "App", hint: "Appearance and bug reports", icon: faSliders },
@@ -82,6 +82,10 @@ export default function Settings() {
     const [reason, setReason] = useState("");
     const [requesting, setRequesting] = useState(false);
     const [uidCopied, setUidCopied] = useState(false);
+    const [editingEmail, setEditingEmail] = useState(false);
+    const [newEmail, setNewEmail] = useState("");
+    const [emailBusy, setEmailBusy] = useState(false);
+    const [emailError, setEmailError] = useState("");
 
     const copyUid = async () => {
         if (!user) return;
@@ -210,6 +214,32 @@ export default function Settings() {
         window.location.reload();
     };
 
+    // Email changes: a link goes to the new address, and the email only changes once it's clicked
+    const canChangeEmail = hasPasswordSignIn(user);
+    const pendingEmail = userData.pendingEmail ?? "";
+    const sendEmailLink = async (target: string) => {
+        setEmailError("");
+        setEmailBusy(true);
+        try {
+            const sent = await requestEmailChange(user, target, () =>
+                promptDialog("Enter your password to change your email.", {
+                    title: "Confirm It's You",
+                    confirmLabel: "Continue",
+                    input: { type: "password", placeholder: "Password", autoComplete: "current-password" },
+                })
+            );
+            if (sent) {
+                setEditingEmail(false);
+                setNewEmail("");
+                setPhrase(`Link sent to ${target.trim().toLowerCase()}.`);
+            }
+        } catch (err) {
+            setEmailError(err instanceof Error ? err.message : "Couldn't send the link. Please try again.");
+        } finally {
+            setEmailBusy(false);
+        }
+    };
+
     const deleteAccount = async () => {
         const result = await confirmDialog("This permanently deletes your account, tasks, and role memberships. This cannot be undone.", { title: "Delete Account?", confirmLabel: "Delete", danger: true })
         if (!result) return;
@@ -326,6 +356,69 @@ export default function Settings() {
                                     required={true}
                                     autocomplete="false"
                                 />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label htmlFor="settings-email" className="text-sm font-medium text-gray-600">Email</label>
+                                {!editingEmail ? (
+                                    <div className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
+                                        <span className="text-sm break-all">{user.email}</span>
+                                        {canChangeEmail && (
+                                            <Button onClick={() => { setEditingEmail(true); setNewEmail(pendingEmail); setEmailError(""); }} color="gray" size="xsm" type="button" extraClasses="shrink-0">
+                                                Change
+                                            </Button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-2">
+                                        <input
+                                            id="settings-email"
+                                            type="email"
+                                            value={newEmail}
+                                            onChange={e => setNewEmail(e.target.value)}
+                                            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); if (newEmail.trim()) sendEmailLink(newEmail); } }}
+                                            placeholder="New email"
+                                            autoComplete="email"
+                                            autoFocus
+                                            maxLength={320}
+                                            className="w-full bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                                        />
+                                        <p className="text-xs text-gray-400">We'll email a link to the new address. Your email stays the same until you click it.</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button onClick={() => sendEmailLink(newEmail)} color="blue" size="xsm" type="button" disabled={emailBusy || !newEmail.trim()}>
+                                                {emailBusy ? "Sending..." : "Send Link"}
+                                            </Button>
+                                            <Button onClick={() => { setEditingEmail(false); setEmailError(""); }} color="gray" size="xsm" type="button" disabled={emailBusy}>
+                                                Cancel
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                                {!canChangeEmail && (
+                                    <p className="text-xs text-gray-400">Your email comes from the account you sign in with (Google or Apple).</p>
+                                )}
+                                {emailError && <p role="alert" className="text-sm text-red-500">{emailError}</p>}
+                                {pendingEmail && !editingEmail && (
+                                    <div className="flex flex-col gap-2 bg-amber-50 border border-amber-200 px-4 py-3 rounded-xl">
+                                        <p className="text-sm text-amber-700">
+                                            <strong className="break-all">{pendingEmail}</strong> isn't verified yet. Click the link we sent to it to start using it. Then sign in again with the new email.
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button onClick={() => sendEmailLink(pendingEmail)} color="gray" size="xsm" type="button" disabled={emailBusy}>
+                                                {emailBusy ? "Sending..." : "Resend Link"}
+                                            </Button>
+                                            <Button
+                                                onClick={() => cancelEmailChange(user.uid).catch(() => setEmailError("Couldn't cancel. Please try again."))}
+                                                color="gray"
+                                                size="xsm"
+                                                type="button"
+                                                disabled={emailBusy}
+                                            >
+                                                Cancel Change
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex flex-col gap-1.5">

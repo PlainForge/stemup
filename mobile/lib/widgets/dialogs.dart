@@ -309,3 +309,128 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
     ),
   );
 }
+
+/// Someone to pick in [pickPerson].
+typedef PickablePerson = ({String uid, String name, String photoURL, String? hint});
+
+/// Bottom sheet listing people with their photos and a search box, in place of
+/// a plain action sheet. Returns the picked uid, or null if dismissed. [chosen]
+/// people show a check (e.g. already selected for a task).
+Future<String?> pickPerson(
+  BuildContext context, {
+  required String title,
+  required List<PickablePerson> people,
+  Set<String> chosen = const {},
+  String emptyText = 'No one to pick.',
+}) => showCupertinoModalPopup<String>(
+  context: context,
+  builder: (ctx) => _PersonSheet(title: title, people: people, chosen: chosen, emptyText: emptyText),
+);
+
+class _PersonSheet extends StatefulWidget {
+  const _PersonSheet({required this.title, required this.people, required this.chosen, required this.emptyText});
+
+  final String title;
+  final List<PickablePerson> people;
+  final Set<String> chosen;
+  final String emptyText;
+
+  @override
+  State<_PersonSheet> createState() => _PersonSheetState();
+}
+
+class _PersonSheetState extends State<_PersonSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _query.trim().toLowerCase();
+    final shown = q.isEmpty ? widget.people : widget.people.where((p) => p.name.toLowerCase().contains(q)).toList();
+    final media = MediaQuery.of(context);
+    return Container(
+      height: media.size.height * .7,
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      decoration: BoxDecoration(
+        color: Palette.card(context),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 5,
+              decoration: BoxDecoration(color: Palette.resolve(context, Palette.gray300), borderRadius: BorderRadius.circular(3)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
+              child: Row(
+                children: [
+                  Expanded(child: Heading(widget.title, size: 18)),
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: CupertinoSearchTextField(placeholder: 'Search by name', onChanged: (v) => setState(() => _query = v)),
+            ),
+            Expanded(
+              child: shown.isEmpty
+                  ? Center(child: Muted(widget.people.isEmpty ? widget.emptyText : 'No matches.', color: Palette.gray400))
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      itemCount: shown.length,
+                      itemBuilder: (context, i) {
+                        final p = shown[i];
+                        final isChosen = widget.chosen.contains(p.uid);
+                        return Pressable(
+                          scale: .98,
+                          onPressed: () => Navigator.pop(context, p.uid),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isChosen ? Palette.resolve(context, Palette.blue50) : Palette.fill(context),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: isChosen ? Palette.blue500.withValues(alpha: .35) : Palette.separator(context)),
+                            ),
+                            child: Row(
+                              children: [
+                                Avatar(p.photoURL, name: p.name, size: Avatar.xxs),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        p.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Palette.label(context)),
+                                      ),
+                                      if (p.hint != null) Muted(p.hint!, size: 12, color: Palette.gray400),
+                                    ],
+                                  ),
+                                ),
+                                if (isChosen)
+                                  Icon(CupertinoIcons.checkmark_alt, size: 18, color: Palette.resolve(context, Palette.navActive)),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

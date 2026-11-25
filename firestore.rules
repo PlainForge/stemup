@@ -46,7 +46,8 @@ service cloud.firestore {
       allow delete: if signedIn() && me() == userId;
       // Your own profile, but not your own points, tasks completed or role list
       allow update: if signedIn() && me() == userId
-        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email', 'notifications']);
+        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email', 'pendingEmail', 'notifications']);
+      // canSeeGlobal (seeing the global leaderboard) is set by admins only (above)
       // Instructors award points, edit stats, accept members and remove them
       allow update: if isInstructor()
         && changes().hasOnly(['roles', 'points', 'taskCompleted', 'currentRole']);
@@ -62,9 +63,16 @@ service cloud.firestore {
       // Only admins (above) write here
     }
 
+    // An instructor may take only themselves off a role's instructors, unless they created the role
+    function instructorRemovalsAllowed() {
+      let removed = resource.data.get('instructors', []).toSet()
+        .difference(request.resource.data.get('instructors', []).toSet());
+      return removed.hasOnly([me()]) || resource.data.get('createdBy', '') == me();
+    }
+
     match /roles/{roleId} {
       allow read: if signedIn();
-      allow update: if runsRole(roleId);
+      allow update: if runsRole(roleId) && instructorRemovalsAllowed();
       // Anyone can ask to join (or withdraw), leave a role, or join the global role
       allow update: if signedIn()
         && changes().hasOnly(['members', 'pendingRequests'])

@@ -104,6 +104,55 @@ export const sendVerificationEmail = onCall({ secrets: [gmailUser, gmailAppPassw
   return { sent: true };
 });
 
+/** How recently the person must have signed in (or re-entered their password) to change their email. */
+const RECENT_LOGIN_MS = 5 * 60 * 1000;
+
+/**
+ * Starts an email change: emails a link to the NEW address, and the account's
+ * email only changes once that link is clicked. Until then the new address is
+ * kept in users/{uid}.pendingEmail so Settings can show it as not verified.
+ */
+export const requestEmailChange = onCall({ secrets: [gmailUser, gmailAppPassword], invoker: "public" }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+  // Same rule as Firebase's own email change: confirm it's you first
+  const authTime = Number(request.auth?.token.auth_time ?? 0) * 1000;
+  if (Date.now() - authTime > RECENT_LOGIN_MS) {
+    throw new HttpsError("failed-precondition", "requires-recent-login");
+  }
+
+  const newEmail = typeof request.data?.email === "string" ? request.data.email.trim().toLowerCase() : "";
+  if (!newEmail || newEmail.length > 320 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail)) {
+    throw new HttpsError("invalid-argument", "That email address doesn't look right.");
+  }
+
+  const user = await getAuth().getUser(uid);
+  if (!user.email) throw new HttpsError("failed-precondition", "This account has no email address.");
+  if (user.email.toLowerCase() === newEmail) throw new HttpsError("invalid-argument", "That's already your email.");
+  const taken = await getAuth().getUserByEmail(newEmail).then(() => true, () => false);
+  if (taken) throw new HttpsError("already-exists", "Another account already uses that email.");
+
+  await claimCooldown(`email_change_${uid}`);
+  const link = await getAuth().generateVerifyAndChangeEmailLink(user.email, newEmail);
+
+  const profile = await getFirestore().doc(`users/${uid}`).get();
+  const name = (profile.data()?.name as string | undefined) || user.displayName || "";
+  const greeting = name ? `Hi ${escapeHtml(name)},` : "Hi,";
+
+  await sendEmail(
+    newEmail,
+    "Confirm your new email for StemUp",
+    "Confirm your new email",
+    `${greeting} tap the button below to start using this address for your StemUp account. Your email won't change until you do.`,
+    "Confirm new email",
+    link,
+    "If you didn't ask to change your StemUp email, you can ignore this email.",
+  );
+  await getFirestore().doc(`users/${uid}`).set({ pendingEmail: newEmail }, { merge: true });
+  logger.info(`Sent email change link for uid ${uid}`);
+  return { sent: true };
+});
+
 /**
  * Sends a password-reset link. Always reports success so the form can't be
  * used to find out which emails have accounts.

@@ -51,7 +51,11 @@ export default function Dash() {
 
             members.forEach(uid => {
                 const unsub = onSnapshot(doc(db, "users", uid), (userSnap) => {
-                    if (!userSnap.exists()) return;
+                    if (!userSnap.exists()) {
+                        // Account deleted: drop them instead of keeping their last-known row
+                        setGlobalLeaders(prev => prev.filter(u => u.uid !== uid));
+                        return;
+                    }
                     const data = userSnap.data();
                     setGlobalLeaders(prev => {
                         const others = prev.filter(u => u.uid !== uid);
@@ -168,8 +172,8 @@ export default function Dash() {
     if (!context || !user || !userData) return null;
 
     // Admins always see the global leaderboard; instructors unless they turned it off in
-    // Settings; everyone in a role whose instructor switched it on for that role
-    const seesGlobal = isAdmin || (access === "instructor" && userData.showGlobalLeaderboard !== false) || showGlobal;
+    // Settings; everyone in a role whose instructor switched it on for that role; anyone an admin let see it
+    const seesGlobal = isAdmin || (access === "instructor" && userData.showGlobalLeaderboard !== false) || showGlobal || userData.canSeeGlobal === true;
 
     const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 

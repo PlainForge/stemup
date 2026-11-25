@@ -1,6 +1,8 @@
 // pages/LoginPage.tsx (+ LoginCard), RegisterPage.tsx (+ RegisterCard) and
 // EmailVerifyPage.tsx, as they render on a phone. Navigation after a successful
 // sign-in is handled by the router redirect.
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -528,13 +530,36 @@ class VerifyEmailScreen extends StatefulWidget {
   State<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
 }
 
-class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
+class _VerifyEmailScreenState extends State<VerifyEmailScreen> with SingleTickerProviderStateMixin {
+  /// Seconds before "Resend" works again (the server allows one email a minute).
+  static const _cooldownSeconds = 60;
+
+  late final AnimationController _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat();
   bool _sending = false;
   String? _status;
   bool _statusOk = true;
+  int _cooldown = 0;
+  Timer? _cooldownTimer;
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    _cooldownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startCooldown() {
+    _cooldownTimer?.cancel();
+    setState(() => _cooldown = _cooldownSeconds);
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return t.cancel();
+      setState(() => _cooldown--);
+      if (_cooldown <= 0) t.cancel();
+    });
+  }
 
   Future<void> _resend() async {
-    if (_sending) return;
+    if (_sending || _cooldown > 0) return;
     final user = FirebaseAuth.instance.currentUser;
     setState(() {
       _sending = true;
@@ -543,12 +568,16 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     try {
       if (user != null) await AuthService.sendVerification(user);
       _statusOk = true;
-      _status = 'Verification email resent to ${user?.email}. It can take a few minutes to arrive.';
+      _status = 'Sent! It can take a few minutes to arrive.';
+      _startCooldown();
     } on FirebaseAuthException catch (e) {
       _statusOk = false;
-      _status = e.code == 'too-many-requests'
-          ? "You've requested a few emails already. Please wait a minute before resending."
-          : "Couldn't resend the email. Please try again.";
+      if (e.code == 'too-many-requests') {
+        _status = "You've requested a few emails already. Please wait a minute before resending.";
+        _startCooldown();
+      } else {
+        _status = "Couldn't resend the email. Please try again.";
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -557,73 +586,212 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   @override
   Widget build(BuildContext context) {
     final email = FirebaseAuth.instance.currentUser?.email ?? '';
+    final dark = Palette.isDark(context);
+    const bannerHeight = 112.0;
+    const iconSize = 80.0;
     return CupertinoPageScaffold(
       backgroundColor: Palette.fill(context),
-      child: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: FadeSlideIn(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 384),
-                padding: const EdgeInsets.all(40),
-                decoration: BoxDecoration(
-                  color: Palette.card(context),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 6, offset: Offset(0, 4), spreadRadius: -1)],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: _gap([
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: Palette.blue100),
-                      child: Icon(FontAwesomeIcons.envelope.data, size: 28, color: Palette.blue600),
-                    ),
-                    Column(
-                      children: [
-                        const Heading('Verify your email', size: 20),
-                        const SizedBox(height: 4),
-                        Text.rich(
-                          TextSpan(
-                            children: [
-                              const TextSpan(text: 'We sent a verification link to '),
-                              TextSpan(
-                                text: email,
-                                style: const TextStyle(fontWeight: FontWeight.w700),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: dark
+                ? const [Color(0xFF030712), Color(0xFF111827), Color(0xFF1E1B4B)]
+                : const [Color(0xFFEFF6FF), Color(0xFFFFFFFF), Color(0xFFEEF2FF)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              child: FadeSlideIn(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Palette.card(context),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Palette.resolve(context, Palette.gray100)),
+                    boxShadow: const [BoxShadow(color: Color(0x1A1E3A8A), blurRadius: 30, offset: Offset(0, 12), spreadRadius: -6)],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Banner with the envelope overlapping its bottom edge
+                      Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.topCenter,
+                        children: [
+                          Container(
+                            height: bannerHeight,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [Palette.blue500, Palette.blue600, Color(0xFF4F46E5)],
                               ),
-                              const TextSpan(text: '. Click it to continue.'),
-                            ],
+                            ),
                           ),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 14, color: Palette.secondary(context)),
-                        ),
-                      ],
-                    ),
-                    AppButton(
-                      label: 'Resend email',
-                      style: AppButtonStyle.blue,
-                      size: AppButtonSize.sm,
-                      loading: _sending,
-                      onPressed: _resend,
-                    ),
-                    if (_status != null)
-                      Text(
-                        _status!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 13, color: Palette.resolve(context, _statusOk ? Palette.green600 : Palette.red500)),
+                          Padding(
+                            padding: const EdgeInsets.only(top: bannerHeight - iconSize / 2),
+                            child: SizedBox(
+                              width: iconSize,
+                              height: iconSize,
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                fit: StackFit.expand,
+                                children: [
+                                  // Soft ping behind the envelope
+                                  AnimatedBuilder(
+                                    animation: _pulse,
+                                    builder: (_, _) => Transform.scale(
+                                      scale: 1 + .45 * _pulse.value,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Palette.blue500.withValues(alpha: .35 * (1 - _pulse.value)),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: const Color(0xFFFFFFFF),
+                                      border: Border.all(color: Palette.card(context), width: 4),
+                                      boxShadow: const [BoxShadow(color: Color(0x26000000), blurRadius: 12, offset: Offset(0, 4))],
+                                    ),
+                                    child: Icon(FontAwesomeIcons.envelopeOpenText.data, size: 30, color: Palette.blue600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    Column(
-                      children: [
-                        Muted("Don't see it? Check your spam or junk folder.", size: 12, center: true, color: Palette.gray400),
-                        const SizedBox(height: 20),
-                        Muted('This page will update automatically once verified.', size: 12, center: true, color: Palette.gray400),
-                        const SizedBox(height: 12),
-                        LinkText('Use a different account', size: 13, color: Palette.gray500, onPressed: AuthService.signOut),
-                      ],
-                    ),
-                  ], 20),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+                        child: Column(
+                          children: _gap([
+                            Column(
+                              children: [
+                                const Heading('Check your inbox', size: 24),
+                                const SizedBox(height: 6),
+                                const Muted('We sent a verification link to', center: true),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: Palette.resolve(context, Palette.blue50),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(color: Palette.blue500.withValues(alpha: .25)),
+                                  ),
+                                  child: Text(
+                                    email,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Palette.resolve(context, Palette.navActive),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Column(
+                              children: [
+                                for (final (icon, text) in [
+                                  (FontAwesomeIcons.inbox, 'Open the email from StemUp'),
+                                  (FontAwesomeIcons.handPointer, 'Tap "Verify email"'),
+                                  (FontAwesomeIcons.circleCheck, 'Come back here. This screen moves on by itself'),
+                                ])
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: Palette.fill(context),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Palette.separator(context)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 32,
+                                            height: 32,
+                                            alignment: Alignment.center,
+                                            decoration: BoxDecoration(color: Palette.blue600, borderRadius: BorderRadius.circular(8)),
+                                            child: Icon(icon.data, size: 13, color: const Color(0xFFFFFFFF)),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(text, style: TextStyle(fontSize: 14, color: Palette.label(context))),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                FadeTransition(
+                                  opacity: Tween(begin: 1.0, end: .3).animate(_pulse),
+                                  child: Container(
+                                    width: 9,
+                                    height: 9,
+                                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Palette.green500),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Muted('Waiting for you to verify...', size: 12, color: Palette.gray400),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                AppButton(
+                                  label: _cooldown > 0 ? 'Resend in ${_cooldown}s' : 'Resend email',
+                                  style: AppButtonStyle.blue,
+                                  size: AppButtonSize.full,
+                                  loading: _sending,
+                                  onPressed: _cooldown > 0 ? null : _resend,
+                                ),
+                                if (_status != null) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _status!,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Palette.resolve(context, _statusOk ? Palette.green600 : Palette.red500),
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 8),
+                                const Muted(
+                                  "Don't see it? Check your spam or junk folder.",
+                                  size: 12,
+                                  center: true,
+                                  color: Palette.gray400,
+                                ),
+                              ],
+                            ),
+                            LinkText(
+                              'Use a different account',
+                              size: 14,
+                              color: Palette.gray500,
+                              icon: FontAwesomeIcons.arrowRightFromBracket.data,
+                              onPressed: AuthService.signOut,
+                            ),
+                          ], 20),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

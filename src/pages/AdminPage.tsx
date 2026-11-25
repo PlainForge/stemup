@@ -134,14 +134,6 @@ export default function AdminPage() {
         await run(req.id, () => roleService.approveRequest(req), "Couldn't approve the request. Please try again.");
     };
 
-    const setInstructor = async (row: UserRow, make: boolean) => {
-        if (!make) {
-            const ok = await confirmDialog(`${row.name} will go back to being a User. They stay in their roles but can't run them any more.`, { title: "Remove Instructor?", confirmLabel: "Remove", danger: true });
-            if (!ok) return;
-        }
-        await run(row.uid, () => make ? roleService.grantInstructor(row.uid) : roleService.revokeInstructor(row.uid), "Couldn't change their access. Please try again.");
-    };
-
     const tabs: { key: AdminTab; label: string; badge: number }[] = [
         { key: "requests", label: "Requests", badge: requests.length },
         { key: "users", label: "Users", badge: 0 },
@@ -160,7 +152,7 @@ export default function AdminPage() {
         >
             <div>
                 <h1 className="text-2xl font-bold">Admin</h1>
-                <p className="text-sm text-gray-500 mt-0.5">Review requests, manage who's an Instructor, and run any role.</p>
+                <p className="text-sm text-gray-500 mt-0.5">Review requests, manage users and their access, and run any role.</p>
             </div>
 
             <div ref={tabBar.ref} className="relative flex items-center gap-0.5 sm:gap-1 border-b border-gray-200 overflow-x-auto scrollbar-hide w-full">
@@ -249,7 +241,12 @@ export default function AdminPage() {
                         const level = accessOf(row.uid);
                         const pending = requests.some(r => r.type === "instructor" && r.uid === row.uid);
                         return (
-                            <div key={row.uid} className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border border-gray-100 bg-white">
+                            <button
+                                key={row.uid}
+                                type="button"
+                                onClick={() => navigate(`/admin/users/${row.uid}`)}
+                                className="group flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border border-gray-200 bg-white text-left transition-all duration-200 hover:border-gray-400 hover:shadow-sm hover:cursor-pointer"
+                            >
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
                                     <ProfileImg src={row.photoURL} alt={row.name} size="xxs" />
                                     <div className="min-w-0">
@@ -263,17 +260,8 @@ export default function AdminPage() {
                                         </p>
                                     </div>
                                 </div>
-                                {level === "user" && (
-                                    <Button onClick={() => setInstructor(row, true)} size="xsm" color="blue" extraClasses="shrink-0" disabled={busy === row.uid}>
-                                        Make Instructor
-                                    </Button>
-                                )}
-                                {level === "instructor" && (
-                                    <Button onClick={() => setInstructor(row, false)} size="xsm" color="red" extraClasses="shrink-0" disabled={busy === row.uid}>
-                                        Remove Instructor
-                                    </Button>
-                                )}
-                            </div>
+                                <FontAwesomeIcon icon={faChevronRight} className="shrink-0 text-gray-300 transition-all duration-200 group-hover:text-gray-600 group-hover:translate-x-1" />
+                            </button>
                         );
                     })}
                 </div>

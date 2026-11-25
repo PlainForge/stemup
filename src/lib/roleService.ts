@@ -8,7 +8,8 @@
 // - Requests (instructor access, a new role, a role reset) live in `requests`
 //   until an admin approves or declines them.
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
-import { db } from "./firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "./firebase";
 import type { Role, StemRequest, UserData, UserRoleData } from "../myDataTypes";
 
 const instructorsRef = () => doc(db, "admins", "instructors");
@@ -128,6 +129,19 @@ export const roleService = {
         await setDoc(instructorsRef(), { ids: arrayRemove(uid) }, { merge: true });
         const led = await getDocs(query(collection(db, "roles"), where("instructors", "array-contains", uid)));
         await Promise.all(led.docs.map(d => updateDoc(d.ref, { instructors: arrayRemove(uid) })));
+    },
+
+    /**
+     * Clears what's left of someone who deleted their account but still shows up
+     * (the purgeDeletedAccount function refuses if they can still sign in).
+     */
+    async purgeDeletedAccount(uid: string) {
+        await httpsCallable(functions, "purgeDeletedAccount")({ uid });
+    },
+
+    /** Lets a User see the global leaderboard on Home (admins and instructors already can). Admin-only in the rules. */
+    async setCanSeeGlobal(uid: string, on: boolean) {
+        await updateDoc(doc(db, "users", uid), { canSeeGlobal: on });
     },
 
     // ── Roles ─────────────────────────────────────────────────────────────

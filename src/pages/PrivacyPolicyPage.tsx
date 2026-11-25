@@ -4,7 +4,7 @@ export default function PrivacyPolicyPage() {
             <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-col gap-6">
                 <div>
                     <h1 className="text-2xl font-bold">Privacy Policy</h1>
-                    <p className="text-sm text-gray-400 mt-1">Last updated: November 24, 2026</p>
+                    <p className="text-sm text-gray-400 mt-1">Last updated: November 25, 2026</p>
                 </div>
 
                 <p className="text-sm text-gray-600 leading-relaxed">
@@ -83,6 +83,18 @@ export default function PrivacyPolicyPage() {
                 </section>
 
                 <section className="flex flex-col gap-2">
+                    <h2 className="text-base font-semibold">Changing your email</h2>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                        If you sign in with an email and password, you can change your email in Settings &rarr; Profile.
+                        You&apos;ll be asked for your password first, then we email a confirmation link to the new address.
+                        Until you click it, we keep the new address with your account only to show that it isn&apos;t verified
+                        yet; your email doesn&apos;t change, and you can cancel. Once confirmed, the new address replaces the old
+                        one and you sign in again with it. If you sign in with Google or Apple, your email comes from that
+                        account and can&apos;t be changed in StemUP.
+                    </p>
+                </section>
+
+                <section className="flex flex-col gap-2">
                     <h2 className="text-base font-semibold">Camera and photo access</h2>
                     <p className="text-sm text-gray-600 leading-relaxed">
                         The iOS app asks for camera or photo library access only when you choose to set a profile photo.
@@ -96,6 +108,8 @@ export default function PrivacyPolicyPage() {
                         This information is used to run the app itself: showing your tasks, tracking your points, and
                         displaying leaderboards. Your name, photo, and points are visible to other members of your role/team
                         as part of the leaderboard and task features &mdash; that visibility is the core purpose of the app.
+                        Admins can also see your email address, your access level and which roles you&apos;re in, so they can
+                        manage accounts, and they can choose to let you see the leaderboard for the whole club.
                         We don't use your data for advertising, and we don't sell or share it with third parties beyond the
                         service providers below.
                     </p>
@@ -130,8 +144,9 @@ export default function PrivacyPolicyPage() {
                     <h2 className="text-base font-semibold">Your choices</h2>
                     <p className="text-sm text-gray-600 leading-relaxed">
                         You can delete your account and all associated data at any time from Settings &rarr; Delete My
-                        Account. This permanently removes your profile, tasks, role memberships, notification settings, and
-                        push tokens. You can turn notifications off at any time in Settings &rarr; Notifications. If you signed in with
+                        Account. This permanently removes your profile, profile photo, tasks, requests, role memberships,
+                        notification settings, and push tokens. If anything is left behind (for example, if your connection
+                        drops partway through), our servers remove it automatically once your account is deleted. You can turn notifications off at any time in Settings &rarr; Notifications. If you signed in with
                         Apple, deleting your account in the iOS app also revokes StemUP&apos;s access to your Apple ID.
                     </p>
                 </section>

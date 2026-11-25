@@ -41,6 +41,8 @@ export default function ProfileImg({ src, alt, size }: ProfileImgProps) {
         <img
             src={optimizeSrc(src, alt)}
             alt={alt}
+            // Google's photo servers can refuse hotlinked images that send a referrer
+            referrerPolicy="no-referrer"
             className={`${imgSize} shrink-0 aspect-square ${!src ? "bg-[#e0e0e0]" : ""} object-cover rounded-full border`}
         />
     );

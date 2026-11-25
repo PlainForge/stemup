@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 
 import '../models/models.dart';
@@ -291,6 +292,18 @@ class Db {
   static Future<void> setRewardsTitle(String roleId, String title) => _role(roleId).update({'rewardsTitle': title.trim()});
 
   static Future<void> setShowGlobalLeaderboard(String uid, bool value) => _user(uid).update({'showGlobalLeaderboard': value});
+
+  /// Clears what's left of someone who deleted their account but still shows up
+  /// (the purgeDeletedAccount function refuses if they can still sign in).
+  static Future<void> purgeDeletedAccount(String uid) =>
+      FirebaseFunctions.instance.httpsCallable('purgeDeletedAccount').call<void>({'uid': uid});
+
+  /// Lets a User see the global leaderboard on Home (admins and instructors already can). Admin-only in the rules.
+  static Future<void> setCanSeeGlobal(String uid, bool value) => _user(uid).update({'canSeeGlobal': value});
+
+  /// Saves the sign-in email on the profile; [clearPending] drops a confirmed (or abandoned) pending email change.
+  static Future<void> syncEmail(String uid, {String? email, bool clearPending = false}) =>
+      _user(uid).update({if (email != null) 'email': email, if (clearPending) 'pendingEmail': FieldValue.delete()});
 
   // ── Notifications ──────────────────────────────────────────────────────
 

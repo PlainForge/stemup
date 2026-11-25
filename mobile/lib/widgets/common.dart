@@ -564,3 +564,39 @@ class CopyIdChip extends StatelessWidget {
     ),
   );
 }
+
+/// A labelled on/off switch in a rounded, filled row (Settings and admin pages).
+class SwitchRow extends StatelessWidget {
+  const SwitchRow({super.key, required this.label, required this.hint, required this.value, required this.onChanged});
+
+  final String label;
+  final String hint;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    decoration: BoxDecoration(
+      color: Palette.fill(context),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Palette.separator(context)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(fontSize: 14, color: Palette.label(context))),
+              const SizedBox(height: 2),
+              Text(hint, style: TextStyle(fontSize: 12, color: Palette.tertiary(context))),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        CupertinoSwitch(value: value, activeTrackColor: Palette.green500, onChanged: onChanged),
+      ],
+    ),
+  );
+}

@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import App from "./App";
 import LoginPage from "./pages/LoginPage";
 import RolePage from "./pages/RolePage";
+import RoleMemberPage from "./pages/RoleMemberPage";
 import RolesSelectorPage from "./pages/RolesSelectorPage";
 import Settings from "./pages/SettingsPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -11,6 +12,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AlumniBatchPage from "./pages/AlumniBatchPage";
 import AdminPage from "./pages/AdminPage";
 import AdminRolePage from "./pages/AdminRolePage";
+import AdminUserPage from "./pages/AdminUserPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 
 export const router = createBrowserRouter([
@@ -40,6 +42,7 @@ export const router = createBrowserRouter([
       { path: "roles", element: <RolesSelectorPage /> },
       { path: "admin", element: <AdminPage /> },
       { path: "admin/roles/:id", element: <AdminRolePage /> },
+      { path: "admin/users/:uid", element: <AdminUserPage /> },
       { path: "admin/inactive/:id", element: <AlumniBatchPage /> },
       // Alumni and Old Users became the Admin page's Inactive Users tab
       { path: "alumni/*", element: <Navigate to="/admin?tab=inactive" replace /> },
@@ -50,6 +53,7 @@ export const router = createBrowserRouter([
         element: <ProtectedRoute />,
         children: [
           { index: true, element: <RolePage /> },
+          { path: "members/:uid", element: <RoleMemberPage /> },
         ],
       },
     ],

@@ -87,24 +87,6 @@ class _AdminScreenState extends State<AdminScreen> {
     await _run(r.id, () => Db.approveRequest(r), "Couldn't approve the request. Please try again.");
   }
 
-  Future<void> _setInstructor(UserData u, bool make) async {
-    if (!make) {
-      final ok = await confirmDialog(
-        context,
-        title: 'Remove Instructor?',
-        message: "${u.name} will go back to being a User. They stay in their roles but can't run them any more.",
-        confirmLabel: 'Remove',
-        destructive: true,
-      );
-      if (!ok) return;
-    }
-    await _run(
-      u.uid,
-      () => make ? Db.grantInstructor(u.uid) : Db.revokeInstructor(u.uid),
-      "Couldn't change their access. Please try again.",
-    );
-  }
-
   Future<void> _restore(OldUserRow row) async {
     setState(() => _restoring = row.uid);
     try {
@@ -126,7 +108,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
     return PageScaffold(
       title: 'Admin',
-      subtitle: "Review requests, manage who's an Instructor, and run any role.",
+      subtitle: 'Review requests, manage users and their access, and run any role.',
       onRefresh: _tab == _AdminTab.inactive ? _loadInactive : null,
       children: [
         SlidingTabs<_AdminTab>(
@@ -264,61 +246,49 @@ class _AdminScreenState extends State<AdminScreen> {
         for (final u in shown)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: AppCard(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              radius: 12,
-              shadow: false,
-              child: Row(
-                children: [
-                  Avatar(u.photoURL, name: u.name, size: Avatar.xxs),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                u.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontWeight: FontWeight.w500, color: Palette.label(context)),
+            child: Pressable(
+              scale: .98,
+              onPressed: () => context.push('/admin/users/${u.uid}'),
+              child: AppCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                radius: 12,
+                shadow: false,
+                child: Row(
+                  children: [
+                    Avatar(u.photoURL, name: u.name, size: Avatar.xxs),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  u.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontWeight: FontWeight.w500, color: Palette.label(context)),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            AccessTag(app.accessOf(u.uid)),
-                          ],
-                        ),
-                        Muted(
-                          '${u.email.isEmpty ? '' : '${u.email} · '}${u.points} pts'
-                          '${requested.contains(u.uid) ? ' · Requested Instructor' : ''}',
-                          size: 12,
-                          maxLines: 1,
-                          color: Palette.gray400,
-                        ),
-                      ],
+                              const SizedBox(width: 6),
+                              AccessTag(app.accessOf(u.uid)),
+                            ],
+                          ),
+                          Muted(
+                            '${u.email.isEmpty ? '' : '${u.email} · '}${u.points} pts'
+                            '${requested.contains(u.uid) ? ' · Requested Instructor' : ''}',
+                            size: 12,
+                            maxLines: 1,
+                            color: Palette.gray400,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  switch (app.accessOf(u.uid)) {
-                    AccessLevel.user => AppButton(
-                      label: 'Make Instructor',
-                      size: AppButtonSize.xsm,
-                      style: AppButtonStyle.blue,
-                      loading: _busy == u.uid,
-                      onPressed: () => _setInstructor(u, true),
-                    ),
-                    AccessLevel.instructor => AppButton(
-                      label: 'Remove',
-                      size: AppButtonSize.xsm,
-                      style: AppButtonStyle.red,
-                      loading: _busy == u.uid,
-                      onPressed: () => _setInstructor(u, false),
-                    ),
-                    AccessLevel.admin => const SizedBox.shrink(),
-                  },
-                ],
+                    const SizedBox(width: 8),
+                    Icon(FontAwesomeIcons.chevronRight.data, size: 14, color: Palette.resolve(context, Palette.gray300)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -578,11 +548,23 @@ class _AdminRoleScreenState extends State<AdminRoleScreen> {
       backLabel: 'Admin',
       backPath: '/admin',
       trailing: role.members.contains(app.user!.uid)
-          ? AppButton(
-              label: 'Open Role Page',
-              size: AppButtonSize.xsm,
-              style: AppButtonStyle.blue,
+          ? Pressable(
               onPressed: () => context.go('/roles/${role.id}'),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 7, 12, 7),
+                decoration: BoxDecoration(color: Palette.blue600, borderRadius: BorderRadius.circular(999)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Open',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFFFFFFFF)),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(FontAwesomeIcons.arrowRight.data, size: 12, color: const Color(0xFFFFFFFF)),
+                  ],
+                ),
+              ),
             )
           : null,
       children: [

@@ -7,7 +7,7 @@ import { canManageRole, isRoleStaff } from "../lib/roleService";
 import { motion } from "motion/react";
 import RoleAdminPage from "../components/RoleAdmin";
 import DoneButton from "../components/TaskDoneButton";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Loading from "./Loading";
 import { MainContext } from "../context/MainContext";
 import Button from "../components/Button";
@@ -30,7 +30,15 @@ export default function RolePage() {
     const role = liveRole ?? null;
     const [leaders, setLeaders] = useState<UserData[]>([]);
     const [userTasks, setUserTasks] = useState<Task[]>([]);
-    const [pageState, setPageState] = useState("leaderboard");
+    // The open tab lives in the URL (?view=), so coming back from a member's page lands on the same tab
+    const [searchParams, setSearchParams] = useSearchParams();
+    const pageState = searchParams.get("view") ?? "leaderboard";
+    const setPageState = (view: string) => setSearchParams(p => {
+        const next = new URLSearchParams(p);
+        next.set("view", view);
+        next.delete("tab");
+        return next;
+    }, { replace: true });
     const [idCopied, setIdCopied] = useState(false);
     const copyRoleId = async () => {
         await navigator.clipboard.writeText(roleId ?? "");

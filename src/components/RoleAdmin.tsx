@@ -1,9 +1,9 @@
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, onSnapshot, query, Timestamp, updateDoc, where } from "firebase/firestore";
 import { alertDialog, confirmDialog, promptDialog } from "../lib/confirm";
 import { roleService, isRoleStaff } from "../lib/roleService";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { db } from "../lib/firebase";
 import { type Role, type StemRequest, type SubmittedTask, type Task, type UserData, type UserRoleData } from "../myDataTypes";
@@ -13,8 +13,10 @@ import Button from "./Button";
 import Input from "./Input";
 import { Alert } from "./PhraseAlert";
 import ProfileImg from "./ProfileImg";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
+import PersonPicker from "./PersonPicker";
 import MedalIcon from "./MedalIcon";
-import { firebaseAuthService } from "../lib/firebaseService";
 import ErrorMessage from "./ErrorMessage";
 
 function taskIsOverdue(task: Task): boolean {
@@ -75,7 +77,14 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [addInstructorUid, setAddInstructorUid] = useState("");
     const [rewardsTitle, setRewardsTitle] = useState(role.rewardsTitle ?? "");
     const [phrase5, setPhrase5] = useState(""); // Rewards title phrase
-    const [page, setPage] = useState("requests");
+    // The open tab lives in the URL (?tab=), so coming back from a member's page lands on the same tab
+    const [searchParams, setSearchParams] = useSearchParams();
+    const page = searchParams.get("tab") ?? "requests";
+    const setPage = (tab: string) => setSearchParams(p => {
+        const next = new URLSearchParams(p);
+        next.set("tab", tab);
+        return next;
+    }, { replace: true });
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
     const [createTaskFor, setCreateSetTaskFor] = useState<string[]>([]);
     const [assignError, setAssignError] = useState("");
@@ -90,7 +99,6 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [taskMonthFilter, setTaskMonthFilter] = useState("all");
     const [taskSort, setTaskSort] = useState("date-desc");
     const [allSubmitted, setAllSubmitted] = useState<SubmittedTask[]>([]);
-    const [editingMember, setEditingMember] = useState<string | null>(null);
     const [reassignTaskId, setReassignTaskId] = useState<string | null>(null);
     const [reassignTo, setReassignTo] = useState("");
     const tabBar = useSlidingIndicator(page);
@@ -99,12 +107,6 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [editDesc, setEditDesc] = useState("");
     const [editPts, setEditPts] = useState(0);
     const [editDue, setEditDue] = useState("");
-    const [editPoints, setEditPoints] = useState(0);
-    const [editTaskCount, setEditTaskCount] = useState(0);
-    const [origEditPoints, setOrigEditPoints] = useState(0);
-    const [origEditTaskCount, setOrigEditTaskCount] = useState(0);
-    // Global totals for the member being edited — membersWithData only carries this role's stats
-    const [editGlobal, setEditGlobal] = useState<{ points: number; taskCompleted: number } | null>(null);
 
     // Listen for all tasks in this role
     useEffect(() => {
@@ -518,57 +520,6 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         await updateDoc(doc(db, "roles", role.id), { showInGlobalLeaderboard: !showInGlobal });
     };
 
-    const kickMember = async (uid: string, name: string) => {
-        const confirm = await confirmDialog(`Remove ${name} from this role?`, { title: "Kick Member", confirmLabel: "Kick", danger: true });
-        if (!confirm) return;
-        await firebaseAuthService.kickUserFromRole(role.id, uid);
-    };
-
-    const openEditMember = (m: UserData) => {
-        const roleData = m.roles?.find((r: UserRoleData) => r.id === role.id);
-        const rp = roleData?.points ?? 0;
-        const rt = roleData?.taskCompleted ?? 0;
-        setEditingMember(m.uid);
-        setEditPoints(rp);
-        setEditTaskCount(rt);
-        setOrigEditPoints(rp);
-        setOrigEditTaskCount(rt);
-        setEditGlobal(null);
-        getDoc(doc(db, "users", m.uid)).then(snap => {
-            const d = snap.data();
-            setEditGlobal({ points: d?.points ?? 0, taskCompleted: d?.taskCompleted ?? 0 });
-        });
-    };
-
-    const saveRoleOnly = async (uid: string) => {
-        const member = membersWithData.find(m => m.uid === uid);
-        if (!member) return;
-        const updatedRoles = (member.roles || []).map((r: UserRoleData) =>
-            r.id === role.id ? { ...r, points: editPoints, taskCompleted: editTaskCount } : r
-        );
-        await updateDoc(doc(db, "users", uid), { roles: updatedRoles });
-        setEditingMember(null);
-    };
-
-    const saveRoleAndGlobal = async (uid: string) => {
-        if (!isAdmin) return;
-        const member = membersWithData.find(m => m.uid === uid);
-        if (!member) return;
-        const deltaPoints = editPoints - origEditPoints;
-        const deltaTaskCount = editTaskCount - origEditTaskCount;
-        const updatedRoles = (member.roles || []).map((r: UserRoleData) =>
-            r.id === role.id ? { ...r, points: editPoints, taskCompleted: editTaskCount } : r
-        );
-        // member.points/taskCompleted are this role's stats, so read the real global totals fresh
-        const fresh = (await getDoc(doc(db, "users", uid))).data();
-        await updateDoc(doc(db, "users", uid), {
-            roles: updatedRoles,
-            points: Math.max(0, (fresh?.points ?? 0) + deltaPoints),
-            taskCompleted: Math.max(0, (fresh?.taskCompleted ?? 0) + deltaTaskCount),
-        });
-        setEditingMember(null);
-    };
-
     // Admins and the role's instructors aren't given tasks or ranked
     const nonAdminMembers = membersWithData.filter((m) => !isRoleStaff(role, m.uid, admins));
 
@@ -716,22 +667,19 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                 setCreateSetTaskFor(allUids);
                             }}>Select all</LinkButton>
                         </div>
-                        <select
-                            name="user"
-                            defaultValue=""
-                            onChange={(e) => {
-                                const uid = e.target.value;
-                                if (uid && !createTaskFor.includes(uid)) {
-                                    setCreateSetTaskFor((prev) => [...prev, uid]);
-                                }
+                        <PersonPicker
+                            label="Member to assign"
+                            placeholder="Select a member"
+                            value=""
+                            resetAfterPick
+                            chosen={createTaskFor}
+                            emptyText="No members in this role yet."
+                            people={nonAdminMembers.map(m => ({ uid: m.uid, name: m.name, photoURL: m.photoURL, hint: `${m.points ?? 0} pts` }))}
+                            onChange={uid => {
+                                // Picking someone already selected takes them off again
+                                setCreateSetTaskFor(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]);
                             }}
-                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
-                        >
-                            <option value="" disabled>Select a member</option>
-                            {nonAdminMembers.map((member) => (
-                                <option key={member.uid} value={member.uid}>{member.name}</option>
-                            ))}
-                        </select>
+                        />
 
                         {createTaskFor.length > 0 && (
                             <div className="flex flex-col gap-2">
@@ -1025,16 +973,14 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             </div>
                                         ) : reassignTaskId === task.id ? (
                                             <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
-                                                <select
+                                                <PersonPicker
+                                                    label="Reassign to"
+                                                    placeholder="Reassign to…"
                                                     value={reassignTo}
-                                                    onChange={e => setReassignTo(e.target.value)}
-                                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400"
-                                                >
-                                                    <option value="">Reassign to…</option>
-                                                    {nonAdminMembers.filter(m => m.uid !== task.assignedTo).map(m => (
-                                                        <option key={m.uid} value={m.uid}>{m.name}</option>
-                                                    ))}
-                                                </select>
+                                                    onChange={setReassignTo}
+                                                    emptyText="No one else in this role."
+                                                    people={nonAdminMembers.filter(m => m.uid !== task.assignedTo).map(m => ({ uid: m.uid, name: m.name, photoURL: m.photoURL }))}
+                                                />
                                                 <div className="flex gap-2">
                                                     <Button onClick={() => reassignTask(task)} size="full" color="blue" disabled={!reassignTo}>Reassign</Button>
                                                     <Button onClick={() => { setReassignTaskId(null); setReassignTo(""); }} size="full" color="cancel">Cancel</Button>
@@ -1066,104 +1012,23 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                     {nonAdminMembers.length === 0 ? (
                         <p className="text-gray-400 text-sm text-center py-8">No members in this role.</p>
                     ) : nonAdminMembers.map((m) => (
-                        <motion.div
+                        <motion.button
                             key={m.uid}
-                            className="bg-white border border-gray-100 rounded-2xl"
+                            type="button"
+                            // Each member has their own page: stats, tasks in this role, edit and kick
+                            onClick={() => navigate(`/roles/${role.id}/members/${m.uid}`)}
+                            className="group flex items-center gap-3 w-full text-left px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all duration-200 hover:border-gray-400 hover:shadow-sm hover:cursor-pointer"
                             initial={{ x: -10, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                         >
-                            <div className="flex items-center justify-between px-4 py-3 gap-4">
-                                <div className="flex items-center gap-3">
-                                    <ProfileImg src={m.photoURL} alt={m.name} size="xs" />
-                                    <div>
-                                        <p className="font-medium">{m.name}</p>
-                                        <p className="text-xs text-gray-400">{m.points ?? 0} pts · {m.taskCompleted ?? 0} tasks</p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button onClick={() => openEditMember(m)} size="xsm" color="blue">Edit</Button>
-                                    <Button onClick={() => kickMember(m.uid, m.name)} size="xsm" color="red">Kick</Button>
-                                </div>
+                            <ProfileImg src={m.photoURL} alt={m.name} size="xs" />
+                            <div className="min-w-0 flex-1">
+                                <p className="font-medium truncate">{m.name}</p>
+                                <p className="text-xs text-gray-400">{m.points ?? 0} pts · {m.taskCompleted ?? 0} tasks</p>
                             </div>
-                        </motion.div>
+                            <FontAwesomeIcon icon={faChevronRight} className="shrink-0 text-gray-300 transition-all duration-200 group-hover:text-gray-600 group-hover:translate-x-1" />
+                        </motion.button>
                     ))}
-
-                    {/* Edit member modal */}
-                    <AnimatePresence>
-                        {editingMember && (() => {
-                            const m = membersWithData.find(x => x.uid === editingMember);
-                            if (!m) return null;
-                            return (
-                                <motion.div
-                                    key="edit-overlay"
-                                    className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    transition={{ duration: 0.25, ease: "easeOut" }}
-                                    onClick={() => setEditingMember(null)}
-                                >
-                                    {/* Card */}
-                                    <motion.div
-                                        className="relative z-10 bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm flex flex-col gap-5"
-                                        initial={{ scale: 0.92, y: 20, opacity: 0 }}
-                                        animate={{ scale: 1, y: 0, opacity: 1 }}
-                                        exit={{ scale: 0.95, y: 10, opacity: 0 }}
-                                        transition={{ type: "spring", stiffness: 380, damping: 30, mass: 0.8 }}
-                                        onClick={e => e.stopPropagation()}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <ProfileImg src={m.photoURL} alt={m.name} size="xs" />
-                                            <div>
-                                                <p className="font-semibold">{m.name}</p>
-                                                <p className="text-xs text-gray-400">
-                                                    Role stats{isAdmin && editGlobal ? ` · Global: ${editGlobal.points} pts, ${editGlobal.taskCompleted} tasks` : ""}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-4">
-                                            <div className="flex flex-col gap-1.5 flex-1">
-                                                <label className="text-xs text-gray-400 uppercase tracking-widest">Points</label>
-                                                <input
-                                                    type="number"
-                                                    min={0}
-                                                    value={editPoints}
-                                                    onChange={e => setEditPoints(Math.max(0, +e.target.value))}
-                                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
-                                                />
-                                            </div>
-                                            <div className="flex flex-col gap-1.5 flex-1">
-                                                <label className="text-xs text-gray-400 uppercase tracking-widest">Tasks Completed</label>
-                                                <input
-                                                    type="number"
-                                                    min={0}
-                                                    value={editTaskCount}
-                                                    onChange={e => setEditTaskCount(Math.max(0, +e.target.value))}
-                                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
-                                                />
-                                            </div>
-                                        </div>
-                                        {/* Only admins change global totals; instructors edit this role's stats only */}
-                                        {isAdmin && editGlobal && (editPoints !== origEditPoints || editTaskCount !== origEditTaskCount) && (
-                                            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
-                                                <p className="font-semibold mb-0.5">Global impact if saved with global:</p>
-                                                <p>
-                                                    Points: {editGlobal.points} to {Math.max(0, editGlobal.points + (editPoints - origEditPoints))}
-                                                    {" · "}
-                                                    Tasks: {editGlobal.taskCompleted} to {Math.max(0, editGlobal.taskCompleted + (editTaskCount - origEditTaskCount))}
-                                                </p>
-                                            </div>
-                                        )}
-                                        <div className="flex flex-col gap-2">
-                                            <Button size="full" onClick={() => saveRoleOnly(m.uid)}>{isAdmin ? "Save to Role Only" : "Save"}</Button>
-                                            {isAdmin && <Button size="full" color="gray" onClick={() => saveRoleAndGlobal(m.uid)}>Save to Role + Global</Button>}
-                                            <button onClick={() => setEditingMember(null)} className="text-xs text-gray-400 hover:text-gray-600 transition-colors py-1 hover:cursor-pointer">Cancel</button>
-                                        </div>
-                                    </motion.div>
-                                </motion.div>
-                            );
-                        })()}
-                    </AnimatePresence>
                 </motion.div>
             )}
 
@@ -1173,6 +1038,9 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
                         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Running this role</h2>
                         <p className="text-sm text-gray-500">Instructors here can give and review tasks, edit points, accept members and request resets. Admins can always run every role.</p>
+                        {!isAdmin && role.createdBy !== user.uid && (
+                            <p className="text-xs text-gray-400">Only the instructor who created this role, or an admin, can remove other instructors. You can always step down yourself.</p>
+                        )}
                         {roleInstructors.length === 0 ? (
                             <p className="text-sm text-gray-400">No instructors yet.</p>
                         ) : roleInstructors.map(uid => {
@@ -1190,7 +1058,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             </p>
                                         </div>
                                     </div>
-                                    {(isAdmin || uid === user.uid || role.createdBy !== uid) && (
+                                    {(isAdmin || uid === user.uid || (!!role.createdBy && role.createdBy === user.uid)) && (
                                         <Button onClick={() => removeInstructor(uid, person?.name ?? "This instructor")} size="xsm" color="red" extraClasses="shrink-0">Remove</Button>
                                     )}
                                 </div>
@@ -1203,14 +1071,18 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                             <p className="text-sm text-gray-400">Every instructor already has access. Admins can make more people Instructors from the Admin page.</p>
                         ) : (
                             <>
-                                <select
+                                <PersonPicker
+                                    label="Instructor to add"
+                                    placeholder="Select an instructor"
                                     value={addInstructorUid}
-                                    onChange={e => setAddInstructorUid(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
-                                >
-                                    <option value="">Select an instructor</option>
-                                    {addableInstructors.map(p => <option key={p.uid} value={p.uid}>{p.name}</option>)}
-                                </select>
+                                    onChange={setAddInstructorUid}
+                                    people={addableInstructors.map(p => ({
+                                        uid: p.uid,
+                                        name: p.name,
+                                        photoURL: p.photoURL,
+                                        hint: (role.members ?? []).includes(p.uid) ? "Already a member" : undefined,
+                                    }))}
+                                />
                                 <Button onClick={addInstructor} size="sm" disabled={!addInstructorUid}>Give Access</Button>
                             </>
                         )}
