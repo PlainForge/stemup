@@ -1,9 +1,11 @@
 # Builds the Flutter iOS app in mobile/ and uploads it to App Store Connect
 # (TestFlight) whenever master changes something under mobile/.
 #
-# Signing is fully automatic: Xcode uses the App Store Connect API key to create
-# or fetch the distribution certificate and provisioning profile in the cloud,
-# so no .p12 or .mobileprovision files need to live in the repo or secrets.
+# Signing is fully automatic: the archive is built unsigned, then the export step
+# uses the App Store Connect API key to sign it with a cloud-managed distribution
+# certificate and an App Store provisioning profile, so no .p12 or .mobileprovision
+# files need to live in the repo or secrets, and no certificates pile up in the
+# Apple Developer account from CI runs.
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   ASC_KEY_ID       App Store Connect API key ID
@@ -69,7 +71,11 @@ jobs:
         # the Archive step below creates/fetches one through the App Store Connect API key.
         run: flutter build ios --release --config-only --no-codesign --build-number="$BUILD_NUMBER"
 
-      - name: Archive
+      - name: Archive (unsigned)
+        # Signing here would make Xcode create a new Apple Development certificate on
+        # every run (each runner starts without one), which hits Apple's certificate
+        # limit. The export step below does the real App Store signing instead, with
+        # a cloud-managed distribution certificate that needs nothing on this machine.
         run: |
           xcodebuild archive \
             -workspace ios/Runner.xcworkspace \
@@ -77,12 +83,22 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$ASC_KEY_PATH" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
             DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
-            CODE_SIGN_STYLE=Automatic
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Carry the app's entitlements into the archive
+        # The export re-signs the app using the entitlements it finds on it, so an unsigned
+        # archive would lose Sign in with Apple and push notifications. A local ad-hoc
+        # signature records them (Runner.entitlements); export replaces it with the real one.
+        run: |
+          APP="$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
+          find "$APP/Frameworks" -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) -print0 2>/dev/null \
+            | xargs -0 -I{} codesign --force --sign - --timestamp=none "{}"
+          codesign --force --sign - --timestamp=none --entitlements ios/Runner/Runner.entitlements "$APP"
+          echo "Entitlements on the archived app:"
+          codesign -d --entitlements :- "$APP"
 
       - name: Export and upload to App Store Connect
         run: |
