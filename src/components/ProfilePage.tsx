@@ -165,7 +165,8 @@ export default function ProfilePage() {
                     {targetAccess !== "user" && <AccessBadge level={targetAccess} />}
                 </div>
 
-                {!isEditing ? (
+                {/* Admins are in every role automatically, so their card is just who they are */}
+                {targetAccess === "admin" ? null : !isEditing ? (
                         <div
                             className="w-full flex flex-col gap-4"
                         >

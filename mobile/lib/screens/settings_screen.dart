@@ -200,7 +200,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               border: Border.all(color: Palette.separator(context)),
                             ),
                             child: ClipOval(
-                              child: Image.memory(_photo!, width: Avatar.md, height: Avatar.md, fit: BoxFit.contain),
+                              child: Image.memory(_photo!, width: Avatar.md, height: Avatar.md, fit: BoxFit.cover),
                             ),
                           )
                         : Avatar(me.photoURL, name: me.name),

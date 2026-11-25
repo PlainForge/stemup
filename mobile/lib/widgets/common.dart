@@ -171,7 +171,7 @@ class Avatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        // Shows around photos that aren't square, since they're shown whole rather than cropped
+        // Shows while the photo loads
         color: fill,
         border: Border.all(color: Palette.separator(context)),
       ),
@@ -180,8 +180,8 @@ class Avatar extends StatelessWidget {
             ? placeholder
             : Image.network(
                 optimizePhoto(url, name: name),
-                // The whole photo, uncropped, inside the circle
-                fit: BoxFit.contain,
+                // Fills the circle (cropping the edges of photos that aren't square), like object-cover on the web
+                fit: BoxFit.cover,
                 width: size,
                 height: size,
                 gaplessPlayback: true,

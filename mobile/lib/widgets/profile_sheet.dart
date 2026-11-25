@@ -169,8 +169,11 @@ class _ProfileCardState extends State<_ProfileCard> {
             children: [
               Heading(_user.name, size: 20, maxLines: 2),
               if (access != AccessLevel.user) ...[const SizedBox(height: 6), AccessTag(access)],
-              const SizedBox(height: 16),
-              _editing ? _editView(context) : _infoView(context, app.isAdmin, targetIsAdmin, canRemoveFromGlobal),
+              // Admins are in every role automatically, so their card is just who they are
+              if (!targetIsAdmin) ...[
+                const SizedBox(height: 16),
+                _editing ? _editView(context) : _infoView(context, app.isAdmin, targetIsAdmin, canRemoveFromGlobal),
+              ],
             ],
           ),
         ),
