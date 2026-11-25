@@ -9,12 +9,12 @@ import { signOut } from "firebase/auth";
 import Loading from "./Loading";
 import Button from "../components/Button";
 import { Alert } from "../components/PhraseAlert";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import ProfileImg from "../components/ProfileImg";
 import Input from "../components/Input";
 import SemesterResetModal from "../components/SemesterResetModal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBug, faCheck, faCopy, faCircleHalfStroke, faMoon, faRightFromBracket, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
+import { faBell, faBug, faCheck, faChevronLeft, faChevronRight, faCopy, faCircleHalfStroke, faSliders, faUser, faUserGear, faUserShield, faMoon, faRightFromBracket, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
 import Dropdown from "../components/Dropdown";
 import type { ThemeMode } from "../context/MainProvider";
 import { NOTIFICATION_TYPES, type StemRequest } from "../myDataTypes";
@@ -51,12 +51,25 @@ function SwitchRow({ label, hint, checked, onChange, disabled = false }: {
     );
 }
 
+const SETTINGS_SECTIONS = [
+    { key: "profile", label: "Profile", hint: "Photo, display name and current role", icon: faUser },
+    { key: "access", label: "Access", hint: "Your access level and Instructor requests", icon: faUserShield },
+    { key: "notifications", label: "Notifications", hint: "Push, email and what to be notified about", icon: faBell },
+    { key: "app", label: "App", hint: "Appearance and bug reports", icon: faSliders },
+    { key: "account", label: "Account", hint: "Sign out and delete your account", icon: faUserGear },
+] as const;
+type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["key"];
+
 export default function Settings() {
     const context = useContext(MainContext);
     const user = context?.user ?? null;
     const userData = context?.userData ?? null;
     const loading = context?.loading ?? true;
     const navigate = useNavigate?.();
+
+    // /settings shows the list of sections; /settings/notifications etc. shows one
+    const { section } = useParams();
+    const tab: SettingsSection | null = SETTINGS_SECTIONS.find(x => x.key === section)?.key ?? null;
 
     const [roleName, setRoleName] = useState("");
     const [name, setName] = useState(userData?.name ?? "");
@@ -228,21 +241,59 @@ export default function Settings() {
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
         >
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold">Account Settings</h1>
-                <button
-                    type="button"
-                    title="User ID (click to copy)"
-                    onClick={copyUid}
-                    className="mt-2 inline-flex items-center gap-1.5 max-w-full text-xs text-gray-400 font-mono bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 cursor-pointer hover:border-gray-300 hover:text-gray-500 transition-colors"
-                >
-                    <span className="break-all text-left">{user.uid}</span>
-                    <FontAwesomeIcon icon={uidCopied ? faCheck : faCopy} className={`shrink-0 ${uidCopied ? "text-green-500" : ""}`} aria-label={uidCopied ? "Copied" : "Copy"} />
-                </button>
-            </div>
+            {!tab ? (
+                <>
+                    <div className="mb-6">
+                        <h1 className="text-2xl font-bold">Account Settings</h1>
+                        <button
+                            type="button"
+                            title="User ID (click to copy)"
+                            onClick={copyUid}
+                            className="mt-2 inline-flex items-center gap-1.5 max-w-full text-xs text-gray-400 font-mono bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 cursor-pointer hover:border-gray-300 hover:text-gray-500 transition-colors"
+                        >
+                            <span className="break-all text-left">{user.uid}</span>
+                            <FontAwesomeIcon icon={uidCopied ? faCheck : faCopy} className={`shrink-0 ${uidCopied ? "text-green-500" : ""}`} aria-label={uidCopied ? "Copied" : "Copy"} />
+                        </button>
+                    </div>
+
+                    {/* One button per group of settings; each opens its own page */}
+                    <div className="flex flex-col gap-3">
+                        {SETTINGS_SECTIONS.map(sec => (
+                            <button
+                                key={sec.key}
+                                type="button"
+                                onClick={() => navigate(`/settings/${sec.key}`)}
+                                className="group flex items-center gap-4 w-full text-left px-5 py-4 rounded-2xl border border-gray-200 bg-white transition-all duration-200 hover:border-gray-400 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 hover:cursor-pointer"
+                            >
+                                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
+                                    <FontAwesomeIcon icon={sec.icon} />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                    <span className="block font-semibold">{sec.label}</span>
+                                    <span className="block text-sm text-gray-500 truncate">{sec.hint}</span>
+                                </span>
+                                <FontAwesomeIcon icon={faChevronRight} className="shrink-0 text-gray-300 transition-all duration-200 group-hover:text-gray-600 group-hover:translate-x-1" />
+                            </button>
+                        ))}
+                    </div>
+                </>
+            ) : (
+                <div className="mb-6 flex flex-col items-start gap-4">
+                    <button
+                        type="button"
+                        onClick={() => navigate("/settings")}
+                        className="flex items-center gap-1.5 pl-2.5 pr-4 py-1.5 rounded-full text-sm font-semibold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors hover:cursor-pointer group"
+                    >
+                        <FontAwesomeIcon icon={faChevronLeft} className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+                        Settings
+                    </button>
+                    <h1 className="text-2xl font-bold">{SETTINGS_SECTIONS.find(x => x.key === tab)?.label}</h1>
+                </div>
+            )}
 
             <div className="flex flex-col gap-4">
 
+                {tab === "profile" && (<>
                 {/* Profile card */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                     <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">Profile</h2>
@@ -307,6 +358,9 @@ export default function Settings() {
                     )}
                 </div>
 
+                </>)}
+
+                {tab === "access" && (<>
                 {/* Access level: User < Instructor < Admin */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                     <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">Access</h2>
@@ -367,6 +421,9 @@ export default function Settings() {
                     </div>
                 </div>
 
+                </>)}
+
+                {tab === "notifications" && (<>
                 {/* Notifications: email here, push from the iOS app; both off until turned on */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                     <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">Notifications</h2>
@@ -399,6 +456,9 @@ export default function Settings() {
                     </div>
                 </div>
 
+                </>)}
+
+                {tab === "app" && (<>
                 {/* App (all screen sizes; desktop also has the floating theme/bug-report buttons) */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                     <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">App</h2>
@@ -426,6 +486,9 @@ export default function Settings() {
                     </div>
                 </div>
 
+                </>)}
+
+                {tab === "account" && (<>
                 {/* Account */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                     <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-5">Account</h2>
@@ -461,6 +524,7 @@ export default function Settings() {
                         </Button>
                     </div>
                 )}
+                </>)}
 
             </div>
 

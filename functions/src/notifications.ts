@@ -199,8 +199,8 @@ export const notifyOnRequestDecision = onDocumentDeleted({ document: "requests/{
     switch (req.type) {
       case "instructor":
         return ok
-          ? { title: "You're an Instructor", body: "Your request was approved. You can now request new roles and run the roles you're given.", path: "/settings" }
-          : { title: "Instructor request declined", body: "Your request to become an Instructor was declined.", path: "/settings" };
+          ? { title: "You're an Instructor", body: "Your request was approved. You can now request new roles and run the roles you're given.", path: "/settings/access" }
+          : { title: "Instructor request declined", body: "Your request to become an Instructor was declined.", path: "/settings/access" };
       case "createRole":
         return ok
           ? { title: "Role created", body: `Your new role "${req.roleName}" was approved. You're its instructor.`, path: "/roles" }

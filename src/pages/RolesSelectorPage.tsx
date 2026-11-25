@@ -11,7 +11,8 @@ import { MainContext } from '../context/MainContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faStar } from '@fortawesome/free-solid-svg-icons';
+import { faStar, faUsers } from '@fortawesome/free-solid-svg-icons';
+import { useNavigate } from 'react-router-dom';
 
 
 
@@ -19,6 +20,7 @@ import { faStar } from '@fortawesome/free-solid-svg-icons';
 const NO_IDS: string[] = [];
 export default function RolesSelectorPage() {
     const context = useContext(MainContext);
+    const navigate = useNavigate();
     const [roleName, setRoleName] = useState("");
     const [purpose, setPurpose] = useState("");
     const [creating, setCreating] = useState(false);
@@ -164,13 +166,19 @@ export default function RolesSelectorPage() {
                 {roles.length > 0 ? roles.map((role) => {
                     if (role.name.match("global")) return null;
                     const isActive = userData?.currentRole === role.id;
+                    const isMember = (role.members ?? []).includes(user.uid);
+                    const memberCount = (role.members ?? []).length;
                     return (
                         <motion.div
                             key={role.id}
-                            className={`relative flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-200 ${
+                            // Members can click anywhere on the card to enter; others use the text on the right
+                            onClick={isMember ? () => navigate(`/roles/${role.id}`) : undefined}
+                            className={`group relative flex items-center gap-4 px-5 py-4 rounded-2xl border transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${
+                                isMember ? "hover:cursor-pointer active:translate-y-0" : ""
+                            } ${
                                 isActive
-                                    ? "border-blue-400 bg-blue-50"
-                                    : "border-gray-200 bg-white hover:border-gray-400 hover:shadow-sm"
+                                    ? "border-blue-400 bg-blue-50 hover:border-blue-500"
+                                    : "border-gray-200 bg-white hover:border-gray-400"
                             }`}
                             initial={{ x: -30, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
@@ -180,19 +188,29 @@ export default function RolesSelectorPage() {
                                     {incompletePerRole[role.id]}
                                 </span>
                             )}
-                            <div className="flex items-center gap-2">
-                                {isActive && (
-                                    <FontAwesomeIcon icon={faStar} className="text-blue-500 text-sm" />
-                                )}
-                                <p className="font-semibold">{role.name}</p>
-                                {canManageRole(role, user.uid, admins, instructors) && ((requestsPerRole[role.id] || 0) + (submittedPerRole[role.id] || 0)) > 0 && (
-                                    <span className="relative flex size-2.5">
-                                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
-                                        <span className="relative inline-flex size-2.5 rounded-full bg-sky-500"></span>
-                                    </span>
-                                )}
+                            {/* Star marks your current role */}
+                            <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                                isActive ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white"
+                            }`}>
+                                <FontAwesomeIcon icon={isActive ? faStar : faUsers} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                    <p className="font-semibold truncate">{role.name}</p>
+                                    {canManageRole(role, user.uid, admins, instructors) && ((requestsPerRole[role.id] || 0) + (submittedPerRole[role.id] || 0)) > 0 && (
+                                        <span className="relative flex size-2.5 shrink-0">
+                                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
+                                            <span className="relative inline-flex size-2.5 rounded-full bg-sky-500"></span>
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-sm text-gray-500 truncate">
+                                    {role.purpose?.trim() || `${memberCount} member${memberCount === 1 ? "" : "s"}`}
+                                </p>
                             </div>
-                            <JoinButton role={role} />
+                            <div className="shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" onClick={e => e.stopPropagation()}>
+                                <JoinButton role={role} />
+                            </div>
                         </motion.div>
                     );
                 }) : (

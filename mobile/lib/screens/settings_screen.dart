@@ -20,12 +20,37 @@ import '../widgets/buttons.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/page_scaffold.dart';
+import 'package:go_router/go_router.dart';
 import 'auth_screens.dart' show privacyPolicyUrl;
 import 'bug_report_sheet.dart';
 import 'semester_reset_sheet.dart';
 
+/// Settings is a list of sections; each opens its own page at `/settings/<name>`.
+enum _SettingsTab {
+  profile('Profile', 'Photo, display name and current role'),
+  access('Access', 'Your access level and Instructor requests'),
+  notifications('Notifications', 'Push, email and what to be notified about'),
+  app('App', 'Appearance, bug reports and glass effects'),
+  account('Account', 'Sign out and delete your account');
+
+  const _SettingsTab(this.label, this.hint);
+  final String label;
+  final String hint;
+
+  IconData get icon => switch (this) {
+    _SettingsTab.profile => FontAwesomeIcons.user.data,
+    _SettingsTab.access => FontAwesomeIcons.userShield.data,
+    _SettingsTab.notifications => FontAwesomeIcons.bell.data,
+    _SettingsTab.app => FontAwesomeIcons.sliders.data,
+    _SettingsTab.account => FontAwesomeIcons.userGear.data,
+  };
+}
+
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, this.section});
+
+  /// Which section page to show; null shows the list of sections.
+  final String? section;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -38,6 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _saving = false;
   bool _deleting = false;
   String? _loadedFor;
+  _SettingsTab? get _tab => _SettingsTab.values.where((t) => t.name == widget.section).firstOrNull;
 
   @override
   void dispose() {
@@ -140,215 +166,225 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (r.id == me.currentRole) currentRoleName = r.name;
     }
 
+    final tab = _tab;
     return PageScaffold(
-      title: 'Account Settings',
+      title: tab?.label ?? 'Account Settings',
+      backLabel: tab == null ? null : 'Settings',
+      backPath: '/settings',
       children: [
-        // User ID under the title, tap to copy (same chip as the role ID)
-        Transform.translate(
-          offset: const Offset(0, -16),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: CopyIdChip(me.uid, copiedMessage: 'User ID copied'),
+        if (tab == null) ...[
+          // User ID under the title, tap to copy (same chip as the role ID)
+          Transform.translate(
+            offset: const Offset(0, -16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: CopyIdChip(me.uid, copiedMessage: 'User ID copied'),
+            ),
           ),
-        ),
+          for (final t in _SettingsTab.values) _SectionButton(t, onPressed: () => context.push('/settings/${t.name}')),
+        ],
 
         // ── Profile ──
-        _Card(
-          title: 'Profile',
-          children: [
-            Center(
-              child: Column(
-                children: [
-                  _photo != null
-                      ? Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: avatarFill(context),
-                            border: Border.all(color: Palette.separator(context)),
-                          ),
-                          child: ClipOval(
-                            child: Image.memory(_photo!, width: Avatar.md, height: Avatar.md, fit: BoxFit.contain),
-                          ),
-                        )
-                      : Avatar(me.photoURL, name: me.name),
-                  const SizedBox(height: 8),
-                  Pressable(
-                    onPressed: _pickPhoto,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: const Color(0xFF111827), borderRadius: BorderRadius.circular(12)),
-                      child: const Text('Change Photo', style: TextStyle(fontSize: 12, color: Color(0xFFFFFFFF))),
+        if (_tab == _SettingsTab.profile)
+          _Card(
+            title: 'Profile',
+            children: [
+              Center(
+                child: Column(
+                  children: [
+                    _photo != null
+                        ? Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: avatarFill(context),
+                              border: Border.all(color: Palette.separator(context)),
+                            ),
+                            child: ClipOval(
+                              child: Image.memory(_photo!, width: Avatar.md, height: Avatar.md, fit: BoxFit.contain),
+                            ),
+                          )
+                        : Avatar(me.photoURL, name: me.name),
+                    const SizedBox(height: 8),
+                    Pressable(
+                      onPressed: _pickPhoto,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(color: const Color(0xFF111827), borderRadius: BorderRadius.circular(12)),
+                        child: const Text('Change Photo', style: TextStyle(fontSize: 12, color: Color(0xFFFFFFFF))),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            _Field(
-              label: 'Display Name',
-              child: AppTextField(controller: _name, placeholder: '', maxLength: 16),
-            ),
-            _Field(
-              label: 'Current Role',
-              child: _InsetRow(
-                label: currentRoleName ?? 'No role selected',
-                muted: currentRoleName == null,
-                action: AppButton(
-                  label: 'Reset',
-                  style: AppButtonStyle.red,
-                  size: AppButtonSize.xsm,
-                  onPressed: () => Db.setCurrentRole(me.uid, ''),
+                  ],
                 ),
               ),
-            ),
-            // Save / Undo only while there are unsaved changes
-            ValueListenableBuilder(
-              valueListenable: _name,
-              builder: (context, value, _) {
-                final changed = value.text.trim() != me.name || _photo != null;
-                return AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                  child: !changed
-                      ? const SizedBox(width: double.infinity)
-                      : Container(
-                          padding: const EdgeInsets.only(top: 20),
-                          decoration: BoxDecoration(
-                            border: Border(top: BorderSide(color: Palette.resolve(context, Palette.gray100))),
+              _Field(
+                label: 'Display Name',
+                child: AppTextField(controller: _name, placeholder: '', maxLength: 16),
+              ),
+              _Field(
+                label: 'Current Role',
+                child: _InsetRow(
+                  label: currentRoleName ?? 'No role selected',
+                  muted: currentRoleName == null,
+                  action: AppButton(
+                    label: 'Reset',
+                    style: AppButtonStyle.red,
+                    size: AppButtonSize.xsm,
+                    onPressed: () => Db.setCurrentRole(me.uid, ''),
+                  ),
+                ),
+              ),
+              // Save / Undo only while there are unsaved changes
+              ValueListenableBuilder(
+                valueListenable: _name,
+                builder: (context, value, _) {
+                  final changed = value.text.trim() != me.name || _photo != null;
+                  return AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    child: !changed
+                        ? const SizedBox(width: double.infinity)
+                        : Container(
+                            padding: const EdgeInsets.only(top: 20),
+                            decoration: BoxDecoration(
+                              border: Border(top: BorderSide(color: Palette.resolve(context, Palette.gray100))),
+                            ),
+                            child: Row(
+                              children: [
+                                AppButton(
+                                  label: 'Save Changes',
+                                  style: AppButtonStyle.blue,
+                                  size: AppButtonSize.sm,
+                                  loading: _saving,
+                                  onPressed: () => _save(me),
+                                ),
+                                const SizedBox(width: 12),
+                                AppButton(
+                                  label: 'Undo',
+                                  style: AppButtonStyle.gray,
+                                  size: AppButtonSize.xsm,
+                                  onPressed: () => setState(() {
+                                    _name.text = me.name;
+                                    _photo = null;
+                                  }),
+                                ),
+                              ],
+                            ),
                           ),
-                          child: Row(
-                            children: [
-                              AppButton(
-                                label: 'Save Changes',
-                                style: AppButtonStyle.blue,
-                                size: AppButtonSize.sm,
-                                loading: _saving,
-                                onPressed: () => _save(me),
-                              ),
-                              const SizedBox(width: 12),
-                              AppButton(
-                                label: 'Undo',
-                                style: AppButtonStyle.gray,
-                                size: AppButtonSize.xsm,
-                                onPressed: () => setState(() {
-                                  _name.text = me.name;
-                                  _photo = null;
-                                }),
-                              ),
-                            ],
-                          ),
-                        ),
-                );
-              },
-            ),
-          ],
-        ),
-
-        // ── Access level: User < Instructor < Admin ──
-        const _AccessCard(),
-
-        // ── Notifications ──
-        _NotificationsCard(me),
-
-        // ── App ──
-        _Card(
-          title: 'App',
-          children: [
-            _InsetRow(
-              label: 'Appearance',
-              action: AppButton(
-                label: _themeLabel(app.themePref),
-                icon: switch (app.themePref) {
-                  ThemePref.system => FontAwesomeIcons.circleHalfStroke,
-                  ThemePref.light => FontAwesomeIcons.sun,
-                  ThemePref.dark => FontAwesomeIcons.moon,
-                }.data,
-                style: AppButtonStyle.gray,
-                size: AppButtonSize.sm,
-                onPressed: () async {
-                  final picked = await pickOption<ThemePref>(
-                    context,
-                    title: 'Appearance',
-                    selected: app.themePref,
-                    options: [for (final t in ThemePref.values) (t, _themeLabel(t))],
                   );
-                  if (picked != null) app.setThemePref(picked);
                 },
               ),
-            ),
-            _InsetRow(
-              label: app.isAdmin ? 'Bug Reports' : 'Report a bug',
-              action: AppButton(
-                label: app.isAdmin ? 'View' : 'Report',
-                icon: (app.isAdmin ? FontAwesomeIcons.wrench : FontAwesomeIcons.bug).data,
-                style: AppButtonStyle.gray,
-                size: AppButtonSize.sm,
-                onPressed: () => showBugReportSheet(context),
-              ),
-            ),
-            _InsetRow(
-              label: 'Reduce glass effects',
-              action: CupertinoSwitch(value: app.reduceGlass, activeTrackColor: Palette.blue600, onChanged: app.setReduceGlass),
-            ),
-          ],
-        ),
+            ],
+          ),
 
-        // ── Account ──
-        _Card(
-          title: 'Account',
-          children: [
-            _InsetRow(
-              label: 'Sign out of this device',
-              action: AppButton(
-                label: 'Sign Out',
-                icon: FontAwesomeIcons.rightFromBracket.data,
-                style: AppButtonStyle.gray,
-                size: AppButtonSize.sm,
-                onPressed: AuthService.signOut,
-              ),
-            ),
-          ],
-        ),
+        // ── Access level: User < Instructor < Admin ──
+        if (_tab == _SettingsTab.access) const _AccessCard(),
 
-        // ── Danger zone ──
-        _Card(
-          title: 'Danger Zone',
-          danger: true,
-          children: [
-            const Muted('Once you delete your account, there is no going back.'),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppButton(
-                label: 'Delete My Account',
-                style: AppButtonStyle.red,
-                size: AppButtonSize.md,
-                loading: _deleting,
-                onPressed: () => _deleteAccount(me),
-              ),
-            ),
-          ],
-        ),
+        // ── Notifications ──
+        if (_tab == _SettingsTab.notifications) _NotificationsCard(me),
 
-        if (app.isAdmin)
+        // ── App ──
+        if (_tab == _SettingsTab.app)
           _Card(
-            title: 'Semester Reset',
-            danger: true,
+            title: 'App',
             children: [
-              const Muted(
-                'Remove old roles to get ready for a new semester. Users whose only roles are removed will be '
-                'permanently deleted along with their tasks; everyone else keeps their account, with points '
-                'and completed tasks reset to 0.',
+              _InsetRow(
+                label: 'Appearance',
+                action: AppButton(
+                  label: _themeLabel(app.themePref),
+                  icon: switch (app.themePref) {
+                    ThemePref.system => FontAwesomeIcons.circleHalfStroke,
+                    ThemePref.light => FontAwesomeIcons.sun,
+                    ThemePref.dark => FontAwesomeIcons.moon,
+                  }.data,
+                  style: AppButtonStyle.gray,
+                  size: AppButtonSize.sm,
+                  onPressed: () async {
+                    final picked = await pickOption<ThemePref>(
+                      context,
+                      title: 'Appearance',
+                      selected: app.themePref,
+                      options: [for (final t in ThemePref.values) (t, _themeLabel(t))],
+                    );
+                    if (picked != null) app.setThemePref(picked);
+                  },
+                ),
               ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: AppButton(
-                  label: 'Reset for New Semester',
-                  style: AppButtonStyle.red,
-                  size: AppButtonSize.md,
-                  onPressed: () => showSemesterResetSheet(context),
+              _InsetRow(
+                label: app.isAdmin ? 'Bug Reports' : 'Report a bug',
+                action: AppButton(
+                  label: app.isAdmin ? 'View' : 'Report',
+                  icon: (app.isAdmin ? FontAwesomeIcons.wrench : FontAwesomeIcons.bug).data,
+                  style: AppButtonStyle.gray,
+                  size: AppButtonSize.sm,
+                  onPressed: () => showBugReportSheet(context),
+                ),
+              ),
+              _InsetRow(
+                label: 'Reduce glass effects',
+                action: CupertinoSwitch(value: app.reduceGlass, activeTrackColor: Palette.blue600, onChanged: app.setReduceGlass),
+              ),
+            ],
+          ),
+
+        // ── Account (sign out, delete, semester reset) ──
+        if (_tab == _SettingsTab.account) ...[
+          _Card(
+            title: 'Account',
+            children: [
+              _InsetRow(
+                label: 'Sign out of this device',
+                action: AppButton(
+                  label: 'Sign Out',
+                  icon: FontAwesomeIcons.rightFromBracket.data,
+                  style: AppButtonStyle.gray,
+                  size: AppButtonSize.sm,
+                  onPressed: AuthService.signOut,
                 ),
               ),
             ],
           ),
+
+          // ── Danger zone ──
+          _Card(
+            title: 'Danger Zone',
+            danger: true,
+            children: [
+              const Muted('Once you delete your account, there is no going back.'),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(
+                  label: 'Delete My Account',
+                  style: AppButtonStyle.red,
+                  size: AppButtonSize.md,
+                  loading: _deleting,
+                  onPressed: () => _deleteAccount(me),
+                ),
+              ),
+            ],
+          ),
+
+          if (app.isAdmin)
+            _Card(
+              title: 'Semester Reset',
+              danger: true,
+              children: [
+                const Muted(
+                  'Remove old roles to get ready for a new semester. Users whose only roles are removed will be '
+                  'permanently deleted along with their tasks; everyone else keeps their account, with points '
+                  'and completed tasks reset to 0.',
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppButton(
+                    label: 'Reset for New Semester',
+                    style: AppButtonStyle.red,
+                    size: AppButtonSize.md,
+                    onPressed: () => showSemesterResetSheet(context),
+                  ),
+                ),
+              ],
+            ),
+        ],
 
         Center(
           child: LinkText('Privacy Policy', size: 13, color: Palette.gray400, onPressed: () => launchUrl(privacyPolicyUrl)),
@@ -609,6 +645,61 @@ class _NotificationsCard extends StatelessWidget {
       ],
     );
   }
+}
+
+/// A section on the Settings page: card-style row (like a role on the Roles
+/// page) with an icon, title, hint and a chevron that opens the section.
+class _SectionButton extends StatelessWidget {
+  const _SectionButton(this.tab, {required this.onPressed});
+
+  final _SettingsTab tab;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+    scale: .98,
+    onPressed: onPressed,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Palette.card(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Palette.separator(context)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: Palette.resolve(context, Palette.blue50), borderRadius: BorderRadius.circular(12)),
+            child: Icon(tab.icon, size: 16, color: Palette.resolve(context, Palette.navActive)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tab.label,
+                  style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tab.hint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, color: Palette.secondary(context)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(CupertinoIcons.chevron_right, size: 16, color: Palette.tertiary(context)),
+        ],
+      ),
+    ),
+  );
 }
 
 /// An inset row with a title, a gray hint under it, and a switch.

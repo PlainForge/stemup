@@ -220,7 +220,7 @@ export default function Nav() {
                     {isAdmin && (
                         <MobileNavItem icon={faUserShield} label="Admin" onClick={() => navigate("/admin")} active={path.startsWith("/admin")} ping={adminRequestCount > 0} />
                     )}
-                    <MobileNavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
+                    <MobileNavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path.startsWith("/settings")} />
                 </PillBar>
             </nav>
         );
@@ -246,7 +246,7 @@ export default function Nav() {
                 {isAdmin && (
                     <NavItem icon={faUserShield} label="Admin" onClick={() => navigate("/admin")} active={path.startsWith("/admin")} ping={adminRequestCount > 0} />
                 )}
-                <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path === "/settings"} />
+                <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path.startsWith("/settings")} />
 
                 {/* User name */}
                 <div className="hidden md:block w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />

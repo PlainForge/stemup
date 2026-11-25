@@ -36,6 +36,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Home /> },
       { path: "settings", element: <Settings /> },
+      { path: "settings/:section", element: <Settings /> },
       { path: "roles", element: <RolesSelectorPage /> },
       { path: "admin", element: <AdminPage /> },
       { path: "admin/roles/:id", element: <AdminRolePage /> },

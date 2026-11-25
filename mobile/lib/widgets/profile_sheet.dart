@@ -1,6 +1,7 @@
 // components/ProfilePage.tsx: another user's card, with admin tools to edit
 // their stats, kick them from the current role, or remove them from global.
 import 'package:flutter/cupertino.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
@@ -16,6 +17,7 @@ import 'dialogs.dart';
 Future<void> showProfileSheet(BuildContext context, UserData user, {String? roleId}) => showModalCard<void>(
   context,
   maxWidth: 320,
+  padding: EdgeInsets.zero,
   builder: (_) => _ProfileCard(user: user, roleId: roleId),
 );
 
@@ -118,46 +120,115 @@ class _ProfileCardState extends State<_ProfileCard> {
     final canRemoveFromGlobal =
         app.isAdmin && _user.isInGlobal && !targetIsAdmin && _globalViewers != null && !_globalViewers!.contains(_user.uid);
 
+    final access = app.accessOf(_user.uid);
+    const bannerHeight = 80.0;
     return Column(
       children: [
-        Avatar(_user.photoURL, name: _user.name, size: Avatar.md),
-        const SizedBox(height: 16),
-        Heading(_user.name, size: 20, maxLines: 2),
-        const SizedBox(height: 16),
-        _editing ? _editView(context) : _infoView(context, app.isAdmin, targetIsAdmin, canRemoveFromGlobal),
+        // Colored banner with a close button; the photo overlaps its bottom edge
+        Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.topCenter,
+          children: [
+            Container(
+              height: bannerHeight,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Palette.blue500, Palette.blue600, Color(0xFF4F46E5)],
+                ),
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Pressable(
+                onPressed: () => Navigator.pop(context),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(color: Color(0x33FFFFFF), shape: BoxShape.circle),
+                  child: const Icon(CupertinoIcons.xmark, size: 15, color: Color(0xFFFFFFFF)),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: bannerHeight - Avatar.sm / 2),
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(color: Palette.card(context), shape: BoxShape.circle),
+                child: Avatar(_user.photoURL, name: _user.name, size: Avatar.sm),
+              ),
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: Column(
+            children: [
+              Heading(_user.name, size: 20, maxLines: 2),
+              if (access != AccessLevel.user) ...[const SizedBox(height: 6), AccessTag(access)],
+              const SizedBox(height: 16),
+              _editing ? _editView(context) : _infoView(context, app.isAdmin, targetIsAdmin, canRemoveFromGlobal),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  Widget _statBox(BuildContext context, String label, int value) => Expanded(
-    child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Palette.fill(context), borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        children: [
-          SectionLabel(label, size: 11.5, padding: const EdgeInsets.only(bottom: 2)),
-          Text(
-            '$value',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Palette.label(context)),
-          ),
-        ],
+  Widget _statBox(BuildContext context, String label, int value, IconData icon, Color tint) {
+    final dark = Palette.isDark(context);
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: tint.withValues(alpha: dark ? .16 : .08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: tint.withValues(alpha: dark ? .35 : .2)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 11, color: tint),
+                const SizedBox(width: 5),
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(fontSize: 11.5, letterSpacing: 1.2, fontWeight: FontWeight.w600, color: tint),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$value',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Palette.label(context)),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _infoView(BuildContext context, bool isAdmin, bool targetIsAdmin, bool canRemoveFromGlobal) {
     final roleNames = _user.roles.where((r) => r.id != globalRoleId).map((r) => r.name).toList();
     return Column(
       children: [
         Row(
-          children: [_statBox(context, 'Points', _user.points), const SizedBox(width: 12), _statBox(context, 'Tasks', _user.taskCompleted)],
+          children: [
+            _statBox(context, 'Points', _user.points, FontAwesomeIcons.trophy.data, const Color(0xFFD97706)),
+            const SizedBox(width: 12),
+            _statBox(context, 'Tasks', _user.taskCompleted, FontAwesomeIcons.circleCheck.data, Palette.green600),
+          ],
         ),
+        const SizedBox(height: 6),
+        Muted(widget.roleId != null ? 'In this role' : 'Across all roles', size: 12, color: Palette.gray400),
         if (roleNames.isNotEmpty) ...[
           const SizedBox(height: 16),
-          Container(
+          SizedBox(
             width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Palette.fill(context), borderRadius: BorderRadius.circular(12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -170,13 +241,13 @@ class _ProfileCardState extends State<_ProfileCard> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Palette.card(context),
+                          color: Palette.resolve(context, Palette.blue50),
                           borderRadius: BorderRadius.circular(99),
-                          border: Border.all(color: Palette.separator(context)),
+                          border: Border.all(color: Palette.blue500.withValues(alpha: .25)),
                         ),
                         child: Text(
                           n,
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Palette.label(context)),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Palette.resolve(context, Palette.navActive)),
                         ),
                       ),
                   ],
@@ -212,7 +283,7 @@ class _ProfileCardState extends State<_ProfileCard> {
             Expanded(
               child: AppButton(
                 label: 'Close',
-                style: AppButtonStyle.gray,
+                style: AppButtonStyle.cancel,
                 size: AppButtonSize.full,
                 onPressed: () => Navigator.pop(context),
               ),
@@ -256,7 +327,7 @@ class _ProfileCardState extends State<_ProfileCard> {
           Expanded(
             child: AppButton(
               label: 'Back',
-              style: AppButtonStyle.gray,
+              style: AppButtonStyle.cancel,
               size: AppButtonSize.full,
               onPressed: () => setState(() => _editing = false),
             ),

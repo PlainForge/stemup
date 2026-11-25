@@ -15,6 +15,8 @@ import ProfileButton from "../components/ProfileButton";
 import ProfileImg from "../components/ProfileImg";
 import MedalIcon from "../components/MedalIcon";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck, faCopy } from "@fortawesome/free-solid-svg-icons";
 
 
 /** Stable fallback so hooks that depend on these lists don't re-run every render */
@@ -29,6 +31,12 @@ export default function RolePage() {
     const [leaders, setLeaders] = useState<UserData[]>([]);
     const [userTasks, setUserTasks] = useState<Task[]>([]);
     const [pageState, setPageState] = useState("leaderboard");
+    const [idCopied, setIdCopied] = useState(false);
+    const copyRoleId = async () => {
+        await navigator.clipboard.writeText(roleId ?? "");
+        setIdCopied(true);
+        setTimeout(() => setIdCopied(false), 1500);
+    };
     const tabBar = useSlidingIndicator(pageState);
     const [rewards, setRewards] = useState<string[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
@@ -244,13 +252,15 @@ export default function RolePage() {
                     </svg>
                     Roles
                 </button>
-                <span
+                <button
+                    type="button"
                     title="Role ID (click to copy)"
-                    onClick={() => navigator.clipboard.writeText(roleId ?? "")}
-                    className="text-xs text-gray-300 font-mono bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 select-all cursor-pointer hover:border-gray-300 hover:text-gray-400 transition-colors"
+                    onClick={copyRoleId}
+                    className="inline-flex items-center gap-1.5 min-w-0 text-xs text-gray-400 font-mono bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 cursor-pointer hover:border-gray-300 hover:text-gray-500 transition-colors"
                 >
-                    {roleId}
-                </span>
+                    <span className="truncate">{roleId}</span>
+                    <FontAwesomeIcon icon={idCopied ? faCheck : faCopy} className={`shrink-0 ${idCopied ? "text-green-500" : ""}`} aria-label={idCopied ? "Copied" : "Copy"} />
+                </button>
             </div>
 
             {/* Role header */}

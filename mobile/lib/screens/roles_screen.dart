@@ -218,7 +218,7 @@ class _RoleRow extends StatelessWidget {
           onPressed: isMember ? enter : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: isCurrent ? Palette.resolve(context, Palette.blue50) : Palette.card(context),
               borderRadius: BorderRadius.circular(16),
@@ -226,20 +226,49 @@ class _RoleRow extends StatelessWidget {
             ),
             child: Row(
               children: [
+                // Same icon box as the Settings sections; a star marks your current role
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isCurrent ? Palette.blue600 : Palette.resolve(context, Palette.blue50),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    (isCurrent ? FontAwesomeIcons.star : FontAwesomeIcons.users).data,
+                    size: 16,
+                    color: isCurrent ? const Color(0xFFFFFFFF) : Palette.resolve(context, Palette.navActive),
+                  ),
+                ),
+                const SizedBox(width: 14),
                 // Takes all the leftover width, so the action always sits flush right
                 Expanded(
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (isCurrent) ...[Icon(FontAwesomeIcons.star.data, size: 13, color: Palette.blue500), const SizedBox(width: 8)],
-                      Flexible(
-                        child: Text(
-                          role.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              role.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                            ),
+                          ),
+                          if (needsAttention) ...[const SizedBox(width: 8), const PingDot(size: 10)],
+                        ],
                       ),
-                      if (needsAttention) ...[const SizedBox(width: 8), const PingDot(size: 10)],
+                      const SizedBox(height: 2),
+                      Text(
+                        role.purpose.trim().isNotEmpty
+                            ? role.purpose.trim()
+                            : '${role.members.length} member${role.members.length == 1 ? '' : 's'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, color: Palette.secondary(context)),
+                      ),
                     ],
                   ),
                 ),

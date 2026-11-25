@@ -10,46 +10,54 @@ import 'buttons.dart';
 import 'common.dart';
 
 /// Centered modal card over a black/60 scrim that springs in (scale .92 → 1).
-Future<T?> showModalCard<T>(BuildContext context, {required WidgetBuilder builder, double maxWidth = 384, bool dismissible = true}) =>
-    showGeneralDialog<T>(
-      context: context,
-      barrierDismissible: dismissible,
-      barrierLabel: 'Close',
-      barrierColor: const Color(0x99000000),
-      transitionDuration: const Duration(milliseconds: 260),
-      pageBuilder: (ctx, _, _) => SafeArea(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewInsetsOf(ctx).bottom),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: MediaQuery.sizeOf(ctx).height * .85),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Palette.card(ctx),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 50, offset: Offset(0, 25), spreadRadius: -12)],
-                ),
-                child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: builder(ctx)),
-              ),
+///
+/// [padding] is the space inside the card; pass zero for edge-to-edge content (it's clipped to the corners).
+Future<T?> showModalCard<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+  double maxWidth = 384,
+  bool dismissible = true,
+  EdgeInsets padding = const EdgeInsets.all(24),
+}) => showGeneralDialog<T>(
+  context: context,
+  barrierDismissible: dismissible,
+  barrierLabel: 'Close',
+  barrierColor: const Color(0x99000000),
+  transitionDuration: const Duration(milliseconds: 260),
+  pageBuilder: (ctx, _, _) => SafeArea(
+    child: Center(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewInsetsOf(ctx).bottom),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: MediaQuery.sizeOf(ctx).height * .85),
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Palette.card(ctx),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 50, offset: Offset(0, 25), spreadRadius: -12)],
             ),
+            child: SingleChildScrollView(padding: padding, child: builder(ctx)),
           ),
         ),
       ),
-      transitionBuilder: (ctx, anim, _, child) {
-        final t = CurvedAnimation(parent: anim, curve: const ElasticOutCurve(1.1), reverseCurve: Curves.easeIn);
-        return FadeTransition(
-          opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
-          child: AnimatedBuilder(
-            animation: t,
-            builder: (_, c) => Transform.translate(
-              offset: Offset(0, 20 * (1 - t.value)),
-              child: Transform.scale(scale: .92 + .08 * t.value, child: c),
-            ),
-            child: child,
-          ),
-        );
-      },
+    ),
+  ),
+  transitionBuilder: (ctx, anim, _, child) {
+    final t = CurvedAnimation(parent: anim, curve: const ElasticOutCurve(1.1), reverseCurve: Curves.easeIn);
+    return FadeTransition(
+      opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+      child: AnimatedBuilder(
+        animation: t,
+        builder: (_, c) => Transform.translate(
+          offset: Offset(0, 20 * (1 - t.value)),
+          child: Transform.scale(scale: .92 + .08 * t.value, child: c),
+        ),
+        child: child,
+      ),
     );
+  },
+);
 
 Future<bool> confirmDialog(
   BuildContext context, {

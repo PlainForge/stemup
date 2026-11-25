@@ -84,7 +84,18 @@ GoRouter buildRouter(AppState app) => GoRouter(
           ],
         ),
         StatefulShellBranch(
-          routes: [GoRoute(path: '/settings', pageBuilder: (_, s) => _page(const SettingsScreen(), s))],
+          routes: [
+            GoRoute(
+              path: '/settings',
+              pageBuilder: (_, s) => _page(const SettingsScreen(), s),
+              routes: [
+                GoRoute(
+                  path: ':section',
+                  pageBuilder: (_, s) => _page(SettingsScreen(section: s.pathParameters['section']), s),
+                ),
+              ],
+            ),
+          ],
         ),
       ],
     ),
