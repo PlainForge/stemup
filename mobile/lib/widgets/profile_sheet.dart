@@ -293,11 +293,12 @@ class _ProfileCardState extends State<_ProfileCard> {
     );
   }
 
-  /// Closes the card and opens a role the viewer is in.
+  /// Closes the card and opens a role the viewer is in, on the Roles tab (go, not
+  /// push, so it switches tabs instead of stacking the role on the current one).
   void _openRole(String roleId) {
     final router = GoRouter.of(context);
     Navigator.pop(context);
-    router.push('/roles/$roleId');
+    router.go('/roles/$roleId');
   }
 
   Widget _roleChip(BuildContext context, String name, {VoidCallback? onPressed}) {

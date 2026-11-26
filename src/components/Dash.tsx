@@ -256,7 +256,15 @@ export default function Dash() {
         >
             {/* Profile header */}
             <div className="flex flex-col items-center gap-3">
-                <ProfileImg src={userData.photoURL} alt={userData.name} />
+                {/* Your own picture opens your card, like anyone else's */}
+                <button
+                    type="button"
+                    onClick={() => context.setShowAccount({ ...userData, uid: user.uid })}
+                    aria-label="View your profile card"
+                    className="rounded-full transition-transform duration-200 hover:scale-105 active:scale-95 hover:cursor-pointer"
+                >
+                    <ProfileImg src={userData.photoURL} alt={userData.name} />
+                </button>
                 <h2 className="text-2xl font-bold">{userData.name}</h2>
                 <p className="text-sm text-gray-400 -mt-2">{today}</p>
             </div>
