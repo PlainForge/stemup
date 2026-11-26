@@ -5,12 +5,18 @@
 // - Admins are listed in admins/all-perms (ids), set by a developer only.
 // - A role's instructors (roles/{id}.instructors) run it; they're also members,
 //   but leaderboards leave them out, the same way they leave out admins.
-// - Requests (instructor access, a new role, a role reset) live in `requests`
-//   until an admin approves or declines them.
+// - A role's owner (roles/{id}.owner, chosen by admins) is one of its instructors.
+//   The others ask the owner to rename or reset the role, edit a member's stats,
+//   kick someone or change the rewards title. Tasks, join requests and prizes
+//   they handle themselves.
+// - Requests live in `requests` until approved or declined: Instructor access
+//   and new roles by an admin, role changes by the role's owner (or an admin
+//   when the role has no owner).
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "./firebase";
-import type { Role, StemRequest, UserData, UserRoleData } from "../myDataTypes";
+import { firebaseAuthService } from "./firebaseService";
+import { ROLE_CHANGE_TYPES, type Role, type RoleChangeType, type StemRequest, type UserData, type UserRoleData } from "../myDataTypes";
 
 const instructorsRef = () => doc(db, "admins", "instructors");
 const NO_REWARD = "No reward set";
@@ -28,6 +34,42 @@ export function canManageRole(role: Pick<Role, "instructors"> | null | undefined
  */
 export function isRoleStaff(role: Pick<Role, "instructors"> | null | undefined, uid: string, admins: string[]) {
     return admins.includes(uid) || (role?.instructors ?? []).includes(uid);
+}
+
+/** The role's owner: `owner`, or for older roles the instructor who created it. "" when it has none. */
+export function roleOwner(role: Pick<Role, "owner" | "createdBy" | "instructors"> | null | undefined): string {
+    if (!role) return "";
+    const owner = role.owner ?? role.createdBy ?? "";
+    // An owner who no longer runs the role doesn't count
+    return owner && (role.instructors ?? []).includes(owner) ? owner : "";
+}
+
+/** True when uid can make the bigger changes to a role without asking: admins and the role's owner. */
+export function canChangeRole(role: Pick<Role, "owner" | "createdBy" | "instructors"> | null | undefined, uid: string | undefined, admins: string[]) {
+    if (!role || !uid) return false;
+    return admins.includes(uid) || roleOwner(role) === uid;
+}
+
+export function isRoleChange(type: StemRequest["type"]): type is RoleChangeType {
+    return (ROLE_CHANGE_TYPES as readonly string[]).includes(type);
+}
+
+/** What a role change request asks for, e.g. `rename Robotics to "Drones"` */
+function roleChangeAction(req: StemRequest): string {
+    const roleName = req.roleName || "this role";
+    switch (req.type) {
+        case "resetRole": return `reset ${roleName}, saving its data as "${req.saveName}"`;
+        case "renameRole": return `rename ${roleName} to "${req.newName}"`;
+        case "editStats": return `set ${req.targetName || "a member"}'s stats to ${req.points ?? 0} pts and ${req.taskCompleted ?? 0} tasks`;
+        case "kickMember": return `remove ${req.targetName || "a member"} from ${roleName}`;
+        case "rewardsTitle": return req.title ? `change the rewards title to "${req.title}"` : "set the rewards title back to the current month";
+        default: return "make a change";
+    }
+}
+
+/** The request in a sentence, from the approver's side ("Sam wants to ...") or the sender's ("You asked to ...") */
+export function describeRoleChange(req: StemRequest, mine = false): string {
+    return mine ? `You asked to ${roleChangeAction(req)}` : `${req.userName || "An instructor"} wants to ${roleChangeAction(req)}`;
 }
 
 async function adminIds(): Promise<string[]> {
@@ -71,8 +113,20 @@ export const roleService = {
     },
 
     async requestRoleReset(uid: string, userName: string, role: { id: string; name: string }, saveName: string) {
+        await this.requestRoleChange("resetRole", uid, userName, role, { saveName: saveName.trim() });
+    },
+
+    /** Asks the role's owner (or an admin, when it has none) to make a change to the role. */
+    async requestRoleChange(
+        type: RoleChangeType,
+        uid: string,
+        userName: string,
+        role: { id: string; name: string },
+        details: Pick<StemRequest, "saveName" | "newName" | "title" | "targetUid" | "targetName" | "points" | "taskCompleted">,
+    ) {
+        const clean = Object.fromEntries(Object.entries(details).filter(([, v]) => v !== undefined));
         await addDoc(collection(db, "requests"), {
-            type: "resetRole", uid, userName, roleId: role.id, roleName: role.name, saveName: saveName.trim(), createdAt: Timestamp.now(),
+            type, uid, userName, roleId: role.id, roleName: role.name, ...clean, createdAt: Timestamp.now(),
         });
     },
 
@@ -104,15 +158,61 @@ export const roleService = {
             case "createRole":
                 await this.createRole(req.roleName || "Untitled Role", req.purpose ?? "", req.uid);
                 break;
-            case "resetRole": {
-                if (!req.roleId) break;
-                const roleSnap = await getDoc(doc(db, "roles", req.roleId));
-                // The role may have been deleted since the request was made
-                if (roleSnap.exists()) await this.resetRole(req.roleId, req.saveName || "Saved Data");
-                break;
-            }
+            default:
+                if (isRoleChange(req.type)) await this.applyRoleChange(req);
         }
         await this.settleRequest(req.id, "approved");
+    },
+
+    /** Carries out a role change request (by the role's owner or an admin). */
+    async applyRoleChange(req: StemRequest) {
+        if (!req.roleId) return;
+        const roleSnap = await getDoc(doc(db, "roles", req.roleId));
+        // The role may have been deleted since the request was made
+        if (!roleSnap.exists()) return;
+        const members: string[] = roleSnap.data().members ?? [];
+        switch (req.type) {
+            case "resetRole":
+                await this.resetRole(req.roleId, req.saveName || "Saved Data");
+                break;
+            case "renameRole":
+                if (req.newName?.trim()) await this.renameRole(req.roleId, req.newName);
+                break;
+            case "rewardsTitle":
+                await this.setRewardsTitle(req.roleId, req.title ?? "");
+                break;
+            case "editStats":
+                // Only while they're still in the role
+                if (req.targetUid && members.includes(req.targetUid)) {
+                    await this.setMemberRoleStats(req.targetUid, req.roleId, req.points ?? 0, req.taskCompleted ?? 0);
+                }
+                break;
+            case "kickMember":
+                if (req.targetUid && members.includes(req.targetUid)) {
+                    await firebaseAuthService.kickUserFromRole(req.roleId, req.targetUid);
+                }
+                break;
+        }
+    },
+
+    /** Sets a member's points and tasks completed in one role (their global totals are untouched). */
+    async setMemberRoleStats(uid: string, roleId: string, points: number, taskCompleted: number) {
+        const ref = doc(db, "users", uid);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return;
+        const roles: UserRoleData[] = Array.isArray(snap.data().roles) ? snap.data().roles : [];
+        await updateDoc(ref, {
+            roles: roles.map(r => r.id === roleId ? { ...r, points: Math.max(0, points), taskCompleted: Math.max(0, taskCompleted) } : r),
+        });
+    },
+
+    async renameRole(roleId: string, name: string) {
+        await updateDoc(doc(db, "roles", roleId), { name: name.trim() });
+    },
+
+    /** Makes one of the role's instructors its owner; "" leaves it with none. Admin-only in the rules. */
+    async setRoleOwner(roleId: string, uid: string) {
+        await updateDoc(doc(db, "roles", roleId), { owner: uid });
     },
 
     // ── Instructor access ────────────────────────────────────────────────
@@ -128,7 +228,11 @@ export const roleService = {
     async revokeInstructor(uid: string) {
         await setDoc(instructorsRef(), { ids: arrayRemove(uid) }, { merge: true });
         const led = await getDocs(query(collection(db, "roles"), where("instructors", "array-contains", uid)));
-        await Promise.all(led.docs.map(d => updateDoc(d.ref, { instructors: arrayRemove(uid) })));
+        // Roles they owned are left without an owner
+        await Promise.all(led.docs.map(d => updateDoc(d.ref, {
+            instructors: arrayRemove(uid),
+            ...(roleOwner({ id: d.id, ...d.data() } as Role) === uid ? { owner: "" } : {}),
+        })));
     },
 
     /**
@@ -159,6 +263,8 @@ export const roleService = {
             members,
             instructors: ownerUid && !admins.includes(ownerUid) ? [ownerUid] : [],
             createdBy: ownerUid ?? "",
+            // The instructor who asked for it owns it
+            owner: ownerUid && !admins.includes(ownerUid) ? ownerUid : "",
             pendingRequests: [],
             createdAt: new Date(),
         });
@@ -173,9 +279,12 @@ export const roleService = {
         await updateDoc(doc(db, "roles", role.id), { instructors: arrayUnion(uid) });
     },
 
-    /** Stops an instructor running this role; they stay a member. */
-    async removeRoleInstructor(roleId: string, uid: string) {
-        await updateDoc(doc(db, "roles", roleId), { instructors: arrayRemove(uid) });
+    /** Stops an instructor running this role; they stay a member. Removing the owner leaves the role without one. */
+    async removeRoleInstructor(role: Pick<Role, "id" | "owner" | "createdBy" | "instructors">, uid: string) {
+        await updateDoc(doc(db, "roles", role.id), {
+            instructors: arrayRemove(uid),
+            ...(roleOwner(role) === uid ? { owner: "" } : {}),
+        });
     },
 
     /**

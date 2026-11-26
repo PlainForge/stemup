@@ -12,7 +12,7 @@
 //   types  per-kind switches, e.g. { newTask: false }; a missing kind is on
 // Push tokens live in users/{uid}/devices/{token}, one per signed-in phone.
 
-import { onDocumentDeleted, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions";
 import { getFirestore, type DocumentData, type Timestamp } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
@@ -209,11 +209,51 @@ export const notifyOnRequestDecision = onDocumentDeleted({ document: "requests/{
         return ok
           ? { title: "Role reset", body: `${req.roleName} was reset. Its leaderboard is saved as "${req.saveName}" on the Saved Data tab.`, path: `/roles/${req.roleId}` }
           : { title: "Reset declined", body: `Your request to reset ${req.roleName} was declined.`, path: `/roles/${req.roleId}` };
-      default:
-        return null;
+      default: {
+        const action = roleChangeAction(req);
+        if (!action) return null;
+        return {
+          title: ok ? "Request approved" : "Request declined",
+          body: `Your request to ${action} was ${ok ? "approved" : "declined"}.`,
+          path: `/roles/${req.roleId}?view=admin`,
+        };
+      }
     }
   })();
   if (msg) await notify(req.uid, "accessRequest", msg);
+});
+
+/** What a role change request asks for (kept in sync with roleChangeAction in src/lib/roleService.ts). */
+function roleChangeAction(req: DocumentData): string | null {
+  const role = req.roleName || "the role";
+  switch (req.type) {
+    case "resetRole": return `reset ${role}`;
+    case "renameRole": return `rename ${role} to "${req.newName}"`;
+    case "editStats": return `change ${req.targetName || "a member"}'s stats in ${role}`;
+    case "kickMember": return `remove ${req.targetName || "a member"} from ${role}`;
+    case "rewardsTitle": return `change the rewards title of ${role}`;
+    default: return null;
+  }
+}
+
+/**
+ * A role's instructors ask its owner for bigger changes; tell the owner one is
+ * waiting. Roles without an owner send these to admins, who see them on the Admin page.
+ */
+export const notifyOnRoleRequest = onDocumentCreated({ document: "requests/{requestId}", secrets }, async (event) => {
+  const req = event.data?.data();
+  const action = req ? roleChangeAction(req) : null;
+  if (!req || !action || typeof req.roleId !== "string" || !req.roleId) return;
+  const role = (await getFirestore().doc(`roles/${req.roleId}`).get()).data();
+  if (!role) return;
+  const owner: string = role.owner ?? role.createdBy ?? "";
+  // An owner who no longer runs the role doesn't count, and nobody needs telling about their own request
+  if (!owner || !((role.instructors ?? []) as string[]).includes(owner) || owner === req.uid) return;
+  await notify(owner, "accessRequest", {
+    title: `Request in ${role.name}`,
+    body: `${req.userName || "An instructor"} wants to ${action}.`,
+    path: `/roles/${req.roleId}?view=admin&tab=requests`,
+  });
 });
 
 /** A deleted (or archived) profile takes its push tokens with it. */

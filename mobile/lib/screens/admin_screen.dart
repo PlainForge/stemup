@@ -84,6 +84,16 @@ class _AdminScreenState extends State<AdminScreen> {
       );
       if (!ok) return;
     }
+    if (r.type == RequestType.kickMember && mounted) {
+      final ok = await confirmDialog(
+        context,
+        title: 'Approve Kick',
+        message: 'Remove ${r.targetName.isEmpty ? 'this member' : r.targetName} from "${r.roleName}"? Their tasks in it are deleted.',
+        confirmLabel: 'Kick',
+        destructive: true,
+      );
+      if (!ok) return;
+    }
     await _run(r.id, () => Db.approveRequest(r), "Couldn't approve the request. Please try again.");
   }
 
@@ -113,7 +123,7 @@ class _AdminScreenState extends State<AdminScreen> {
       children: [
         SlidingTabs<_AdminTab>(
           tabs: [
-            SlidingTab(_AdminTab.requests, 'Requests', count: app.adminRequests.length),
+            SlidingTab(_AdminTab.requests, 'Requests', count: app.adminQueue.length),
             const SlidingTab(_AdminTab.users, 'Users'),
             const SlidingTab(_AdminTab.roles, 'Roles'),
             const SlidingTab(_AdminTab.inactive, 'Inactive Users'),
@@ -142,7 +152,8 @@ class _AdminScreenState extends State<AdminScreen> {
   // ── Requests ──
 
   Widget _requestsTab(BuildContext context, AppState app) {
-    final requests = app.adminRequests;
+    // A role's owner handles its instructors' change requests; admins see them only for roles without one
+    final requests = app.adminQueue;
     if (requests.isEmpty) return const EmptyState('No requests right now.');
     return Column(
       children: [
@@ -159,12 +170,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     SectionLabel(
-                      switch (r.type) {
-                        RequestType.instructor => 'Instructor access',
-                        RequestType.createRole => 'New role',
-                        RequestType.resetRole => 'Role reset',
-                        null => 'Request',
-                      },
+                      r.type?.label ?? 'Request',
                       size: 12,
                       padding: EdgeInsets.zero,
                     ),
@@ -172,16 +178,16 @@ class _AdminScreenState extends State<AdminScreen> {
                     Text(switch (r.type) {
                       RequestType.instructor => '${_who(r, 'Someone')} wants to be an Instructor',
                       RequestType.createRole => '${_who(r, 'An instructor')} wants to create "${r.roleName}"',
-                      RequestType.resetRole => '${_who(r, 'An instructor')} wants to reset "${r.roleName}"',
                       null => '',
+                      _ => '${_who(r, 'An instructor')} wants to ${r.roleChangeAction}',
                     }, style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context))),
+                    if (r.type?.isRoleChange == true) Muted('${r.roleName} has no owner, so this came to admins.', size: 12, color: Palette.gray400),
                     if (r.createdAt != null) Muted(DateFormat('MMM d', 'en_US').format(r.createdAt!), size: 12, color: Palette.gray400),
                     if (r.type == RequestType.instructor && r.reason.isNotEmpty) ...[const SizedBox(height: 10), _Quote(r.reason)],
                     if (r.type == RequestType.createRole) ...[
                       const SizedBox(height: 10),
                       _Quote('Purpose: ${r.purpose.isEmpty ? 'None given' : r.purpose}'),
                     ],
-                    if (r.type == RequestType.resetRole) ...[const SizedBox(height: 10), Muted('Data will be saved as "${r.saveName}".')],
                     const SizedBox(height: 12),
                     Wrap(
                       spacing: 8,
@@ -202,7 +208,7 @@ class _AdminScreenState extends State<AdminScreen> {
                               ? null
                               : () => _run(r.id, () => Db.declineAccessRequest(r.id), "Couldn't decline the request."),
                         ),
-                        if (r.type == RequestType.resetRole && r.roleId.isNotEmpty)
+                        if (r.type?.isRoleChange == true && r.roleId.isNotEmpty)
                           AppButton(
                             label: 'View Role',
                             size: AppButtonSize.xsm,

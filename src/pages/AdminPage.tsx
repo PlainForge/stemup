@@ -7,7 +7,7 @@ import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import { db } from "../lib/firebase";
 import { MainContext } from "../context/MainContext";
 import { GLOBAL_ROLE_ID } from "../lib/firebaseService";
-import { roleService } from "../lib/roleService";
+import { describeRoleChange, isRoleChange, roleOwner, roleService } from "../lib/roleService";
 import { alertDialog, confirmDialog } from "../lib/confirm";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { ACCESS_LABELS, type AccessLevel, type Role, type StemRequest, type UserRoleData } from "../myDataTypes";
@@ -25,6 +25,10 @@ const REQUEST_LABELS: Record<StemRequest["type"], string> = {
     instructor: "Instructor access",
     createRole: "New role",
     resetRole: "Role reset",
+    renameRole: "Rename role",
+    editStats: "Edit member stats",
+    kickMember: "Kick member",
+    rewardsTitle: "Rewards title",
 };
 
 export function AccessBadge({ level }: { level: AccessLevel }) {
@@ -108,6 +112,12 @@ export default function AdminPage() {
 
     if (loading || !user || !isAdmin) return <Loading />;
 
+    // A role's owner handles its instructors' change requests; admins get them only for roles without one
+    const shownRequests = requests.filter(r => {
+        if (!isRoleChange(r.type)) return true;
+        return !roleOwner(roles.find(role => role.id === r.roleId));
+    });
+
     const accessOf = (uid: string): AccessLevel => admins.includes(uid) ? "admin" : instructors.includes(uid) ? "instructor" : "user";
     const userName = (uid: string) => users.find(u => u.uid === uid)?.name;
 
@@ -131,11 +141,18 @@ export default function AdminPage() {
             );
             if (!ok) return;
         }
+        if (req.type === "kickMember") {
+            const ok = await confirmDialog(
+                `Remove ${req.targetName ?? "this member"} from "${req.roleName}"? Their tasks in it are deleted.`,
+                { title: "Approve Kick", confirmLabel: "Kick", danger: true }
+            );
+            if (!ok) return;
+        }
         await run(req.id, () => roleService.approveRequest(req), "Couldn't approve the request. Please try again.");
     };
 
     const tabs: { key: AdminTab; label: string; badge: number }[] = [
-        { key: "requests", label: "Requests", badge: requests.length },
+        { key: "requests", label: "Requests", badge: shownRequests.length },
         { key: "users", label: "Users", badge: 0 },
         { key: "roles", label: "Roles", badge: 0 },
         { key: "inactive", label: "Inactive Users", badge: 0 },
@@ -175,9 +192,9 @@ export default function AdminPage() {
             {/* Requests */}
             {tab === "requests" && (
                 <div className="flex flex-col gap-3">
-                    {requests.length === 0 ? (
+                    {shownRequests.length === 0 ? (
                         <p className="text-gray-400 text-sm text-center py-8">No requests right now.</p>
-                    ) : requests.map(req => (
+                    ) : shownRequests.map(req => (
                         <motion.div
                             key={req.id}
                             className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3"
@@ -190,8 +207,9 @@ export default function AdminPage() {
                                     <p className="font-semibold mt-0.5">
                                         {req.type === "instructor" && `${req.userName || userName(req.uid) || "Someone"} wants to be an Instructor`}
                                         {req.type === "createRole" && `${req.userName || userName(req.uid) || "An instructor"} wants to create "${req.roleName}"`}
-                                        {req.type === "resetRole" && `${req.userName || userName(req.uid) || "An instructor"} wants to reset "${req.roleName}"`}
+                                        {isRoleChange(req.type) && describeRoleChange({ ...req, userName: req.userName || userName(req.uid) || "" })}
                                     </p>
+                                    {isRoleChange(req.type) && <p className="text-xs text-gray-400 mt-0.5">{req.roleName} has no owner, so this came to admins.</p>}
                                 </div>
                                 <span className="text-xs text-gray-400 shrink-0">
                                     {req.createdAt?.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
@@ -205,9 +223,6 @@ export default function AdminPage() {
                                     <span className="font-medium">Purpose: </span>{req.purpose || "None given"}
                                 </p>
                             )}
-                            {req.type === "resetRole" && (
-                                <p className="text-sm text-gray-600">Data will be saved as <strong>{req.saveName}</strong>.</p>
-                            )}
                             <div className="flex gap-2">
                                 <Button onClick={() => approve(req)} size="xsm" color="green" disabled={busy === req.id}>
                                     {busy === req.id ? "Working..." : "Approve"}
@@ -215,7 +230,7 @@ export default function AdminPage() {
                                 <Button onClick={() => run(req.id, () => roleService.declineRequest(req.id), "Couldn't decline the request.")} size="xsm" color="red" disabled={busy === req.id}>
                                     Decline
                                 </Button>
-                                {req.type === "resetRole" && req.roleId && (
+                                {isRoleChange(req.type) && req.roleId && (
                                     <Button onClick={() => navigate(`/admin/roles/${req.roleId}`)} size="xsm" color="gray">View Role</Button>
                                 )}
                             </div>

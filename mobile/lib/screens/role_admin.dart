@@ -45,6 +45,10 @@ class _RoleAdminViewState extends State<RoleAdminView> {
   List<Task> _tasks = const [];
   List<SubmittedTask> _submitted = const [];
   List<UserData> _requesters = const [];
+
+  /// Changes this role's instructors asked its owner for (a reset, a rename, ...).
+  List<StemRequest> _roleRequests = const [];
+  String? _busyRequest;
   final _filters = TaskFilters();
   _TaskFilter _taskFilter = _TaskFilter.all;
 
@@ -56,6 +60,10 @@ class _RoleAdminViewState extends State<RoleAdminView> {
     _subs.addAll([
       Db.roleTasksStream(role.id).listen((t) => setState(() => _tasks = t)),
       Db.roleSubmittedStream(role.id).listen((s) => setState(() => _submitted = s)),
+      Db.roleRequestsStream(role.id).listen(
+        (r) => setState(() => _roleRequests = r.where((x) => x.type?.isRoleChange == true).toList()),
+        onError: (_) {},
+      ),
     ]);
     _syncRequesters();
   }
@@ -89,6 +97,42 @@ class _RoleAdminViewState extends State<RoleAdminView> {
   /// Members who take part: admins and the role's instructors aren't given tasks or ranked.
   List<UserData> _nonAdmins(AppState app) => widget.members.where((m) => !app.isStaff(role, m.uid)).toList();
 
+  /// Who approves the other instructors' change requests: the owner, or admins when there's none.
+  String get _approver {
+    final o = role.owner;
+    if (o.isEmpty) return 'an admin';
+    final n = widget.members.where((m) => m.uid == o).firstOrNull?.name ?? '';
+    return n.isEmpty ? "the role's owner" : n;
+  }
+
+  Future<void> _approveRoleRequest(StemRequest r) async {
+    if (r.type == RequestType.resetRole || r.type == RequestType.kickMember) {
+      final reset = r.type == RequestType.resetRole;
+      final ok = await confirmDialog(
+        context,
+        title: reset ? 'Approve Reset' : 'Approve Kick',
+        message: reset
+            ? 'Reset ${role.name}? Its leaderboard is saved as "${r.saveName}", then all tasks, prizes and members\' points in it are cleared.'
+            : 'Remove ${r.targetName.isEmpty ? 'this member' : r.targetName} from ${role.name}? Their tasks in this role are deleted.',
+        confirmLabel: reset ? 'Reset' : 'Kick',
+        destructive: true,
+      );
+      if (!ok) return;
+    }
+    await _runRequest(r, () => Db.approveRequest(r), "Couldn't approve the request. Please try again.");
+  }
+
+  Future<void> _runRequest(StemRequest r, Future<void> Function() action, String failMessage) async {
+    setState(() => _busyRequest = r.id);
+    try {
+      await action();
+    } catch (_) {
+      if (mounted) showToast(context, failMessage, error: true);
+    } finally {
+      if (mounted) setState(() => _busyRequest = null);
+    }
+  }
+
   SubmittedTask? _pendingFor(String taskId) {
     for (final s in _submitted) {
       if (s.id == taskId && !s.complete) return s;
@@ -99,12 +143,16 @@ class _RoleAdminViewState extends State<RoleAdminView> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
+    final me = app.user?.uid;
+    // Requests the signed-in person can approve, and the ones they sent
+    final toReview = app.canChangeRole(role) ? _roleRequests.where((r) => r.uid != me).toList() : <StemRequest>[];
+    final mine = _roleRequests.where((r) => r.uid == me).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SlidingTabs<_AdminTab>(
           tabs: [
-            SlidingTab(_AdminTab.requests, 'Requests', count: role.pendingRequests.length),
+            SlidingTab(_AdminTab.requests, 'Requests', count: role.pendingRequests.length + toReview.length),
             const SlidingTab(_AdminTab.creation, 'Assign Task'),
             SlidingTab(_AdminTab.tasks, 'Tasks', count: _submitted.where((s) => !s.complete).length),
             const SlidingTab(_AdminTab.members, 'Members'),
@@ -129,13 +177,13 @@ class _RoleAdminViewState extends State<RoleAdminView> {
           child: KeyedSubtree(
             key: ValueKey(_tab),
             child: switch (_tab) {
-              _AdminTab.requests => _requestsTab(context),
+              _AdminTab.requests => _requestsTab(context, toReview, mine),
               _AdminTab.creation => _AssignTaskForm(role: role, members: _nonAdmins(app)),
               _AdminTab.tasks => _tasksTab(context, app),
               _AdminTab.members => _membersTab(context, app),
               _AdminTab.instructors => _InstructorsTab(role: role),
-              _AdminTab.rewards => _RewardsForm(role: role),
-              _AdminTab.config => _ConfigTab(role: role),
+              _AdminTab.rewards => _RewardsForm(role: role, approver: _approver),
+              _AdminTab.config => _ConfigTab(role: role, approver: _approver, roleRequests: _roleRequests),
             },
           ),
         ),
@@ -174,11 +222,21 @@ class _RoleAdminViewState extends State<RoleAdminView> {
 
   // ── Requests ──
 
-  Widget _requestsTab(BuildContext context) {
+  Widget _requestsTab(BuildContext context, List<StemRequest> toReview, List<StemRequest> mine) {
     final list = _requesters.where((u) => role.pendingRequests.contains(u.uid)).toList();
-    if (list.isEmpty) return const EmptyState('No pending requests.');
+    final changes = [...toReview, ...mine];
+    if (list.isEmpty && changes.isEmpty) return const EmptyState('No pending requests.');
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Changes the role's other instructors asked for, for the owner (or an admin) to approve
+        if (changes.isNotEmpty) ...[
+          const SectionLabel('Instructor requests'),
+          for (final r in changes) _roleRequestCard(context, r, mine: mine.contains(r)),
+          const SizedBox(height: 4),
+          const SectionLabel('Join requests'),
+          if (list.isEmpty) const Muted('No pending join requests.', color: Palette.gray400),
+        ],
         for (var i = 0; i < list.length; i++)
           _personRow(
             i,
@@ -207,6 +265,58 @@ class _RoleAdminViewState extends State<RoleAdminView> {
       ],
     );
   }
+
+  Widget _roleRequestCard(BuildContext context, StemRequest r, {required bool mine}) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: FadeSlideIn(
+      key: ValueKey(r.id),
+      dx: -10,
+      offset: 0,
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shadow: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(r.describe(mine: mine), style: TextStyle(fontWeight: FontWeight.w500, color: Palette.label(context))),
+            if (r.createdAt != null) Muted(DateFormat('MMM d', 'en_US').format(r.createdAt!), size: 12, color: Palette.gray400),
+            const SizedBox(height: 10),
+            if (mine)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Waiting for $_approver', style: const TextStyle(fontSize: 12, color: Palette.amber700)),
+                  ),
+                  AppButton(label: 'Withdraw', size: AppButtonSize.xsm, style: AppButtonStyle.cancel, onPressed: () => Db.deleteRequest(r.id)),
+                ],
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  AppButton(
+                    label: 'Approve',
+                    size: AppButtonSize.xsm,
+                    style: AppButtonStyle.green,
+                    loading: _busyRequest == r.id,
+                    onPressed: () => _approveRoleRequest(r),
+                  ),
+                  AppButton(
+                    label: 'Decline',
+                    size: AppButtonSize.xsm,
+                    style: AppButtonStyle.red,
+                    onPressed: _busyRequest == r.id
+                        ? null
+                        : () => _runRequest(r, () => Db.declineAccessRequest(r.id), "Couldn't decline the request."),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
 
   // ── Tasks ──
 
@@ -831,10 +941,10 @@ class _AdminTaskCardState extends State<_AdminTaskCard> {
 
 /// Edits a member's stats in one role (opened from their member page).
 class EditMemberCard extends StatefulWidget {
-  const EditMemberCard({super.key, required this.member, required this.roleId});
+  const EditMemberCard({super.key, required this.member, required this.role});
 
   final UserData member;
-  final String roleId;
+  final Role role;
 
   @override
   State<EditMemberCard> createState() => EditMemberCardState();
@@ -866,7 +976,26 @@ class EditMemberCardState extends State<EditMemberCard> {
   int _read(TextEditingController c) => (int.tryParse(c.text.trim()) ?? 0).clamp(0, 1 << 31);
 
   Future<void> _save(bool alsoGlobal) async {
-    await Db.setMemberRoleStats(widget.member.uid, widget.roleId, points: _read(_points), tasks: _read(_tasks), alsoGlobal: alsoGlobal);
+    final app = context.read<AppState>();
+    final role = widget.role;
+    // Instructors who don't own the role ask the owner (or an admin, when it has none)
+    if (!app.canChangeRole(role)) {
+      try {
+        await Db.requestRoleChange(RequestType.editStats, app.user!.uid, app.userData?.name ?? '', role, {
+          'targetUid': widget.member.uid,
+          'targetName': widget.member.name,
+          'points': _read(_points),
+          'taskCompleted': _read(_tasks),
+        });
+        if (!mounted) return;
+        Navigator.pop(context);
+        showToast(context, 'Sent to ${role.owner.isEmpty ? 'an admin' : "the role's owner"} to approve.');
+      } catch (_) {
+        if (mounted) showToast(context, "Couldn't send the request. Please try again.", error: true);
+      }
+      return;
+    }
+    await Db.setMemberRoleStats(widget.member.uid, role.id, points: _read(_points), tasks: _read(_tasks), alsoGlobal: alsoGlobal);
     if (mounted) Navigator.pop(context);
   }
 
@@ -886,7 +1015,9 @@ class EditMemberCardState extends State<EditMemberCard> {
     final dp = _read(_points) - m.points;
     final dt = _read(_tasks) - m.taskCompleted;
     // Only admins change global totals; instructors edit this role's stats only
-    final isAdmin = context.watch<AppState>().isAdmin;
+    final app = context.watch<AppState>();
+    final isAdmin = app.isAdmin;
+    final canChange = app.canChangeRole(widget.role);
     final g = isAdmin ? _global : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -940,7 +1071,15 @@ class EditMemberCardState extends State<EditMemberCard> {
           ),
         ],
         const SizedBox(height: 20),
-        AppButton(label: isAdmin ? 'Save to Role Only' : 'Save', size: AppButtonSize.full, onPressed: () => _save(false)),
+        AppButton(
+          label: isAdmin
+              ? 'Save to Role Only'
+              : canChange
+              ? 'Save'
+              : 'Send Request',
+          size: AppButtonSize.full,
+          onPressed: () => _save(false),
+        ),
         if (isAdmin) ...[
           const SizedBox(height: 8),
           AppButton(label: 'Save to Role + Global', style: AppButtonStyle.gray, size: AppButtonSize.full, onPressed: () => _save(true)),
@@ -957,9 +1096,12 @@ class EditMemberCardState extends State<EditMemberCard> {
 // ── Rewards & config ────────────────────────────────────────────────────
 
 class _RewardsForm extends StatefulWidget {
-  const _RewardsForm({required this.role});
+  const _RewardsForm({required this.role, required this.approver});
 
   final Role role;
+
+  /// Who approves the title when this person can't change it directly.
+  final String approver;
 
   @override
   State<_RewardsForm> createState() => _RewardsFormState();
@@ -988,18 +1130,34 @@ class _RewardsFormState extends State<_RewardsForm> {
   }
 
   Future<void> _saveTitle() async {
-    await Db.setRewardsTitle(widget.role.id, _title.text);
-    if (mounted) showToast(context, _title.text.trim().isEmpty ? 'Title reset to the current month' : 'Title updated');
+    final app = context.read<AppState>();
+    if (app.canChangeRole(widget.role)) {
+      await Db.setRewardsTitle(widget.role.id, _title.text);
+      if (mounted) showToast(context, _title.text.trim().isEmpty ? 'Title reset to the current month' : 'Title updated');
+      return;
+    }
+    try {
+      await Db.requestRoleChange(RequestType.rewardsTitle, app.user!.uid, app.userData?.name ?? '', widget.role, {'title': _title.text.trim()});
+      _title.text = widget.role.rewardsTitle;
+      if (mounted) showToast(context, 'Title change requested. ${_cap(widget.approver)} will review it.');
+    } catch (_) {
+      if (mounted) showToast(context, "Couldn't send the request. Please try again.", error: true);
+    }
   }
 
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) {
+    final canChange = context.watch<AppState>().canChangeRole(widget.role);
+    return Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _Section(
         title: 'Rewards title',
         children: [
-          const Muted('The heading on the Rewards tab. Leave it empty to show the current month.'),
+          Muted(
+            'The heading on the Rewards tab. Leave it empty to show the current month.'
+            '${canChange ? '' : ' ${_cap(widget.approver)} has to approve a new title.'}',
+          ),
           AppTextField(
             controller: _title,
             placeholder: '${DateFormat('MMMM', 'en_US').format(DateTime.now())} Rewards',
@@ -1008,7 +1166,7 @@ class _RewardsFormState extends State<_RewardsForm> {
           ),
           Align(
             alignment: Alignment.centerLeft,
-            child: AppButton(label: 'Save Title', size: AppButtonSize.sm, onPressed: _saveTitle),
+            child: AppButton(label: canChange ? 'Save Title' : 'Request Title Change', size: AppButtonSize.sm, onPressed: _saveTitle),
           ),
         ],
       ),
@@ -1041,6 +1199,39 @@ class _RewardsFormState extends State<_RewardsForm> {
         ],
       ),
     ],
+  );
+  }
+}
+
+String _cap(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+/// Amber "waiting for approval" box (`bg-amber-50 border-amber-200`), with an optional action.
+class PendingNotice extends StatelessWidget {
+  const PendingNotice(this.text, {super.key, this.actionLabel, this.onAction});
+
+  final String text;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: Palette.amber50,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFFDE68A)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(text, style: const TextStyle(fontSize: 14, color: Palette.amber700)),
+        ),
+        if (actionLabel != null && onAction != null) ...[
+          const SizedBox(width: 8),
+          AppButton(label: actionLabel!, size: AppButtonSize.xsm, style: AppButtonStyle.cancel, onPressed: onAction),
+        ],
+      ],
+    ),
   );
 }
 
@@ -1086,7 +1277,32 @@ class _InstructorsTabState extends State<_InstructorsTab> {
       confirmLabel: 'Remove',
       destructive: true,
     );
-    if (ok) await Db.removeRoleInstructor(widget.role.id, uid);
+    if (ok) await Db.removeRoleInstructor(widget.role, uid);
+  }
+
+  // Admins choose which of the role's instructors owns it
+  Future<void> _makeOwner(String uid, String name) async {
+    final role = widget.role;
+    final ok = await confirmDialog(
+      context,
+      title: 'Make Owner?',
+      message:
+          "$name will own ${role.name}. The role's other instructors will need $name's approval to rename or reset it, edit members' stats, kick members or change the rewards title.",
+      confirmLabel: 'Make Owner',
+    );
+    if (ok) await Db.setRoleOwner(role.id, uid);
+  }
+
+  Future<void> _clearOwner() async {
+    final role = widget.role;
+    final ok = await confirmDialog(
+      context,
+      title: 'Remove Owner?',
+      message: "${role.name} will have no owner, so its instructors' change requests will come to admins instead.",
+      confirmLabel: 'Remove Owner',
+      destructive: true,
+    );
+    if (ok) await Db.setRoleOwner(role.id, '');
   }
 
   Future<void> _add(List<UserData> addable) async {
@@ -1128,14 +1344,19 @@ class _InstructorsTabState extends State<_InstructorsTab> {
           title: 'Running this role',
           children: [
             const Muted(
-              'Instructors here can give and review tasks, edit points, accept members and request resets. Admins can always run every role.',
+              "Instructors here can give, edit and review tasks, accept members and set prizes. The role's owner can also rename or reset it, "
+              "edit members' stats, kick members and change the rewards title; other instructors send the owner a request for those. "
+              'Admins can always run every role.',
             ),
-            if (!app.isAdmin)
-              const Muted(
-                'Only the instructor who created this role, or an admin, can remove other instructors. To step down yourself, ask an admin.',
-                size: 12,
-                color: Palette.gray400,
-              ),
+            Muted(
+              !app.isAdmin
+                  ? "Only the role's owner, or an admin, can remove other instructors. To step down yourself, ask an admin."
+                  : role.owner.isNotEmpty
+                  ? 'Only the owner, or an admin, can remove other instructors.'
+                  : "This role has no owner, so its instructors' change requests come to admins. Make one of them the owner below.",
+              size: 12,
+              color: Palette.gray400,
+            ),
             if (role.instructors.isEmpty) const Muted('No instructors yet.', color: Palette.gray400),
             for (final uid in role.instructors)
               Container(
@@ -1160,15 +1381,28 @@ class _InstructorsTabState extends State<_InstructorsTab> {
                             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.label(context)),
                           ),
                           Muted(
-                            '${role.createdBy == uid ? 'Created this role' : 'Instructor'}'
+                            '${role.owner == uid ? 'Owner' : 'Instructor'}'
                             '${app.instructors.contains(uid) ? '' : ' · No longer an Instructor'}',
                             size: 12,
-                            color: Palette.gray400,
+                            color: role.owner == uid ? const Color(0xFF9333EA) : Palette.gray400,
                           ),
                         ],
                       ),
                     ),
-                    if (app.isAdmin || (uid != app.user!.uid && role.createdBy.isNotEmpty && role.createdBy == app.user!.uid))
+                    if (app.isAdmin && role.owner != uid && app.instructors.contains(uid)) ...[
+                      AppButton(
+                        label: 'Make Owner',
+                        size: AppButtonSize.xsm,
+                        style: AppButtonStyle.blue,
+                        onPressed: () => _makeOwner(uid, byId[uid]?.name ?? 'This instructor'),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    if (app.isAdmin && role.owner == uid) ...[
+                      AppButton(label: 'Remove Owner', size: AppButtonSize.xsm, style: AppButtonStyle.gray, onPressed: _clearOwner),
+                      const SizedBox(width: 6),
+                    ],
+                    if (app.isAdmin || (uid != app.user!.uid && role.owner == app.user!.uid))
                       AppButton(
                         label: 'Remove',
                         size: AppButtonSize.xsm,
@@ -1199,9 +1433,15 @@ class _InstructorsTabState extends State<_InstructorsTab> {
 }
 
 class _ConfigTab extends StatefulWidget {
-  const _ConfigTab({required this.role});
+  const _ConfigTab({required this.role, required this.approver, required this.roleRequests});
 
   final Role role;
+
+  /// Who approves renames and resets when this person can't make them directly.
+  final String approver;
+
+  /// The role's open change requests.
+  final List<StemRequest> roleRequests;
 
   @override
   State<_ConfigTab> createState() => _ConfigTabState();
@@ -1210,46 +1450,44 @@ class _ConfigTab extends StatefulWidget {
 class _ConfigTabState extends State<_ConfigTab> {
   final _name = TextEditingController();
   bool _resetting = false;
-  StreamSubscription<List<StemRequest>>? _resetSub;
-  StemRequest? _pendingReset;
-
-  @override
-  void initState() {
-    super.initState();
-    // A reset this role is waiting on an admin to approve
-    _resetSub = Db.roleRequestsStream(widget.role.id).listen((r) {
-      if (mounted) setState(() => _pendingReset = r.where((x) => x.type == RequestType.resetRole).firstOrNull);
-    }, onError: (_) {});
-  }
 
   @override
   void dispose() {
     _name.dispose();
-    _resetSub?.cancel();
     super.dispose();
   }
 
   Future<void> _rename() async {
     final n = _name.text.trim();
     if (n.isEmpty) return;
-    await Db.renameRole(widget.role.id, n);
-    _name.clear();
-    if (mounted) showToast(context, 'Role name updated successfully');
+    final app = context.read<AppState>();
+    try {
+      if (app.canChangeRole(widget.role)) {
+        await Db.renameRole(widget.role.id, n);
+        if (mounted) showToast(context, 'Role name updated successfully');
+      } else {
+        await Db.requestRoleChange(RequestType.renameRole, app.user!.uid, app.userData?.name ?? '', widget.role, {'newName': n});
+        if (mounted) showToast(context, 'Rename requested. ${_cap(widget.approver)} will review it.');
+      }
+      _name.clear();
+    } catch (_) {
+      if (mounted) showToast(context, "Couldn't save that. Please try again.", error: true);
+    }
   }
 
-  // Admins reset straight away; instructors send the reset to an admin to approve
+  // Admins and the role's owner reset straight away; its other instructors ask the owner
   Future<void> _reset() async {
     final app = context.read<AppState>();
-    final isAdmin = app.isAdmin;
+    final canChange = app.canChangeRole(widget.role);
     final saveName = await promptText(
       context,
-      title: isAdmin ? 'Reset Role' : 'Request Reset',
-      message: isAdmin
+      title: canChange ? 'Reset Role' : 'Request Reset',
+      message: canChange
           ? "Every member's points and tasks completed in this role are saved under this name on the Saved Data tab, then cleared along with all tasks and prizes."
-          : "Name this save. An admin will review the reset; once approved, every member's points and tasks completed are saved under this name on the Saved Data tab, then cleared along with all tasks and prizes.",
+          : "Name this save. ${_cap(widget.approver)} will review the reset; once approved, every member's points and tasks completed are saved under this name on the Saved Data tab, then cleared along with all tasks and prizes.",
       placeholder: 'e.g. ${DateFormat('MMMM y', 'en_US').format(DateTime.now())}',
-      confirmLabel: isAdmin ? 'Reset' : 'Send Request',
-      destructive: isAdmin,
+      confirmLabel: canChange ? 'Reset' : 'Send Request',
+      destructive: canChange,
     );
     if (saveName == null || !mounted) return;
     if (saveName.trim().isEmpty) {
@@ -1258,12 +1496,12 @@ class _ConfigTabState extends State<_ConfigTab> {
     }
     setState(() => _resetting = true);
     try {
-      if (isAdmin) {
+      if (canChange) {
         await Db.resetRole(widget.role.id, saveName.trim());
         if (mounted) showToast(context, 'Role reset. Its data is on the Saved Data tab.');
       } else {
         await Db.requestRoleReset(app.user!.uid, app.userData?.name ?? '', widget.role, saveName);
-        if (mounted) showToast(context, 'Reset requested. An admin will review it.');
+        if (mounted) showToast(context, 'Reset requested. ${_cap(widget.approver)} will review it.');
       }
     } catch (_) {
       if (mounted) showToast(context, "Couldn't reset the role. Please try again.", error: true);
@@ -1288,19 +1526,25 @@ class _ConfigTabState extends State<_ConfigTab> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = context.watch<AppState>().isAdmin;
+    final app = context.watch<AppState>();
+    final isAdmin = app.isAdmin;
+    final canChange = app.canChangeRole(widget.role);
+    final me = app.user?.uid;
     final on = widget.role.showInGlobalLeaderboard;
-    final pending = _pendingReset;
+    // Your own reset request, or (for instructors who'd have to ask) one another instructor already sent
+    final resets = widget.roleRequests.where((r) => r.type == RequestType.resetRole);
+    final pending = resets.where((r) => r.uid == me).firstOrNull ?? (canChange ? null : resets.firstOrNull);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Section(
           title: 'Rename role',
           children: [
+            if (!canChange) Muted('${_cap(widget.approver)} has to approve a new name.'),
             AppTextField(controller: _name, placeholder: 'New role name', onSubmitted: (_) => _rename()),
             Align(
               alignment: Alignment.centerLeft,
-              child: AppButton(label: 'Save Name', size: AppButtonSize.sm, onPressed: _rename),
+              child: AppButton(label: canChange ? 'Save Name' : 'Request Rename', size: AppButtonSize.sm, onPressed: _rename),
             ),
           ],
         ),
@@ -1334,41 +1578,20 @@ class _ConfigTabState extends State<_ConfigTab> {
             Muted(
               "Saves every member's points and tasks completed under a name you choose (shown with the date on the Saved Data tab), "
               "then clears this role's tasks, submissions and prizes and sets everyone back to 0."
-              '${isAdmin ? '' : ' An admin has to approve it first.'}',
+              '${canChange ? '' : ' ${_cap(widget.approver)} has to approve it first.'}',
             ),
             if (pending != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Palette.amber50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFDE68A)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Reset requested as "${pending.saveName}". Waiting for an admin.',
-                        style: const TextStyle(fontSize: 14, color: Palette.amber700),
-                      ),
-                    ),
-                    if (!isAdmin) ...[
-                      const SizedBox(width: 8),
-                      AppButton(
-                        label: 'Cancel',
-                        size: AppButtonSize.xsm,
-                        style: AppButtonStyle.cancel,
-                        onPressed: () => Db.deleteRequest(pending.id),
-                      ),
-                    ],
-                  ],
-                ),
+              PendingNotice(
+                '${pending.uid == me ? 'Reset requested' : '${pending.userName.isEmpty ? 'An instructor' : pending.userName} requested a reset'}'
+                ' as "${pending.saveName}". Waiting for ${widget.approver}.',
+                actionLabel: pending.uid == me ? 'Cancel' : null,
+                onAction: () => Db.deleteRequest(pending.id),
               )
             else
               Align(
                 alignment: Alignment.centerLeft,
                 child: AppButton(
-                  label: isAdmin ? 'Reset Role' : 'Request Reset',
+                  label: canChange ? 'Reset Role' : 'Request Reset',
                   size: AppButtonSize.sm,
                   loading: _resetting,
                   onPressed: _reset,

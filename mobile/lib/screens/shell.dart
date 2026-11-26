@@ -26,7 +26,7 @@ class AppShell extends StatelessWidget {
     final tabs = [
       _Tab(0, GlassTabItem(icon: FontAwesomeIcons.house.data, label: 'Home')),
       _Tab(1, GlassTabItem(icon: FontAwesomeIcons.users.data, label: 'Roles', badge: app.rolesTabBadge)),
-      if (app.isAdmin) _Tab(2, GlassTabItem(icon: FontAwesomeIcons.userShield.data, label: 'Admin', badge: app.adminRequests.isNotEmpty)),
+      if (app.isAdmin) _Tab(2, GlassTabItem(icon: FontAwesomeIcons.userShield.data, label: 'Admin', badge: app.adminQueue.isNotEmpty)),
       _Tab(3, GlassTabItem(icon: FontAwesomeIcons.gears.data, label: 'Settings')),
     ];
     final current = tabs.indexWhere((t) => t.branch == shell.currentIndex).clamp(0, tabs.length - 1);

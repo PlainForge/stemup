@@ -52,6 +52,11 @@ export type Role = {
   /** Instructors who run this role (its creator plus anyone they add). They're members too, but aren't ranked. */
   instructors?: string[];
   createdBy?: string;
+  /**
+   * The instructor who owns this role, set by admins. Its other instructors ask
+   * the owner before bigger changes. Falls back to createdBy when unset; "" means none.
+   */
+  owner?: string;
   purpose?: string;
   /** Heading on the Rewards tab; the current month when unset */
   rewardsTitle?: string;
@@ -67,10 +72,14 @@ export const ACCESS_LABELS: Record<AccessLevel, string> = {
   admin: "Admin",
 };
 
-/** Something an admin has to approve, in the `requests` collection */
+/** Changes to a role that its instructors ask the role's owner for (or admins, when it has none) */
+export const ROLE_CHANGE_TYPES = ["resetRole", "renameRole", "editStats", "kickMember", "rewardsTitle"] as const;
+export type RoleChangeType = (typeof ROLE_CHANGE_TYPES)[number];
+
+/** Something to approve, in the `requests` collection: by an admin, or by a role's owner for role changes */
 export type StemRequest = {
   id: string;
-  type: "instructor" | "createRole" | "resetRole";
+  type: "instructor" | "createRole" | RoleChangeType;
   uid: string;
   userName: string;
   createdAt?: Timestamp;
@@ -79,9 +88,17 @@ export type StemRequest = {
   /** createRole: the new role's name and purpose */
   roleName?: string;
   purpose?: string;
-  /** resetRole: which role, and the name to save its data under */
+  /** Role changes: which role. resetRole: the name to save its data under */
   roleId?: string;
   saveName?: string;
+  /** renameRole: the new name. rewardsTitle: the new title ("" goes back to the current month) */
+  newName?: string;
+  title?: string;
+  /** editStats and kickMember: the member it's about. editStats: their new stats in this role */
+  targetUid?: string;
+  targetName?: string;
+  points?: number;
+  taskCompleted?: number;
   /** Set by an admin just before removing the request, so the person can be told the outcome */
   status?: "approved" | "declined";
 };

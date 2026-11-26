@@ -63,6 +63,10 @@ class AppState extends ChangeNotifier {
   /// Instructors who don't run the role take part like anyone else.
   bool isStaff(Role? role, String uid) => admins.contains(uid) || (role?.instructors.contains(uid) ?? false);
 
+  /// Admins and the role's owner make the bigger changes (rename, reset, edit
+  /// stats, kick, rewards title) directly; its other instructors request them.
+  bool canChangeRole(Role? role) => role != null && user != null && (isAdmin || role.owner == user!.uid);
+
   late ThemePref themePref;
 
   /// Swap real refraction for a plain blur (cheaper on older phones).
@@ -74,8 +78,16 @@ class AppState extends ChangeNotifier {
   Set<String> mySubmittedIds = const {};
   List<SubmittedTask> pendingSubmissions = const [];
 
-  /// Requests waiting for an admin (admins only).
+  /// Every open request (admins only).
   List<StemRequest> adminRequests = const [];
+
+  /// The requests admins handle: Instructor access, new roles, and changes to
+  /// roles without an owner (a role's owner handles the rest).
+  List<StemRequest> get adminQueue => adminRequests.where((r) {
+    if (r.type?.isRoleChange != true) return true;
+    final role = roles.where((x) => x.id == r.roleId).firstOrNull;
+    return role == null || role.owner.isEmpty;
+  }).toList();
   Set<String> seenTaskIds = {};
 
   void _onAuth(User? usr) {

@@ -192,6 +192,8 @@ class Db {
       'members': members,
       'instructors': ownerUid != null && !admins.contains(ownerUid) ? [ownerUid] : <String>[],
       'createdBy': ownerUid ?? '',
+      // The instructor who asked for it owns it
+      'owner': ownerUid != null && !admins.contains(ownerUid) ? ownerUid : '',
       'pendingRequests': [],
       'createdAt': DateTime.now(),
     });
@@ -210,14 +212,12 @@ class Db {
   static Future<void> requestRoleCreation(String uid, String userName, String roleName, String purpose) =>
       _addRequest({'type': 'createRole', 'uid': uid, 'userName': userName, 'roleName': roleName.trim(), 'purpose': purpose.trim()});
 
-  static Future<void> requestRoleReset(String uid, String userName, Role role, String saveName) => _addRequest({
-    'type': 'resetRole',
-    'uid': uid,
-    'userName': userName,
-    'roleId': role.id,
-    'roleName': role.name,
-    'saveName': saveName.trim(),
-  });
+  static Future<void> requestRoleReset(String uid, String userName, Role role, String saveName) =>
+      requestRoleChange(RequestType.resetRole, uid, userName, role, {'saveName': saveName.trim()});
+
+  /// Asks the role's owner (or an admin, when it has none) to make a change to the role.
+  static Future<void> requestRoleChange(RequestType type, String uid, String userName, Role role, Map<String, Object> details) =>
+      _addRequest({'type': type.key, 'uid': uid, 'userName': userName, 'roleId': role.id, 'roleName': role.name, ...details});
 
   /// Withdraws your own request (no notification is sent).
   static Future<void> deleteRequest(String id) => _db.doc('requests/$id').delete();
@@ -239,15 +239,40 @@ class Db {
         await grantInstructor(r.uid);
       case RequestType.createRole:
         await createRole(r.roleName.isEmpty ? 'Untitled Role' : r.roleName, purpose: r.purpose, ownerUid: r.uid);
-      case RequestType.resetRole:
-        // The role may have been deleted since the request was made
-        if (r.roleId.isNotEmpty && (await _role(r.roleId).get()).exists) {
-          await resetRole(r.roleId, r.saveName.isEmpty ? 'Saved Data' : r.saveName);
-        }
+      case RequestType.resetRole ||
+          RequestType.renameRole ||
+          RequestType.editStats ||
+          RequestType.kickMember ||
+          RequestType.rewardsTitle:
+        await _applyRoleChange(r);
       case null:
         break;
     }
     await _settleRequest(r.id, 'approved');
+  }
+
+  /// Carries out a role change request (by the role's owner or an admin).
+  static Future<void> _applyRoleChange(StemRequest r) async {
+    if (r.roleId.isEmpty) return;
+    final snap = await _role(r.roleId).get();
+    // The role may have been deleted since the request was made
+    if (!snap.exists) return;
+    final members = Role.fromDoc(snap).members;
+    switch (r.type) {
+      case RequestType.resetRole:
+        await resetRole(r.roleId, r.saveName.isEmpty ? 'Saved Data' : r.saveName);
+      case RequestType.renameRole:
+        if (r.newName.trim().isNotEmpty) await renameRole(r.roleId, r.newName);
+      case RequestType.rewardsTitle:
+        await setRewardsTitle(r.roleId, r.title);
+      // Only while they're still in the role
+      case RequestType.editStats when members.contains(r.targetUid):
+        await setMemberRoleStats(r.targetUid, r.roleId, points: r.points, tasks: r.taskCompleted, alsoGlobal: false);
+      case RequestType.kickMember when members.contains(r.targetUid):
+        await kickUserFromRole(r.roleId, r.targetUid);
+      default:
+        break;
+    }
   }
 
   static Future<void> grantInstructor(String uid) async {
@@ -269,6 +294,8 @@ class Db {
       led.docs.map(
         (d) => d.reference.update({
           'instructors': FieldValue.arrayRemove([uid]),
+          // Roles they owned are left without an owner
+          if (Role.fromDoc(d).owner == uid) 'owner': '',
         }),
       ),
     );
@@ -282,10 +309,14 @@ class Db {
     });
   }
 
-  /// Stops an instructor running this role; they stay a member.
-  static Future<void> removeRoleInstructor(String roleId, String uid) => _role(roleId).update({
+  /// Stops an instructor running this role; they stay a member. Removing the owner leaves the role without one.
+  static Future<void> removeRoleInstructor(Role role, String uid) => _role(role.id).update({
     'instructors': FieldValue.arrayRemove([uid]),
+    if (role.owner == uid) 'owner': '',
   });
+
+  /// Makes one of the role's instructors its owner; '' leaves it with none. Admin-only in the rules.
+  static Future<void> setRoleOwner(String roleId, String uid) => _role(roleId).update({'owner': uid});
 
   static Future<void> setRewardsTitle(String roleId, String title) => _role(roleId).update({'rewardsTitle': title.trim()});
 
@@ -369,7 +400,7 @@ class Db {
     }
   }
 
-  static Future<void> renameRole(String roleId, String name) => _role(roleId).update({'name': name});
+  static Future<void> renameRole(String roleId, String name) => _role(roleId).update({'name': name.trim()});
 
   static Future<void> acceptRequest(Role role, String uid) async {
     if (!(await _user(uid).get()).exists) return;

@@ -5,6 +5,8 @@ rules_version = '2';
 //   Instructors: ids in admins/instructors (set by admins from the Admin page)
 //   A role's instructors are listed in roles/{id}.instructors; an Instructor can
 //   run only the roles they're listed on. Admins can do everything.
+//   A role's owner (roles/{id}.owner, set by admins) is one of its instructors
+//   and makes the bigger changes to it; its other instructors request those.
 //
 // Deploy with: firebase deploy --only firestore:rules
 // This replaces whatever rules are in the Firebase console.
@@ -63,13 +65,35 @@ service cloud.firestore {
       // Only admins (above) write here
     }
 
-    // Only the instructor who created the role may take other instructors off it,
-    // and no instructor may take themselves off (admins can, via their own rule)
+    // A role's owner is the instructor in `owner`, set by admins; roles from before
+    // owners existed fall back to the instructor who created them
+    function roleOwner(data) { return data.get('owner', data.get('createdBy', '')); }
+    function ownsRoleData(data) {
+      return isInstructor() && roleOwner(data) == me() && me() in data.get('instructors', []);
+    }
+    function ownsRole(roleId) {
+      return roleId is string && roleId != ''
+        && exists(/databases/$(database)/documents/roles/$(roleId))
+        && ownsRoleData(get(/databases/$(database)/documents/roles/$(roleId)).data);
+    }
+
+    // Only the role's owner may take other instructors off it, and no instructor
+    // may take themselves off (admins can, via their own rule)
     function instructorRemovalsAllowed() {
       let removed = resource.data.get('instructors', []).toSet()
         .difference(request.resource.data.get('instructors', []).toSet());
       return removed.size() == 0
-        || (!(me() in removed) && resource.data.get('createdBy', '') == me());
+        || (!(me() in removed) && ownsRoleData(resource.data));
+    }
+
+    // Instructors who don't own the role ask the owner to rename it, change the
+    // rewards title or kick members. Only admins choose the owner.
+    function ownerOnlyChangesAllowed() {
+      return !changes().hasAny(['owner', 'createdBy'])
+        && (ownsRoleData(resource.data)
+            || (!changes().hasAny(['name', 'rewardsTitle'])
+                && resource.data.get('members', []).toSet()
+                     .difference(request.resource.data.get('members', []).toSet()).size() == 0));
     }
 
     // Only people already in the role can be made its instructors
@@ -81,7 +105,8 @@ service cloud.firestore {
 
     match /roles/{roleId} {
       allow read: if signedIn();
-      allow update: if runsRole(roleId) && instructorRemovalsAllowed() && instructorAdditionsAreMembers();
+      allow update: if runsRole(roleId) && instructorRemovalsAllowed() && instructorAdditionsAreMembers()
+        && ownerOnlyChangesAllowed();
       // Anyone can ask to join (or withdraw), leave a role, or join the global role
       allow update: if signedIn()
         && changes().hasOnly(['members', 'pendingRequests'])
@@ -123,21 +148,28 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.assignedTo == me();
     }
 
-    // Saved Data (role resets). Resets run when an admin approves them.
+    // Saved Data (role resets). The role's owner resets it; admins can too.
     match /leaderboardSnapshots/{snapId} {
       allow read: if signedIn();
+      allow create: if ownsRole(request.resource.data.roleId);
     }
 
-    // Requests for an admin: Instructor access, a new role, a role reset
+    // Requests. Admins approve Instructor access and new roles. Changes to a role
+    // (reset, rename, editing a member's stats, kicking, the rewards title) go to
+    // the role's owner, or to admins when it has none.
     match /requests/{requestId} {
       allow read: if signedIn() && (resource.data.uid == me() || isInstructor());
       allow create: if signedIn()
         && request.resource.data.uid == me()
         && (request.resource.data.type == 'instructor'
             || (request.resource.data.type == 'createRole' && isInstructor())
-            || (request.resource.data.type == 'resetRole' && runsRole(request.resource.data.roleId)));
-      // Withdrawing your own request; approving and declining is admin-only (above)
+            || (request.resource.data.type in ['resetRole', 'renameRole', 'editStats', 'kickMember', 'rewardsTitle']
+                && runsRole(request.resource.data.roleId)));
+      // Withdrawing your own request
       allow delete: if signedIn() && resource.data.uid == me();
+      // The role's owner approves or declines: records the decision, then removes it
+      allow update: if ownsRole(resource.data.get('roleId', '')) && changes().hasOnly(['status']);
+      allow delete: if ownsRole(resource.data.get('roleId', ''));
     }
 
     match /bugs/{bugId} {

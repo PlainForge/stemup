@@ -16,7 +16,7 @@ import '../widgets/buttons.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/page_scaffold.dart';
-import 'role_admin.dart' show EditMemberCard;
+import 'role_admin.dart' show EditMemberCard, PendingNotice;
 
 /// /roles/:id/members/:uid and /admin/roles/:id/members/:uid
 class RoleMemberScreen extends StatefulWidget {
@@ -37,9 +37,13 @@ class _RoleMemberScreenState extends State<RoleMemberScreen> {
   Set<String> _pendingIds = const {};
   bool _busy = false;
 
+  /// Changes about this member the signed-in instructor has asked the owner for.
+  List<StemRequest> _myRequests = const [];
+
   @override
   void initState() {
     super.initState();
+    final me = context.read<AppState>().user?.uid;
     _subs
       ..add(
         Db.userRoleTasksStream(widget.roleId, widget.uid).listen((t) {
@@ -49,6 +53,11 @@ class _RoleMemberScreenState extends State<RoleMemberScreen> {
       ..add(
         Db.roleSubmittedStream(widget.roleId).listen((s) {
           if (mounted) setState(() => _pendingIds = {for (final x in s.where((x) => x.assignedTo == widget.uid && !x.complete)) x.id});
+        }, onError: (_) {}),
+      )
+      ..add(
+        Db.roleRequestsStream(widget.roleId).listen((r) {
+          if (mounted) setState(() => _myRequests = r.where((x) => x.uid == me && x.targetUid == widget.uid).toList());
         }, onError: (_) {}),
       );
   }
@@ -64,6 +73,30 @@ class _RoleMemberScreenState extends State<RoleMemberScreen> {
   String get _backPath => GoRouterState.of(context).uri.path.split('/members/').first;
 
   Future<void> _kick(Role role, UserData m) async {
+    final app = context.read<AppState>();
+    // Instructors who don't own the role ask the owner (or an admin, when it has none)
+    if (!app.canChangeRole(role)) {
+      final ok = await confirmDialog(
+        context,
+        title: 'Request Kick',
+        message: "Ask ${_waitingOn(role)} to remove ${m.name} from ${role.name}? Their tasks in this role are deleted if it's approved.",
+        confirmLabel: 'Send Request',
+        destructive: true,
+      );
+      if (!ok || !mounted) return;
+      setState(() => _busy = true);
+      try {
+        await Db.requestRoleChange(RequestType.kickMember, app.user!.uid, app.userData?.name ?? '', role, {
+          'targetUid': m.uid,
+          'targetName': m.name,
+        });
+      } catch (_) {
+        if (mounted) showToast(context, "Couldn't send the request. Please try again.", error: true);
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
     final ok = await confirmDialog(
       context,
       title: 'Kick Member',
@@ -126,7 +159,7 @@ class _RoleMemberScreenState extends State<RoleMemberScreen> {
             backPath: back,
             children: [
               _header(context, app, role, member, level),
-              if (!staff) _statsCard(context, role, member, inRole),
+              if (!staff) _statsCard(context, app, role, member, inRole),
               if (!staff) _tasksCard(context, tasks),
               if (staff)
                 AppCard(
@@ -246,45 +279,70 @@ class _RoleMemberScreenState extends State<RoleMemberScreen> {
     );
   }
 
-  Widget _statsCard(BuildContext context, Role role, UserData m, UserData inRole) => AppCard(
-    shadow: false,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionLabel('In ${role.name}'),
-        Row(
-          children: [
-            _statBox(context, 'Points', inRole.points, FontAwesomeIcons.trophy.data, const Color(0xFFD97706)),
-            const SizedBox(width: 12),
-            _statBox(context, 'Tasks', inRole.taskCompleted, FontAwesomeIcons.circleCheck.data, Palette.green600),
+  /// Who approves this role's change requests.
+  String _waitingOn(Role role) => role.owner.isEmpty ? 'an admin' : "the role's owner";
+
+  Widget _statsCard(BuildContext context, AppState app, Role role, UserData m, UserData inRole) {
+    final canChange = app.canChangeRole(role);
+    final pendingEdit = _myRequests.where((r) => r.type == RequestType.editStats).firstOrNull;
+    final pendingKick = _myRequests.where((r) => r.type == RequestType.kickMember).firstOrNull;
+    return AppCard(
+      shadow: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionLabel('In ${role.name}'),
+          Row(
+            children: [
+              _statBox(context, 'Points', inRole.points, FontAwesomeIcons.trophy.data, const Color(0xFFD97706)),
+              const SizedBox(width: 12),
+              _statBox(context, 'Tasks', inRole.taskCompleted, FontAwesomeIcons.circleCheck.data, Palette.green600),
+            ],
+          ),
+          // Requests already sent to the owner about this member
+          for (final r in [?pendingEdit, ?pendingKick]) ...[
+            const SizedBox(height: 12),
+            PendingNotice(
+              r.type == RequestType.editStats
+                  ? 'You asked to set their stats to ${r.points} pts and ${r.taskCompleted} tasks. Waiting for ${_waitingOn(role)}.'
+                  : 'You asked to kick them. Waiting for ${_waitingOn(role)}.',
+              actionLabel: 'Withdraw',
+              onAction: () => Db.deleteRequest(r.id),
+            ),
           ],
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            AppButton(
-              label: 'Edit Stats',
-              style: AppButtonStyle.blue,
-              size: AppButtonSize.sm,
-              onPressed: () => showModalCard<void>(
-                context,
-                builder: (_) => EditMemberCard(member: inRole, roleId: role.id),
+          if (!canChange) ...[
+            const SizedBox(height: 12),
+            Muted("Changes to their stats and kicking them need ${_waitingOn(role)}'s approval.", size: 12, color: Palette.gray400),
+          ],
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              AppButton(
+                label: canChange ? 'Edit Stats' : 'Request Stat Change',
+                style: AppButtonStyle.blue,
+                size: AppButtonSize.sm,
+                onPressed: pendingEdit != null
+                    ? null
+                    : () => showModalCard<void>(
+                        context,
+                        builder: (_) => EditMemberCard(member: inRole, role: role),
+                      ),
               ),
-            ),
-            AppButton(
-              label: 'Kick from Role',
-              style: AppButtonStyle.red,
-              size: AppButtonSize.sm,
-              loading: _busy,
-              onPressed: () => _kick(role, m),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
+              AppButton(
+                label: canChange ? 'Kick from Role' : 'Request Kick',
+                style: AppButtonStyle.red,
+                size: AppButtonSize.sm,
+                loading: _busy,
+                onPressed: pendingKick != null ? null : () => _kick(role, m),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _tasksCard(BuildContext context, List<Task> tasks) => AppCard(
     shadow: false,

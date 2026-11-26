@@ -188,6 +188,10 @@ class Role {
   /// members too, but leaderboards leave them out, like admins.
   final List<String> instructors;
   final String createdBy;
+
+  /// The instructor who owns this role, set by admins (null when the field is
+  /// missing, so older roles fall back to [createdBy]; '' means none). Use [owner].
+  final String? ownerField;
   final String purpose;
 
   /// Heading on the Rewards tab; the current month when empty.
@@ -201,6 +205,7 @@ class Role {
     this.showInGlobalLeaderboard = false,
     this.instructors = const [],
     this.createdBy = '',
+    this.ownerField,
     this.purpose = '',
     this.rewardsTitle = '',
   });
@@ -215,12 +220,20 @@ class Role {
       showInGlobalLeaderboard: m['showInGlobalLeaderboard'] == true,
       instructors: _strList(m['instructors']),
       createdBy: _str(m['createdBy']),
+      ownerField: m['owner'] is String ? m['owner'] as String : null,
       purpose: _str(m['purpose']),
       rewardsTitle: _str(m['rewardsTitle']).trim(),
     );
   }
 
   bool get isGlobal => name.contains('global');
+
+  /// The role's owner: its other instructors ask them before bigger changes.
+  /// '' when it has none (or the owner no longer runs the role).
+  String get owner {
+    final o = ownerField ?? createdBy;
+    return o.isNotEmpty && instructors.contains(o) ? o : '';
+  }
 }
 
 enum TaskStatus { inProgress, almostDone }
@@ -485,9 +498,28 @@ class Bug {
   }
 }
 
-enum RequestType { instructor, createRole, resetRole }
+enum RequestType { instructor, createRole, resetRole, renameRole, editStats, kickMember, rewardsTitle }
 
-/// Something an admin has to approve, from the `requests` collection.
+extension RequestTypeInfo on RequestType {
+  /// The value stored in Firestore.
+  String get key => name;
+
+  /// Changes a role's instructors ask its owner for (or admins, when it has none).
+  bool get isRoleChange => this != RequestType.instructor && this != RequestType.createRole;
+
+  String get label => switch (this) {
+    RequestType.instructor => 'Instructor access',
+    RequestType.createRole => 'New role',
+    RequestType.resetRole => 'Role reset',
+    RequestType.renameRole => 'Rename role',
+    RequestType.editStats => 'Edit member stats',
+    RequestType.kickMember => 'Kick member',
+    RequestType.rewardsTitle => 'Rewards title',
+  };
+}
+
+/// Something to approve, from the `requests` collection: by an admin, or by a
+/// role's owner for changes to that role.
 class StemRequest {
   final String id;
   final RequestType? type;
@@ -502,9 +534,19 @@ class StemRequest {
   final String roleName;
   final String purpose;
 
-  /// resetRole: which role, and the name to save its data under.
+  /// Role changes: which role. resetRole: the name to save its data under.
   final String roleId;
   final String saveName;
+
+  /// renameRole: the new name. rewardsTitle: the new title ('' goes back to the current month).
+  final String newName;
+  final String title;
+
+  /// editStats and kickMember: the member it's about. editStats: their new stats in the role.
+  final String targetUid;
+  final String targetName;
+  final int points;
+  final int taskCompleted;
 
   const StemRequest({
     required this.id,
@@ -517,18 +559,38 @@ class StemRequest {
     this.purpose = '',
     this.roleId = '',
     this.saveName = '',
+    this.newName = '',
+    this.title = '',
+    this.targetUid = '',
+    this.targetName = '',
+    this.points = 0,
+    this.taskCompleted = 0,
   });
+
+  /// What a role change asks for, e.g. `rename Robotics to "Drones"` (kept in
+  /// sync with roleChangeAction in src/lib/roleService.ts).
+  String get roleChangeAction {
+    final role = roleName.isEmpty ? 'this role' : roleName;
+    final who = targetName.isEmpty ? 'a member' : targetName;
+    return switch (type) {
+      RequestType.resetRole => 'reset $role, saving its data as "$saveName"',
+      RequestType.renameRole => 'rename $role to "$newName"',
+      RequestType.editStats => "set $who's stats to $points pts and $taskCompleted tasks",
+      RequestType.kickMember => 'remove $who from $role',
+      RequestType.rewardsTitle => title.isEmpty ? 'set the rewards title back to the current month' : 'change the rewards title to "$title"',
+      _ => 'make a change',
+    };
+  }
+
+  /// The request in a sentence, from the approver's side or the sender's ([mine]).
+  String describe({bool mine = false}) =>
+      mine ? 'You asked to $roleChangeAction' : '${userName.isEmpty ? 'An instructor' : userName} wants to $roleChangeAction';
 
   factory StemRequest.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final m = doc.data() ?? {};
     return StemRequest(
       id: doc.id,
-      type: switch (m['type']) {
-        'instructor' => RequestType.instructor,
-        'createRole' => RequestType.createRole,
-        'resetRole' => RequestType.resetRole,
-        _ => null,
-      },
+      type: RequestType.values.where((t) => t.key == m['type']).firstOrNull,
       uid: _str(m['uid']),
       userName: _str(m['userName']),
       createdAt: _date(m['createdAt']),
@@ -537,6 +599,12 @@ class StemRequest {
       purpose: _str(m['purpose']),
       roleId: _str(m['roleId']),
       saveName: _str(m['saveName']),
+      newName: _str(m['newName']),
+      title: _str(m['title']),
+      targetUid: _str(m['targetUid']),
+      targetName: _str(m['targetName']),
+      points: _int(m['points']),
+      taskCompleted: _int(m['taskCompleted']),
     );
   }
 }

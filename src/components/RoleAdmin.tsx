@@ -1,6 +1,6 @@
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, onSnapshot, query, Timestamp, updateDoc, where } from "firebase/firestore";
 import { alertDialog, confirmDialog, promptDialog } from "../lib/confirm";
-import { roleService, isRoleStaff } from "../lib/roleService";
+import { roleService, isRoleStaff, canChangeRole, roleOwner, describeRoleChange, isRoleChange } from "../lib/roleService";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { motion } from "motion/react";
@@ -72,7 +72,9 @@ interface prop {
 export default function RoleAdminPage({ role, membersWithData, requested } : prop) {
     const context = useContext(MainContext);
     const navigate = useNavigate();
-    const [pendingReset, setPendingReset] = useState<StemRequest | null>(null);
+    // Changes this role's instructors have asked its owner for (a reset, a rename, ...)
+    const [roleRequests, setRoleRequests] = useState<StemRequest[]>([]);
+    const [busyRequest, setBusyRequest] = useState<string | null>(null);
     const [instructorProfiles, setInstructorProfiles] = useState<{ uid: string; name: string; photoURL: string }[]>([]);
     const [addInstructorUid, setAddInstructorUid] = useState("");
     const [rewardsTitle, setRewardsTitle] = useState(role.rewardsTitle ?? "");
@@ -126,13 +128,14 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         return () => unsub();
     }, [role.id]);
 
-    // A reset this role is waiting on an admin to approve
+    // Changes waiting on the role's owner (or an admin) to approve
     useEffect(() => {
         const q = query(collection(db, "requests"), where("roleId", "==", role.id));
         return onSnapshot(q, (snap) => {
-            const reset = snap.docs.map(d => ({ id: d.id, ...d.data() } as StemRequest)).find(r => r.type === "resetRole");
-            setPendingReset(reset ?? null);
-        }, (err) => console.error("Error loading reset requests:", err));
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as StemRequest)).filter(r => isRoleChange(r.type));
+            list.sort((a, b) => (a.createdAt?.toMillis() ?? 0) - (b.createdAt?.toMillis() ?? 0));
+            setRoleRequests(list);
+        }, (err) => console.error("Error loading role requests:", err));
     }, [role.id]);
 
     // Names and photos for the people who can run this role, and for every instructor that could be added
@@ -153,6 +156,17 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     }, [instructorsKey]);
 
     useEffect(() => setRewardsTitle(role.rewardsTitle ?? ""), [role.rewardsTitle]);
+
+    const me = context?.user ?? null;
+    const myName = context?.userData?.name ?? "";
+    const isAdmin = !!me && (context?.admins ?? []).includes(me.uid);
+    // Admins and the role's owner change things directly; other instructors send a request
+    const canChange = canChangeRole(role, me?.uid, context?.admins ?? []);
+    const ownerUid = roleOwner(role);
+    const ownerName = instructorProfiles.find(p => p.uid === ownerUid)?.name;
+    // Who approves the other instructors' requests: the owner, or admins when there's none
+    const approverName = ownerUid ? (ownerName ? `${ownerName} (the role's owner)` : "The role's owner") : "An admin";
+    const waitingOn = ownerUid ? (ownerName ?? "the role's owner") : "an admin";
 
     // Get Users that requested
     useEffect(() => {
@@ -246,13 +260,17 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         const formData = new FormData(e.currentTarget)
         const newName = formData.get("newName") as string;
 
-        if (newName.length < 1) return;
+        const form = e.currentTarget;
+        if (newName.trim().length < 1) return;
         try {
-            await updateDoc(doc(db, "roles", role.id), {
-                name: newName
-            })
-            setPhrase("Role name updated successfully");
-            e.currentTarget.reset();
+            if (canChange) {
+                await roleService.renameRole(role.id, newName);
+                setPhrase("Role name updated successfully");
+            } else {
+                await roleService.requestRoleChange("renameRole", me!.uid, myName, role, { newName: newName.trim() });
+                setPhrase(`Rename requested. ${approverName} will review it.`);
+            }
+            form.reset();
         } catch (err) {
             console.log(err);
         }
@@ -399,18 +417,16 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         });
     };
 
-    const isAdmin = !!context?.user && (context.admins ?? []).includes(context.user.uid);
-
-    // Admins reset straight away; instructors send the reset to an admin to approve
+    // Admins and the role's owner make changes straight away; its other instructors ask the owner
     const resetRole = async () => {
         const saveName = await promptDialog(
-            isAdmin
+            canChange
                 ? "Every member's points and tasks completed in this role are saved under this name on the Saved Data tab, then cleared along with all tasks and prizes."
-                : "Name this save. An admin will review the reset; once approved, every member's points and tasks completed are saved under this name on the Saved Data tab, then cleared along with all tasks and prizes.",
+                : `Name this save. ${approverName} will review the reset; once approved, every member's points and tasks completed are saved under this name on the Saved Data tab, then cleared along with all tasks and prizes.`,
             {
-                title: isAdmin ? "Reset Role" : "Request Reset",
-                confirmLabel: isAdmin ? "Reset" : "Send Request",
-                danger: isAdmin,
+                title: canChange ? "Reset Role" : "Request Reset",
+                confirmLabel: canChange ? "Reset" : "Send Request",
+                danger: canChange,
                 input: { placeholder: `e.g. ${new Date().toLocaleString("en-US", { month: "long", year: "numeric" })}` },
             }
         );
@@ -420,12 +436,12 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
             return;
         }
         try {
-            if (isAdmin) {
+            if (canChange) {
                 await roleService.resetRole(role.id, saveName.trim());
                 setPhrase2("Role reset. Its data is on the Saved Data tab.");
             } else {
-                await roleService.requestRoleReset(context!.user!.uid, context!.userData?.name ?? "", role, saveName);
-                setPhrase2("Reset requested. An admin will review it.");
+                await roleService.requestRoleReset(me!.uid, myName, role, saveName);
+                setPhrase2(`Reset requested. ${approverName} will review it.`);
             }
         } catch (err) {
             console.error("Error resetting role:", err);
@@ -433,9 +449,40 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         }
     };
 
-    const cancelResetRequest = async () => {
-        if (!pendingReset) return;
-        await roleService.deleteRequest(pendingReset.id);
+    const withdrawRequest = async (req: StemRequest) => {
+        await roleService.deleteRequest(req.id);
+    };
+
+    const approveRoleRequest = async (req: StemRequest) => {
+        if (req.type === "resetRole" || req.type === "kickMember") {
+            const ok = await confirmDialog(
+                req.type === "resetRole"
+                    ? `Reset ${role.name}? Its leaderboard is saved as "${req.saveName}", then all tasks, prizes and members' points in it are cleared.`
+                    : `Remove ${req.targetName ?? "this member"} from ${role.name}? Their tasks in this role are deleted.`,
+                { title: req.type === "resetRole" ? "Approve Reset" : "Approve Kick", confirmLabel: req.type === "resetRole" ? "Reset" : "Kick", danger: true }
+            );
+            if (!ok) return;
+        }
+        setBusyRequest(req.id);
+        try {
+            await roleService.approveRequest(req);
+        } catch (err) {
+            console.error("Error approving request:", err);
+            await alertDialog("Couldn't approve the request. Please try again.", "Something went wrong");
+        } finally {
+            setBusyRequest(null);
+        }
+    };
+
+    const declineRoleRequest = async (req: StemRequest) => {
+        setBusyRequest(req.id);
+        try {
+            await roleService.declineRequest(req.id);
+        } catch (err) {
+            console.error("Error declining request:", err);
+        } finally {
+            setBusyRequest(null);
+        }
     };
 
     const deleteRole = async () => {
@@ -453,8 +500,14 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const saveRewardsTitle = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         try {
-            await roleService.setRewardsTitle(role.id, rewardsTitle);
-            setPhrase5(rewardsTitle.trim() ? "Title updated" : "Title reset to the current month");
+            if (canChange) {
+                await roleService.setRewardsTitle(role.id, rewardsTitle);
+                setPhrase5(rewardsTitle.trim() ? "Title updated" : "Title reset to the current month");
+            } else {
+                await roleService.requestRoleChange("rewardsTitle", me!.uid, myName, role, { title: rewardsTitle.trim() });
+                setPhrase5(`Title change requested. ${approverName} will review it.`);
+                setRewardsTitle(role.rewardsTitle ?? "");
+            }
         } catch (err) {
             console.error(err);
         }
@@ -512,8 +565,32 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
             { title: "Remove Instructor?", confirmLabel: "Remove", danger: true }
         );
         if (!ok) return;
-        await roleService.removeRoleInstructor(role.id, uid);
+        await roleService.removeRoleInstructor(role, uid);
     };
+
+    // Admins choose which of the role's instructors owns it
+    const makeOwner = async (uid: string, name: string) => {
+        const ok = await confirmDialog(
+            `${name} will own ${role.name}. The role's other instructors will need ${name}'s approval to rename or reset it, edit members' stats, kick members or change the rewards title.`,
+            { title: "Make Owner?", confirmLabel: "Make Owner" }
+        );
+        if (!ok) return;
+        await roleService.setRoleOwner(role.id, uid);
+    };
+
+    const clearOwner = async () => {
+        const ok = await confirmDialog(
+            `${role.name} will have no owner, so its instructors' change requests will come to admins instead.`,
+            { title: "Remove Owner?", confirmLabel: "Remove Owner", danger: true }
+        );
+        if (!ok) return;
+        await roleService.setRoleOwner(role.id, "");
+    };
+
+    // Requests the signed-in person can approve, and the ones they sent and can withdraw
+    const toReview = canChange ? roleRequests.filter(r => r.uid !== user.uid) : [];
+    const mine = roleRequests.filter(r => r.uid === user.uid);
+    const pendingReset = mine.find(r => r.type === "resetRole") ?? (canChange ? null : roleRequests.find(r => r.type === "resetRole")) ?? null;
 
     const toggleGlobalLeaderboard = async () => {
         await updateDoc(doc(db, "roles", role.id), { showInGlobalLeaderboard: !showInGlobal });
@@ -596,7 +673,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     };
 
     const adminTabs = [
-        { key: "requests", label: "Requests", badge: requested.length },
+        { key: "requests", label: "Requests", badge: requested.length + toReview.length },
         { key: "creation", label: "Assign Task", badge: 0 },
         { key: "tasks", label: "Tasks", badge: allSubmitted.filter(t => !t.complete).length },
         { key: "members", label: "Members", badge: 0 },
@@ -633,8 +710,48 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
             {/* Requests */}
             {page.match("requests") && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
+                    {/* Changes the role's other instructors asked for, for the owner (or an admin) to approve */}
+                    {(toReview.length > 0 || mine.length > 0) && (
+                        <div className="flex flex-col gap-3">
+                            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Instructor requests</h2>
+                            {[...toReview, ...mine].map(req => {
+                                const isMine = req.uid === user.uid;
+                                return (
+                                    <motion.div
+                                        key={req.id}
+                                        className="flex flex-col gap-3 bg-white border border-gray-100 rounded-2xl px-4 py-3"
+                                        initial={{ x: -10, opacity: 0 }}
+                                        animate={{ x: 0, opacity: 1 }}
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <p className="text-sm font-medium">{describeRoleChange(req, isMine)}</p>
+                                            <span className="text-xs text-gray-400 shrink-0">
+                                                {req.createdAt?.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {isMine ? (
+                                                <>
+                                                    <span className="text-xs text-amber-600 self-center flex-1">Waiting for {waitingOn}</span>
+                                                    <Button onClick={() => withdrawRequest(req)} size="xsm" color="cancel">Withdraw</Button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Button onClick={() => approveRoleRequest(req)} size="xsm" color="green" disabled={busyRequest === req.id}>
+                                                        {busyRequest === req.id ? "Working..." : "Approve"}
+                                                    </Button>
+                                                    <Button onClick={() => declineRoleRequest(req)} size="xsm" color="red" disabled={busyRequest === req.id}>Decline</Button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+                            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mt-2">Join requests</h2>
+                        </div>
+                    )}
                     {userRequested.length === 0 ? (
-                        <p className="text-gray-400 text-sm text-center py-8">No pending requests.</p>
+                        <p className="text-gray-400 text-sm text-center py-8">No pending join requests.</p>
                     ) : userRequested.map((u) => (
                         <motion.div
                             key={u.uid}
@@ -1036,9 +1153,11 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
                         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Running this role</h2>
-                        <p className="text-sm text-gray-500">Instructors here can give and review tasks, edit points, accept members and request resets. Admins can always run every role.</p>
-                        {!isAdmin && (
-                            <p className="text-xs text-gray-400">Only the instructor who created this role, or an admin, can remove other instructors. To step down yourself, ask an admin.</p>
+                        <p className="text-sm text-gray-500">Instructors here can give, edit and review tasks, accept members and set prizes. The role's owner can also rename or reset it, edit members' stats, kick members and change the rewards title; other instructors send the owner a request for those. Admins can always run every role.</p>
+                        {isAdmin ? (
+                            <p className="text-xs text-gray-400">{ownerUid ? "Only the owner, or an admin, can remove other instructors." : "This role has no owner, so its instructors' change requests come to admins. Make one of them the owner below."}</p>
+                        ) : (
+                            <p className="text-xs text-gray-400">Only the role's owner, or an admin, can remove other instructors. To step down yourself, ask an admin.</p>
                         )}
                         {roleInstructors.length === 0 ? (
                             <p className="text-sm text-gray-400">No instructors yet.</p>
@@ -1052,14 +1171,22 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                         <div className="min-w-0">
                                             <p className="text-sm font-medium truncate">{person?.name ?? "Loading..."}{uid === user.uid ? " (you)" : ""}</p>
                                             <p className="text-xs text-gray-400">
-                                                {role.createdBy === uid ? "Created this role" : "Instructor"}
+                                                {ownerUid === uid ? <span className="font-semibold text-purple-600">Owner</span> : "Instructor"}
                                                 {lostAccess ? " · No longer an Instructor" : ""}
                                             </p>
                                         </div>
                                     </div>
-                                    {(isAdmin || (uid !== user.uid && !!role.createdBy && role.createdBy === user.uid)) && (
-                                        <Button onClick={() => removeInstructor(uid, person?.name ?? "This instructor")} size="xsm" color="red" extraClasses="shrink-0">Remove</Button>
-                                    )}
+                                    <div className="flex gap-2 shrink-0">
+                                        {isAdmin && ownerUid !== uid && !lostAccess && (
+                                            <Button onClick={() => makeOwner(uid, person?.name ?? "This instructor")} size="xsm" color="blue">Make Owner</Button>
+                                        )}
+                                        {isAdmin && ownerUid === uid && (
+                                            <Button onClick={clearOwner} size="xsm" color="gray">Remove Owner</Button>
+                                        )}
+                                        {(isAdmin || (uid !== user.uid && ownerUid === user.uid)) && (
+                                            <Button onClick={() => removeInstructor(uid, person?.name ?? "This instructor")} size="xsm" color="red">Remove</Button>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}
@@ -1093,7 +1220,10 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
                     <form onSubmit={saveRewardsTitle} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
                         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Rewards title</h2>
-                        <p className="text-sm text-gray-500">The heading on the Rewards tab. Leave it empty to show the current month.</p>
+                        <p className="text-sm text-gray-500">
+                            The heading on the Rewards tab. Leave it empty to show the current month.
+                            {!canChange && ` ${approverName} has to approve a new title.`}
+                        </p>
                         <input
                             value={rewardsTitle}
                             onChange={e => setRewardsTitle(e.target.value)}
@@ -1101,7 +1231,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                             placeholder={`${new Date().toLocaleString("en-US", { month: "long" })} Rewards`}
                             className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
                         />
-                        <Button type="submit" size="sm">Save Title</Button>
+                        <Button type="submit" size="sm">{canChange ? "Save Title" : "Request Title Change"}</Button>
                         <Alert value={phrase5} setValue={setPhrase5} />
                     </form>
                     <form onSubmit={setReward} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
@@ -1130,9 +1260,10 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
                         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Rename role</h2>
+                        {!canChange && <p className="text-sm text-gray-500 -mt-2">{approverName} has to approve a new name.</p>}
                         <form id="rolename" onSubmit={changeRoleName} className="flex flex-col gap-3">
                             <Input type="text" name="newName" placeholder="New role name" required={true} autocomplete="false" size="full" />
-                            <Button type="submit" size="sm">Save Name</Button>
+                            <Button type="submit" size="sm">{canChange ? "Save Name" : "Request Rename"}</Button>
                             <Alert value={phrase} setValue={setPhrase} />
                         </form>
                     </div>
@@ -1154,15 +1285,17 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Reset role</h2>
                         <p className="text-sm text-gray-500">
                             Saves every member's points and tasks completed under a name you choose (shown with the date on the Saved Data tab), then clears this role's tasks, submissions and prizes and sets everyone back to 0.
-                            {!isAdmin && " An admin has to approve it first."}
+                            {!canChange && ` ${approverName} has to approve it first.`}
                         </p>
                         {pendingReset ? (
                             <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                                <p className="text-sm text-amber-700">Reset requested as "{pendingReset.saveName}". Waiting for an admin.</p>
-                                {!isAdmin && <Button onClick={cancelResetRequest} size="xsm" color="cancel" extraClasses="shrink-0">Cancel</Button>}
+                                <p className="text-sm text-amber-700">
+                                    {pendingReset.uid === user.uid ? "Reset requested" : `${pendingReset.userName || "An instructor"} requested a reset`} as "{pendingReset.saveName}". Waiting for {waitingOn}.
+                                </p>
+                                {pendingReset.uid === user.uid && <Button onClick={() => withdrawRequest(pendingReset)} size="xsm" color="cancel" extraClasses="shrink-0">Cancel</Button>}
                             </div>
                         ) : (
-                            <Button onClick={resetRole} size="sm">{isAdmin ? "Reset Role" : "Request Reset"}</Button>
+                            <Button onClick={resetRole} size="sm">{canChange ? "Reset Role" : "Request Reset"}</Button>
                         )}
                         <Alert value={phrase2} setValue={setPhrase2} />
                     </div>

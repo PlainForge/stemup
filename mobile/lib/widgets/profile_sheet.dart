@@ -2,6 +2,7 @@
 // their stats, kick them from the current role, or remove them from global.
 import 'package:flutter/cupertino.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../models/models.dart';
@@ -216,7 +217,9 @@ class _ProfileCardState extends State<_ProfileCard> {
   }
 
   Widget _infoView(BuildContext context, bool isAdmin, bool targetIsAdmin, bool canRemoveFromGlobal) {
-    final roleNames = _user.roles.where((r) => r.id != globalRoleId).map((r) => r.name).toList();
+    final theirRoles = _user.roles.where((r) => r.id != globalRoleId).toList();
+    // The roles the viewer is in, whose chips on this card open the role
+    final myRoleIds = {for (final r in context.read<AppState>().userData?.roles ?? const <UserRoleData>[]) r.id};
     return Column(
       children: [
         Row(
@@ -228,7 +231,7 @@ class _ProfileCardState extends State<_ProfileCard> {
         ),
         const SizedBox(height: 6),
         Muted(widget.roleId != null ? 'In this role' : 'Across all roles', size: 12, color: Palette.gray400),
-        if (roleNames.isNotEmpty) ...[
+        if (theirRoles.isNotEmpty) ...[
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
@@ -240,19 +243,8 @@ class _ProfileCardState extends State<_ProfileCard> {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    for (final n in roleNames)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Palette.resolve(context, Palette.blue50),
-                          borderRadius: BorderRadius.circular(99),
-                          border: Border.all(color: Palette.blue500.withValues(alpha: .25)),
-                        ),
-                        child: Text(
-                          n,
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Palette.resolve(context, Palette.navActive)),
-                        ),
-                      ),
+                    for (final r in theirRoles)
+                      _roleChip(context, r.name, onPressed: myRoleIds.contains(r.id) ? () => _openRole(r.id) : null),
                   ],
                 ),
               ],
@@ -299,6 +291,39 @@ class _ProfileCardState extends State<_ProfileCard> {
         ],
       ],
     );
+  }
+
+  /// Closes the card and opens a role the viewer is in.
+  void _openRole(String roleId) {
+    final router = GoRouter.of(context);
+    Navigator.pop(context);
+    router.push('/roles/$roleId');
+  }
+
+  Widget _roleChip(BuildContext context, String name, {VoidCallback? onPressed}) {
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Palette.resolve(context, Palette.blue50),
+        borderRadius: BorderRadius.circular(99),
+        // Roles you can open get a stronger outline and a chevron
+        border: Border.all(color: Palette.blue500.withValues(alpha: onPressed == null ? .25 : .55)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            name,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Palette.resolve(context, Palette.navActive)),
+          ),
+          if (onPressed != null) ...[
+            const SizedBox(width: 4),
+            Icon(FontAwesomeIcons.chevronRight.data, size: 8, color: Palette.resolve(context, Palette.navActive)),
+          ],
+        ],
+      ),
+    );
+    return onPressed == null ? chip : Pressable(onPressed: onPressed, child: chip);
   }
 
   Widget _field(String label, TextEditingController c) => Expanded(

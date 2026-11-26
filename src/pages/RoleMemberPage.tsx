@@ -6,10 +6,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft, faChevronRight, faCircleCheck, faEnvelope, faTrophy } from "@fortawesome/free-solid-svg-icons";
 import { db } from "../lib/firebase";
 import { MainContext } from "../context/MainContext";
-import { canManageRole, isRoleStaff } from "../lib/roleService";
+import { canChangeRole, canManageRole, isRoleStaff, roleOwner, roleService } from "../lib/roleService";
 import { firebaseAuthService } from "../lib/firebaseService";
 import { alertDialog, confirmDialog } from "../lib/confirm";
-import type { AccessLevel, Role, SubmittedTask, Task, UserData, UserRoleData } from "../myDataTypes";
+import type { AccessLevel, Role, StemRequest, SubmittedTask, Task, UserData, UserRoleData } from "../myDataTypes";
 import Loading from "./Loading";
 import Button from "../components/Button";
 import ProfileImg from "../components/ProfileImg";
@@ -39,6 +39,8 @@ export default function RoleMemberPage() {
     const [points, setPoints] = useState(0);
     const [taskCount, setTaskCount] = useState(0);
     const [busy, setBusy] = useState(false);
+    // Change requests about this role (to show the ones already sent about this member)
+    const [pendingRequests, setPendingRequests] = useState<StemRequest[]>([]);
 
     useEffect(() => {
         if (!roleId || !uid || !user) return;
@@ -53,6 +55,9 @@ export default function RoleMemberPage() {
             onSnapshot(query(collection(db, "tasksSubmitted"), where("roleId", "==", roleId), where("assignedTo", "==", uid)),
                 snap => setSubmitted(snap.docs.map(d => ({ ...d.data(), id: d.id } as SubmittedTask))),
                 err => console.error("Error loading submissions:", err)),
+            onSnapshot(query(collection(db, "requests"), where("roleId", "==", roleId)),
+                snap => setPendingRequests(snap.docs.map(d => ({ ...d.data(), id: d.id } as StemRequest))),
+                err => console.error("Error loading requests:", err)),
         ];
         return () => unsubs.forEach(u => u());
     }, [roleId, uid, user]);
@@ -97,6 +102,13 @@ export default function RoleMemberPage() {
     const pendingIds = new Set(submitted.filter(s => !s.complete).map(s => s.id));
     const sortedTasks = [...tasks].sort((a, b) => Number(a.complete) - Number(b.complete) || (b.createdOn?.toMillis() ?? 0) - (a.createdOn?.toMillis() ?? 0));
 
+    // Admins and the role's owner edit stats and kick directly; other instructors ask the owner
+    const canChange = canChangeRole(role, user.uid, admins);
+    const waitingOn = roleOwner(role) ? "the role's owner" : "an admin";
+    const myRequests = pendingRequests.filter(r => r.uid === user.uid && r.targetUid === uid);
+    const pendingEdit = myRequests.find(r => r.type === "editStats");
+    const pendingKick = myRequests.find(r => r.type === "kickMember");
+
     const startEdit = () => {
         setPoints(rolePoints);
         setTaskCount(roleTasks);
@@ -106,6 +118,21 @@ export default function RoleMemberPage() {
     // Saves this role's stats; admins can apply the same change to the global totals
     const save = async (alsoGlobal: boolean) => {
         setBusy(true);
+        if (!canChange) {
+            try {
+                await roleService.requestRoleChange("editStats", user.uid, context?.userData?.name ?? "", role, {
+                    targetUid: uid, targetName: member.name, points, taskCompleted: taskCount,
+                });
+                setEditing(false);
+                await alertDialog(`Sent to ${waitingOn} to approve.`, "Change requested");
+            } catch (err) {
+                console.error(err);
+                await alertDialog("Couldn't send the request. Please try again.", "Not sent");
+            } finally {
+                setBusy(false);
+            }
+            return;
+        }
         try {
             const ref = doc(db, "users", uid);
             const fresh = (await getDoc(ref)).data() ?? {};
@@ -128,6 +155,23 @@ export default function RoleMemberPage() {
     };
 
     const kick = async () => {
+        if (!canChange) {
+            const ok = await confirmDialog(
+                `Ask ${waitingOn} to remove ${member.name} from ${role.name}? Their tasks in this role are deleted if it's approved.`,
+                { title: "Request Kick", confirmLabel: "Send Request", danger: true }
+            );
+            if (!ok) return;
+            setBusy(true);
+            try {
+                await roleService.requestRoleChange("kickMember", user.uid, context?.userData?.name ?? "", role, { targetUid: uid, targetName: member.name });
+            } catch (err) {
+                console.error(err);
+                await alertDialog("Couldn't send the request. Please try again.", "Not sent");
+            } finally {
+                setBusy(false);
+            }
+            return;
+        }
         const ok = await confirmDialog(`Remove ${member.name} from ${role.name}? Their tasks in this role are deleted.`, { title: "Kick Member", confirmLabel: "Kick", danger: true });
         if (!ok) return;
         setBusy(true);
@@ -199,9 +243,19 @@ export default function RoleMemberPage() {
                                 <p className="text-2xl font-bold">{roleTasks}</p>
                             </div>
                         </div>
+                        {/* Requests already sent to the owner about this member */}
+                        {[pendingEdit, pendingKick].filter(r => !!r).map(r => (
+                            <div key={r.id} className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                                <p className="text-sm text-amber-700">
+                                    {r.type === "editStats" ? `You asked to set their stats to ${r.points ?? 0} pts and ${r.taskCompleted ?? 0} tasks.` : "You asked to kick them."} Waiting for {waitingOn}.
+                                </p>
+                                <Button onClick={() => roleService.deleteRequest(r.id)} size="xsm" color="cancel" extraClasses="shrink-0">Withdraw</Button>
+                            </div>
+                        ))}
+                        {!canChange && <p className="text-xs text-gray-400">Changes to their stats and kicking them need {waitingOn}'s approval.</p>}
                         <div className="flex flex-wrap gap-2">
-                            <Button onClick={startEdit} color="blue" size="sm">Edit Stats</Button>
-                            <Button onClick={kick} color="red" size="sm" disabled={busy}>Kick from Role</Button>
+                            <Button onClick={startEdit} color="blue" size="sm" disabled={!!pendingEdit}>{canChange ? "Edit Stats" : "Request Stat Change"}</Button>
+                            <Button onClick={kick} color="red" size="sm" disabled={busy || !!pendingKick}>{canChange ? "Kick from Role" : "Request Kick"}</Button>
                         </div>
                     </div>
                 ) : (
@@ -228,7 +282,7 @@ export default function RoleMemberPage() {
                             </div>
                         )}
                         <div className="flex flex-wrap gap-2">
-                            <Button onClick={() => save(false)} size="sm" disabled={busy}>{isAdmin ? "Save to Role Only" : "Save"}</Button>
+                            <Button onClick={() => save(false)} size="sm" disabled={busy}>{isAdmin ? "Save to Role Only" : canChange ? "Save" : "Send Request"}</Button>
                             {isAdmin && <Button onClick={() => save(true)} color="blue" size="sm" disabled={busy}>Save to Role + Global</Button>}
                             <Button onClick={() => setEditing(false)} color="cancel" size="sm" disabled={busy}>Cancel</Button>
                         </div>

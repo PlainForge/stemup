@@ -198,6 +198,9 @@ class _RoleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMember = role.members.contains(uid);
+    // Admins and the role's instructors are in every member list but don't take part
+    final app = context.watch<AppState>();
+    final memberCount = role.members.where((m) => !app.isStaff(role, m)).length;
     final requested = role.pendingRequests.contains(uid);
     void enter() => context.push('/roles/${role.id}');
 
@@ -267,7 +270,7 @@ class _RoleRow extends StatelessWidget {
                       Text(
                         role.purpose.trim().isNotEmpty
                             ? role.purpose.trim()
-                            : '${role.members.length} member${role.members.length == 1 ? '' : 's'}',
+                            : '$memberCount member${memberCount == 1 ? '' : 's'}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 13, color: Palette.secondary(context)),

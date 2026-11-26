@@ -3,7 +3,7 @@ import { db } from '../lib/firebase';
 import { useContext, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { type Role, type StemRequest } from '../myDataTypes';
-import { canManageRole, roleService } from '../lib/roleService';
+import { canManageRole, isRoleStaff, roleService } from '../lib/roleService';
 import { alertDialog } from '../lib/confirm';
 import JoinButton from '../components/RoleJoinButton';
 import Loading from './Loading';
@@ -167,7 +167,8 @@ export default function RolesSelectorPage() {
                     if (role.name.match("global")) return null;
                     const isActive = userData?.currentRole === role.id;
                     const isMember = (role.members ?? []).includes(user.uid);
-                    const memberCount = (role.members ?? []).length;
+                    // Admins and the role's instructors are in every member list but don't take part
+                    const memberCount = (role.members ?? []).filter(uid => !isRoleStaff(role, uid, admins)).length;
                     return (
                         <motion.div
                             key={role.id}

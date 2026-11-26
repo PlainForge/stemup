@@ -3,7 +3,7 @@ import { confirmDialog, alertDialog } from "../lib/confirm";
 import { MainContext } from "../context/MainContext";
 import Button from "./Button";
 import ProfileImg from "./ProfileImg";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { firebaseAuthService, GLOBAL_ROLE_ID } from "../lib/firebaseService";
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from "firebase/firestore";
 import type { AccessLevel, UserRoleData } from "../myDataTypes";
@@ -51,6 +51,7 @@ export default function ProfilePage() {
     }, [selectedUid, viewerIsAdmin]);
 
     const location = useLocation();
+    const navigate = useNavigate();
     const { id: roleId } = useParams<{ id: string }>();
 
     const swtch = () => {
@@ -62,6 +63,12 @@ export default function ProfilePage() {
     if (!selectedUser || !user) return;
 
     const isAdmin = admins.includes(user.uid);
+    // The roles the viewer is in, whose chips on this card link to the role
+    const viewerRoleIds = new Set((context?.userData?.roles ?? []).map(r => r.id));
+    const openRole = (id: string) => {
+        swtch();
+        navigate(`/roles/${id}`);
+    };
     const targetAccess: AccessLevel = admins.includes(selectedUser.uid) ? "admin" : instructors.includes(selectedUser.uid) ? "instructor" : "user";
 
     // On a role page the card shows that role's stats, so edits target the role
@@ -187,18 +194,25 @@ export default function ProfilePage() {
                             <p className="text-xs text-gray-400 text-center -mt-2">{inRolePage ? "In this role" : "Across all roles"}</p>
 
                             {(() => {
-                                const roleNames = (selectedUser.roles ?? [])
-                                    .filter(r => r.id !== GLOBAL_ROLE_ID)
-                                    .map(r => r.name);
-                                if (roleNames.length === 0) return null;
+                                const theirRoles = (selectedUser.roles ?? []).filter(r => r.id !== GLOBAL_ROLE_ID);
+                                if (theirRoles.length === 0) return null;
+                                const chip = "text-xs font-medium bg-blue-50 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900 px-2.5 py-1 rounded-full";
                                 return (
                                     <div className="w-full">
                                         <p className="text-xs text-gray-400 uppercase tracking-widest mb-2">Roles</p>
                                         <div className="flex flex-wrap gap-1.5">
-                                            {roleNames.map(name => (
-                                                <span key={name} className="text-xs font-medium bg-blue-50 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900 px-2.5 py-1 rounded-full">
-                                                    {name}
-                                                </span>
+                                            {/* Roles you're in too open that role's page */}
+                                            {theirRoles.map(r => viewerRoleIds.has(r.id) ? (
+                                                <button
+                                                    key={r.id}
+                                                    type="button"
+                                                    onClick={() => openRole(r.id)}
+                                                    className={`${chip} transition-colors hover:bg-blue-100 hover:border-blue-300 hover:cursor-pointer`}
+                                                >
+                                                    {r.name}
+                                                </button>
+                                            ) : (
+                                                <span key={r.id} className={chip}>{r.name}</span>
                                             ))}
                                         </div>
                                     </div>
