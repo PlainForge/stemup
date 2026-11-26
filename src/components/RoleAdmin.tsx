@@ -491,7 +491,9 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     }
 
     const roleInstructors = role.instructors ?? [];
-    const addableInstructors = instructorProfiles.filter(p => allInstructors.includes(p.uid) && !roleInstructors.includes(p.uid) && !admins.includes(p.uid));
+    // Only Instructors who are already members of this role can be given access to run it
+    const roleMembers = role.members ?? [];
+    const addableInstructors = instructorProfiles.filter(p => allInstructors.includes(p.uid) && roleMembers.includes(p.uid) && !roleInstructors.includes(p.uid) && !admins.includes(p.uid));
 
     const addInstructor = async () => {
         const person = instructorProfiles.find(p => p.uid === addInstructorUid);
@@ -505,12 +507,9 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     };
 
     const removeInstructor = async (uid: string, name: string) => {
-        const isSelf = uid === user.uid;
         const ok = await confirmDialog(
-            isSelf
-                ? "You'll stay a member of this role but won't be able to run it any more."
-                : `${name} will stay a member of this role but won't be able to run it any more.`,
-            { title: isSelf ? "Leave as Instructor?" : "Remove Instructor?", confirmLabel: "Remove", danger: true }
+            `${name} will stay a member of this role but won't be able to run it any more.`,
+            { title: "Remove Instructor?", confirmLabel: "Remove", danger: true }
         );
         if (!ok) return;
         await roleService.removeRoleInstructor(role.id, uid);
@@ -1038,8 +1037,8 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
                         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Running this role</h2>
                         <p className="text-sm text-gray-500">Instructors here can give and review tasks, edit points, accept members and request resets. Admins can always run every role.</p>
-                        {!isAdmin && role.createdBy !== user.uid && (
-                            <p className="text-xs text-gray-400">Only the instructor who created this role, or an admin, can remove other instructors. You can always step down yourself.</p>
+                        {!isAdmin && (
+                            <p className="text-xs text-gray-400">Only the instructor who created this role, or an admin, can remove other instructors. To step down yourself, ask an admin.</p>
                         )}
                         {roleInstructors.length === 0 ? (
                             <p className="text-sm text-gray-400">No instructors yet.</p>
@@ -1058,7 +1057,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             </p>
                                         </div>
                                     </div>
-                                    {(isAdmin || uid === user.uid || (!!role.createdBy && role.createdBy === user.uid)) && (
+                                    {(isAdmin || (uid !== user.uid && !!role.createdBy && role.createdBy === user.uid)) && (
                                         <Button onClick={() => removeInstructor(uid, person?.name ?? "This instructor")} size="xsm" color="red" extraClasses="shrink-0">Remove</Button>
                                     )}
                                 </div>
@@ -1068,7 +1067,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
                         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Add an instructor</h2>
                         {addableInstructors.length === 0 ? (
-                            <p className="text-sm text-gray-400">Every instructor already has access. Admins can make more people Instructors from the Admin page.</p>
+                            <p className="text-sm text-gray-400">No other Instructors are members of this role. Only Instructors who have joined this role can be given access to run it.</p>
                         ) : (
                             <>
                                 <PersonPicker
@@ -1080,7 +1079,6 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                         uid: p.uid,
                                         name: p.name,
                                         photoURL: p.photoURL,
-                                        hint: (role.members ?? []).includes(p.uid) ? "Already a member" : undefined,
                                     }))}
                                 />
                                 <Button onClick={addInstructor} size="sm" disabled={!addInstructorUid}>Give Access</Button>

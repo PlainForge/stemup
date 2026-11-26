@@ -167,14 +167,10 @@ export const roleService = {
         return ref.id;
     },
 
-    /** Gives another instructor access to run this role (and makes them a member). */
-    async addRoleInstructor(role: { id: string; name: string }, uid: string) {
-        await updateDoc(doc(db, "roles", role.id), {
-            instructors: arrayUnion(uid),
-            members: arrayUnion(uid),
-            pendingRequests: arrayRemove(uid),
-        });
-        await addRoleToUser(uid, role);
+    /** Gives an instructor who is already a member of this role access to run it. */
+    async addRoleInstructor(role: { id: string; members?: string[] }, uid: string) {
+        if (!(role.members ?? []).includes(uid)) throw new Error("Only members of this role can be made its instructors");
+        await updateDoc(doc(db, "roles", role.id), { instructors: arrayUnion(uid) });
     },
 
     /** Stops an instructor running this role; they stay a member. */

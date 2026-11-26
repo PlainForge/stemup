@@ -274,14 +274,12 @@ class Db {
     );
   }
 
-  /// Gives another instructor access to run this role (and makes them a member).
+  /// Gives an instructor who is already a member of this role access to run it.
   static Future<void> addRoleInstructor(Role role, String uid) async {
+    if (!role.members.contains(uid)) throw StateError('Only members of this role can be made its instructors');
     await _role(role.id).update({
       'instructors': FieldValue.arrayUnion([uid]),
-      'members': FieldValue.arrayUnion([uid]),
-      'pendingRequests': FieldValue.arrayRemove([uid]),
     });
-    await _addRoleToUser(uid, role.id, role.name);
   }
 
   /// Stops an instructor running this role; they stay a member.

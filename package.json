@@ -13,7 +13,7 @@
     "ios:open": "npx cap open ios"
   },
   "dependencies": {
-    "@capacitor-firebase/authentication": "^8.5.2",
+    "@capacitor-firebase/authentication": "^5.4.1",
     "@capacitor/core": "^8.5.2",
     "@capacitor/ios": "^8.5.2",
     "@fortawesome/free-brands-svg-icons": "^7.0.0",
@@ -21,7 +21,7 @@
     "@fortawesome/free-solid-svg-icons": "^7.0.0",
     "@fortawesome/react-fontawesome": "^3.0.1",
     "@tailwindcss/vite": "^4.1.17",
-    "firebase": "^12.1.0",
+    "firebase": "^9.14.0",
     "motion": "^12.23.12",
     "nanoid": "^5.1.5",
     "obscenity": "0.4.6",

@@ -1079,13 +1079,10 @@ class _InstructorsTabState extends State<_InstructorsTab> {
   }
 
   Future<void> _remove(AppState app, String uid, String name) async {
-    final self = uid == app.user!.uid;
     final ok = await confirmDialog(
       context,
-      title: self ? 'Leave as Instructor?' : 'Remove Instructor?',
-      message: self
-          ? "You'll stay a member of this role but won't be able to run it any more."
-          : "$name will stay a member of this role but won't be able to run it any more.",
+      title: 'Remove Instructor?',
+      message: "$name will stay a member of this role but won't be able to run it any more.",
       confirmLabel: 'Remove',
       destructive: true,
     );
@@ -1098,7 +1095,7 @@ class _InstructorsTabState extends State<_InstructorsTab> {
       title: 'Give access to',
       people: [
         for (final p in addable)
-          (uid: p.uid, name: p.name, photoURL: p.photoURL, hint: widget.role.members.contains(p.uid) ? 'Already a member' : null),
+          (uid: p.uid, name: p.name, photoURL: p.photoURL, hint: null),
       ],
     );
     if (uid == null) return;
@@ -1113,7 +1110,15 @@ class _InstructorsTabState extends State<_InstructorsTab> {
     final role = widget.role;
     final byId = {for (final p in _people) p.uid: p};
     final addable =
-        _people.where((p) => app.instructors.contains(p.uid) && !role.instructors.contains(p.uid) && !app.admins.contains(p.uid)).toList()
+        _people
+            .where(
+              (p) =>
+                  app.instructors.contains(p.uid) &&
+                  role.members.contains(p.uid) &&
+                  !role.instructors.contains(p.uid) &&
+                  !app.admins.contains(p.uid),
+            )
+            .toList()
           ..sort((a, b) => a.name.compareTo(b.name));
 
     return Column(
@@ -1125,9 +1130,9 @@ class _InstructorsTabState extends State<_InstructorsTab> {
             const Muted(
               'Instructors here can give and review tasks, edit points, accept members and request resets. Admins can always run every role.',
             ),
-            if (!app.isAdmin && role.createdBy != app.user!.uid)
+            if (!app.isAdmin)
               const Muted(
-                'Only the instructor who created this role, or an admin, can remove other instructors. You can always step down yourself.',
+                'Only the instructor who created this role, or an admin, can remove other instructors. To step down yourself, ask an admin.',
                 size: 12,
                 color: Palette.gray400,
               ),
@@ -1163,7 +1168,7 @@ class _InstructorsTabState extends State<_InstructorsTab> {
                         ],
                       ),
                     ),
-                    if (app.isAdmin || uid == app.user!.uid || (role.createdBy.isNotEmpty && role.createdBy == app.user!.uid))
+                    if (app.isAdmin || (uid != app.user!.uid && role.createdBy.isNotEmpty && role.createdBy == app.user!.uid))
                       AppButton(
                         label: 'Remove',
                         size: AppButtonSize.xsm,
@@ -1181,7 +1186,7 @@ class _InstructorsTabState extends State<_InstructorsTab> {
           children: [
             if (addable.isEmpty)
               const Muted(
-                'Every instructor already has access. Admins can make more people Instructors from the Admin page.',
+                'No other Instructors are members of this role. Only Instructors who have joined this role can be given access to run it.',
                 color: Palette.gray400,
               )
             else

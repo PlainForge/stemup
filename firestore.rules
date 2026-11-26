@@ -63,16 +63,25 @@ service cloud.firestore {
       // Only admins (above) write here
     }
 
-    // An instructor may take only themselves off a role's instructors, unless they created the role
+    // Only the instructor who created the role may take other instructors off it,
+    // and no instructor may take themselves off (admins can, via their own rule)
     function instructorRemovalsAllowed() {
       let removed = resource.data.get('instructors', []).toSet()
         .difference(request.resource.data.get('instructors', []).toSet());
-      return removed.hasOnly([me()]) || resource.data.get('createdBy', '') == me();
+      return removed.size() == 0
+        || (!(me() in removed) && resource.data.get('createdBy', '') == me());
+    }
+
+    // Only people already in the role can be made its instructors
+    function instructorAdditionsAreMembers() {
+      let added = request.resource.data.get('instructors', []).toSet()
+        .difference(resource.data.get('instructors', []).toSet());
+      return added.difference(resource.data.get('members', []).toSet()).size() == 0;
     }
 
     match /roles/{roleId} {
       allow read: if signedIn();
-      allow update: if runsRole(roleId) && instructorRemovalsAllowed();
+      allow update: if runsRole(roleId) && instructorRemovalsAllowed() && instructorAdditionsAreMembers();
       // Anyone can ask to join (or withdraw), leave a role, or join the global role
       allow update: if signedIn()
         && changes().hasOnly(['members', 'pendingRequests'])
