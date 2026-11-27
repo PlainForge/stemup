@@ -6,7 +6,7 @@ import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { AnimatePresence, motion } from "motion/react";
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { db } from "../lib/firebase";
-import { type Role, type RoleInvite, type StemRequest, type SubmittedTask, type Task, type UserData, type UserRoleData } from "../myDataTypes";
+import { type MessagingFeature, type Role, type RoleInvite, type StemRequest, type SubmittedTask, type Task, type UserData, type UserRoleData } from "../myDataTypes";
 import { MainContext } from "../context/MainContext";
 import LinkButton from "./LinkButton";
 import Button from "./Button";
@@ -14,7 +14,7 @@ import Input from "./Input";
 import { Alert } from "./PhraseAlert";
 import ProfileImg from "./ProfileImg";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowRightArrowLeft, faArrowUpWideShort, faCalendar, faCalendarDays, faChevronRight, faLock, faPalette, faRotate, faTrash, faCircleCheck, faCircleDot, faClock, faFlagCheckered, faInbox, faMagnifyingGlass, faPen, faPersonRunning, faRotateLeft, faTrashCan, faTriangleExclamation, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowRightArrowLeft, faArrowUpWideShort, faCalendar, faCalendarDays, faChevronRight, faComments, faLock, faPalette, faRotate, faTrash, faCircleCheck, faCircleDot, faClock, faFlagCheckered, faInbox, faMagnifyingGlass, faPen, faPersonRunning, faRotateLeft, faTrashCan, faTriangleExclamation, faXmark } from "@fortawesome/free-solid-svg-icons";
 import PersonPicker from "./PersonPicker";
 import Dropdown from "./Dropdown";
 import DatePicker from "./DatePicker";
@@ -27,6 +27,7 @@ import MedalIcon from "./MedalIcon";
 import ErrorMessage from "./ErrorMessage";
 import InstructorCard from "./InstructorCard";
 import { GLOBAL_ROLE_ID } from "../lib/firebaseService";
+import TaskThreadButton from "./TaskThread";
 
 /** Today as "YYYY-MM-DD" in local time (the earliest due date for a new task) */
 function todayKey(): string {
@@ -92,6 +93,8 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     // Changes this role's instructors have asked its owner for (a reset, a rename, ...)
     const [roleRequests, setRoleRequests] = useState<StemRequest[]>([]);
     const [busyRequest, setBusyRequest] = useState<string | null>(null);
+    // Which messaging switch or request is being saved (Config > Messages)
+    const [messagingBusy, setMessagingBusy] = useState<MessagingFeature | null>(null);
     const [instructorProfiles, setInstructorProfiles] = useState<{ uid: string; name: string; photoURL: string }[]>([]);
     // Open invitations to this role, and everyone who could be invited
     const [invites, setInvites] = useState<RoleInvite[]>([]);
@@ -680,6 +683,22 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
         }
     };
 
+    // Group chat and task questions: the owner and admins switch them; other instructors ask
+    const messaging = { chat: role.chatEnabled === true, taskThreads: role.taskThreadsEnabled === true };
+    const changeMessaging = async (feature: MessagingFeature) => {
+        const enabled = !messaging[feature];
+        setMessagingBusy(feature);
+        try {
+            if (canChange) await roleService.setRoleMessaging(role.id, feature, enabled);
+            else await roleService.requestRoleChange("roleMessaging", me!.uid, myName, role, { feature, enabled });
+        } catch (err) {
+            console.error("Error changing messaging:", err);
+            await alertDialog(canChange ? "Couldn't change that. Please try again." : "Couldn't send the request. Please try again.", "Something went wrong");
+        } finally {
+            setMessagingBusy(null);
+        }
+    };
+
     const assignee = (uid: string, name: string, note?: string) => (
         <div className="flex items-center gap-2 min-w-0">
             <ProfileImg src={membersWithData.find(m => m.uid === uid)?.photoURL} alt={name} size="xxs" />
@@ -1120,6 +1139,11 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                 <Button onClick={() => declineTask(submission)} size="full" color="red">Decline</Button>
                                             </div>
                                         )}
+                                        {role.taskThreadsEnabled && (
+                                            <div className="-mx-2 -mb-2 mt-auto">
+                                                <TaskThreadButton task={task} enabled runsRole />
+                                            </div>
+                                        )}
                                         {editTaskId === task.id ? (
                                             <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
                                                 <input
@@ -1337,6 +1361,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                 const sections = [
                     { key: "general", label: "General", hint: `Name and global leaderboard (${showInGlobal ? "on" : "off"})`, icon: faPen },
                     { key: "icon", label: "Icon", hint: "The icon and color on the Roles page and this role's page", icon: faPalette },
+                    { key: "messages", label: "Messages", hint: `Group chat ${messaging.chat ? "on" : "off"} · Task questions ${messaging.taskThreads ? "on" : "off"}`, icon: faComments },
                     ...(canChange ? [{ key: "privacy", label: "Privacy", hint: inviteOnly ? "Invite only: hidden from the Roles page" : "Public: anyone can find it and ask to join", icon: faLock }] : []),
                     { key: "reset", label: "Reset Role", hint: pendingReset ? `Reset waiting for ${waitingOn}` : "Save the leaderboard and start fresh", icon: faRotate },
                     ...(isAdmin ? [{ key: "delete", label: "Delete Role", hint: "Permanently delete this role and its data", icon: faTrash, danger: true }] : []),
@@ -1442,6 +1467,69 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                         {(role.pendingRequests ?? []).length} join request{(role.pendingRequests ?? []).length === 1 ? " is" : "s are"} still waiting from before. You can still accept or decline {(role.pendingRequests ?? []).length === 1 ? "it" : "them"} in the Members tab.
                                     </p>
                                 )}
+                            </div>
+                        )}
+
+                        {open.key === "messages" && (
+                            <div className="flex flex-col gap-3">
+                                {([
+                                    {
+                                        feature: "chat" as const,
+                                        title: "Group chat",
+                                        text: `A chat with everyone in ${role.name}, on a Chat tab on the role's page. New messages show up as notifications in the iOS app (never by email). Instructors and admins can delete any message.`,
+                                    },
+                                    {
+                                        feature: "taskThreads" as const,
+                                        title: "Task questions",
+                                        text: "A Questions button on each task, where the person doing it and whoever gave it can talk about it. Nobody else can read it. New messages show up as notifications in the iOS app (never by email).",
+                                    },
+                                ]).map(({ feature, title, text }) => {
+                                    const on = messaging[feature];
+                                    const pending = roleRequests.find(r => r.type === "roleMessaging" && r.feature === feature);
+                                    return (
+                                        <div key={feature} className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold flex items-center gap-2">
+                                                        {title}
+                                                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${on
+                                                            ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30"
+                                                            : "bg-gray-50 text-gray-500 border-gray-200"}`}>{on ? "On" : "Off"}</span>
+                                                    </p>
+                                                    <p className="text-sm text-gray-500">{text}</p>
+                                                </div>
+                                                {canChange && (
+                                                    <button
+                                                        type="button"
+                                                        role="switch"
+                                                        aria-checked={on}
+                                                        aria-label={`${title} in ${role.name}`}
+                                                        disabled={messagingBusy === feature}
+                                                        onClick={() => changeMessaging(feature)}
+                                                        className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 hover:cursor-pointer disabled:opacity-60 ${on ? "bg-green-500" : "bg-gray-300"}`}
+                                                    >
+                                                        <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 ${on ? "translate-x-6" : "translate-x-1"}`} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {!canChange && (pending ? (
+                                                <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 dark:bg-amber-500/15 dark:border-amber-500/40">
+                                                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                                                        {pending.uid === user.uid ? "You asked" : `${pending.userName || "An instructor"} asked`} to turn it {pending.enabled ? "on" : "off"}. Waiting for {waitingOn}.
+                                                    </p>
+                                                    {pending.uid === user.uid && <Button onClick={() => withdrawRequest(pending)} size="xsm" color="cancel" extraClasses="shrink-0">Withdraw</Button>}
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col gap-2">
+                                                    <p className="text-xs text-gray-400">Only {approverName === "An admin" ? "an admin" : "the role's owner or an admin"} can turn this {on ? "off" : "on"}. You can ask them.</p>
+                                                    <Button onClick={() => changeMessaging(feature)} size="sm" color={on ? "gray" : "blue"} disabled={messagingBusy === feature}>
+                                                        {messagingBusy === feature ? "Sending..." : on ? "Request to Turn Off" : "Request to Turn On"}
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
 

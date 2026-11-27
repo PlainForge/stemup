@@ -15,6 +15,7 @@ import RoleIcon from "../components/RoleIcon";
 import BackButton from "../components/BackButton";
 import { AccessBadge } from "./AdminPage";
 import AdminUserPage from "./AdminUserPage";
+import { showsRole } from "../lib/userPage";
 
 /**
  * /users/:uid (and /roles/users/:uid, /tasks/users/:uid...) — anyone's page,
@@ -72,7 +73,11 @@ export default function UserPage() {
     const level: AccessLevel = admins.includes(uid) ? "admin" : instructors.includes(uid) ? "instructor" : "user";
     const name = person.name || "Unknown User";
     const myRoleStats = new Map((Array.isArray(person.roles) ? person.roles : []).map(r => [r.id, r]));
-    const sorted = [...roles].sort((a, b) => a.name.localeCompare(b.name));
+    // Roles they've hidden from their page show only to them and whoever runs that role (admins get the admin page)
+    const runsIt = (id: string) => instructors.includes(user.uid) && (roles.find(r => r.id === id)?.instructors ?? []).includes(user.uid);
+    const sorted = roles
+        .filter(r => showsRole(person, r.id, { uid: user.uid, isAdmin, runs: runsIt }))
+        .sort((a, b) => a.name.localeCompare(b.name));
     const instructing = sorted.filter(r => (r.instructors ?? []).includes(uid));
     const memberOf = sorted.filter(r => !(r.instructors ?? []).includes(uid));
     // Roles the viewer runs, where they can edit this person's points and tasks

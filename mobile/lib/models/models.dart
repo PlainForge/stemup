@@ -7,6 +7,9 @@ const globalRoleId = 'r3wUbRSCX7cxwBYhtAdg';
 const defaultAvatar = 'https://ui-avatars.com/api/?name=User&background=90caf9&color=fff';
 const noReward = 'No reward set';
 
+/// Longest chat or thread message (also checked by the Firestore rules).
+const maxMessageLength = 2000;
+
 int _int(dynamic v) => v is num ? v.toInt() : 0;
 String _str(dynamic v, [String fallback = '']) => v is String ? v : fallback;
 List<String> _strList(dynamic v) => v is List ? v.whereType<String>().toList() : const [];
@@ -25,7 +28,8 @@ extension AccessLevelLabel on AccessLevel {
 
 /// Kinds of notification, each with its own switch in Settings. Names match
 /// NotifyType in functions/src/notifications.ts.
-enum NotifyType { newTask, taskEdited, taskReviewed, extension, joinRole, accessRequest, invite }
+/// [roleChat] and [taskThread] come as push notifications only, never email.
+enum NotifyType { newTask, taskEdited, taskReviewed, extension, joinRole, accessRequest, invite, roleChat, taskThread }
 
 extension NotifyTypeText on NotifyType {
   String get label => switch (this) {
@@ -36,6 +40,8 @@ extension NotifyTypeText on NotifyType {
     NotifyType.joinRole => 'Role join requests',
     NotifyType.accessRequest => 'Instructor and role requests',
     NotifyType.invite => 'Role invitations',
+    NotifyType.roleChat => 'Group chat messages',
+    NotifyType.taskThread => 'Task questions',
   };
 
   String get hint => switch (this) {
@@ -46,6 +52,8 @@ extension NotifyTypeText on NotifyType {
     NotifyType.joinRole => 'A request to join a role is accepted or declined',
     NotifyType.accessRequest => 'Instructor access, new roles and role resets',
     NotifyType.invite => 'Someone invites you to join a role',
+    NotifyType.roleChat => "New messages in a role's group chat (never by email)",
+    NotifyType.taskThread => 'A new message on one of your tasks (never by email)',
   };
 }
 
@@ -156,6 +164,10 @@ class UserData implements Ranked {
   /// A short, optional bio (200 words at most), set in Settings > Profile and shown on their card.
   final String aboutMe;
 
+  /// Roles they've hidden from their card and user page (each role's Settings tab).
+  /// Admins and the role's instructors still see them.
+  final List<String> hideOnProfile;
+
   const UserData({
     required this.uid,
     required this.name,
@@ -172,6 +184,7 @@ class UserData implements Ranked {
     this.hideOnHome = const [],
     this.tasksGiven = 0,
     this.aboutMe = '',
+    this.hideOnProfile = const [],
   });
 
   factory UserData.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) => UserData.fromMap(doc.id, doc.data() ?? {});
@@ -194,6 +207,7 @@ class UserData implements Ranked {
     hideOnHome: m['hideOnHome'] is List ? (m['hideOnHome'] as List).whereType<String>().toList() : const [],
     tasksGiven: _int(m['tasksGiven']),
     aboutMe: _str(m['aboutMe']).trim(),
+    hideOnProfile: _strList(m['hideOnProfile']),
   );
 
   UserRoleData? roleData(String roleId) {
@@ -229,6 +243,7 @@ class UserData implements Ranked {
         hideOnHome: hideOnHome,
         tasksGiven: tasksGiven,
         aboutMe: aboutMe,
+        hideOnProfile: hideOnProfile,
       );
 }
 
@@ -260,6 +275,13 @@ class Role {
   final String icon;
   final String iconColor;
 
+  /// A group chat for everyone in the role (off unless its owner or an admin turns it on).
+  final bool chatEnabled;
+
+  /// Each task gets a thread between the person doing it and whoever gave it
+  /// (off unless its owner or an admin turns it on).
+  final bool taskThreadsEnabled;
+
   const Role({
     required this.id,
     required this.name,
@@ -274,6 +296,8 @@ class Role {
     this.rewardsTitle = '',
     this.icon = '',
     this.iconColor = '',
+    this.chatEnabled = false,
+    this.taskThreadsEnabled = false,
   });
 
   factory Role.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -292,8 +316,12 @@ class Role {
       rewardsTitle: _str(m['rewardsTitle']).trim(),
       icon: _str(m['icon']),
       iconColor: _str(m['iconColor']),
+      chatEnabled: m['chatEnabled'] == true,
+      taskThreadsEnabled: m['taskThreadsEnabled'] == true,
     );
   }
+
+  bool messagingOn(MessagingFeature f) => f == MessagingFeature.chat ? chatEnabled : taskThreadsEnabled;
 
   bool get isGlobal => name.contains('global');
 
@@ -337,6 +365,11 @@ class Task {
   /// Who gave it ('' on older tasks, from before this was recorded).
   final String assignedBy;
 
+  /// Its thread (tasks/{id}/messages): how many messages and who wrote the
+  /// latest (kept by the notifyOnTaskMessage Cloud Function).
+  final int messageCount;
+  final String lastMessageBy;
+
   const Task({
     required this.id,
     required this.assignedTo,
@@ -354,6 +387,8 @@ class Task {
     this.extensionDeclined = false,
     this.declineCount = 0,
     this.assignedBy = '',
+    this.messageCount = 0,
+    this.lastMessageBy = '',
   });
 
   factory Task.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -375,6 +410,8 @@ class Task {
       extensionDeclined: m['extensionDeclined'] == true,
       declineCount: _int(m['declineCount']),
       assignedBy: _str(m['assignedBy']),
+      messageCount: _int(m['messageCount']),
+      lastMessageBy: _str(m['lastMessageBy']),
     );
   }
 
@@ -592,7 +629,7 @@ class Bug {
   }
 }
 
-enum RequestType { instructor, createRole, resetRole, renameRole, editStats, kickMember, rewardsTitle, roleIcon }
+enum RequestType { instructor, createRole, resetRole, renameRole, editStats, kickMember, rewardsTitle, roleIcon, roleMessaging }
 
 extension RequestTypeInfo on RequestType {
   /// The value stored in Firestore.
@@ -610,7 +647,45 @@ extension RequestTypeInfo on RequestType {
     RequestType.kickMember => 'Kick member',
     RequestType.rewardsTitle => 'Rewards title',
     RequestType.roleIcon => 'Role icon',
+    RequestType.roleMessaging => 'Role messaging',
   };
+}
+
+/// The two kinds of role messaging, each turned on in the role's Config. Names
+/// match MessagingFeature in src/myDataTypes.ts.
+enum MessagingFeature { chat, taskThreads }
+
+extension MessagingFeatureText on MessagingFeature {
+  String get label => this == MessagingFeature.chat ? 'Group chat' : 'Task questions';
+}
+
+/// A message in a role's group chat (roles/{id}/messages) or a task's thread (tasks/{id}/messages).
+class ChatMessage {
+  final String id;
+  final String uid;
+  final String name;
+  final String photoURL;
+  final String text;
+
+  /// Null for a message still on its way to the server.
+  final DateTime? createdAt;
+
+  const ChatMessage({required this.id, required this.uid, required this.name, this.photoURL = '', required this.text, this.createdAt});
+
+  factory ChatMessage.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final m = doc.data() ?? {};
+    return ChatMessage(
+      id: doc.id,
+      uid: _str(m['uid']),
+      name: _str(m['name'], 'Unknown User'),
+      photoURL: _str(m['photoURL']),
+      text: _str(m['text']),
+      createdAt: _date(m['createdAt']),
+    );
+  }
+
+  /// When it was sent (now, for one still sending).
+  DateTime get at => createdAt ?? DateTime.now();
 }
 
 /// Something to approve, from the `requests` collection: by an admin, or by a
@@ -692,6 +767,10 @@ class StemRequest {
   final String icon;
   final String iconColor;
 
+  /// roleMessaging: which kind of messaging, and whether to turn it on or off.
+  final MessagingFeature? feature;
+  final bool enabled;
+
   const StemRequest({
     required this.id,
     required this.type,
@@ -711,6 +790,8 @@ class StemRequest {
     this.taskCompleted = 0,
     this.icon = '',
     this.iconColor = '',
+    this.feature,
+    this.enabled = false,
   });
 
   /// What a role change asks for, e.g. `rename Robotics to "Drones"` (kept in
@@ -726,6 +807,8 @@ class StemRequest {
       RequestType.rewardsTitle =>
         title.isEmpty ? 'set the rewards title back to the current month' : 'change the rewards title to "$title"',
       RequestType.roleIcon => 'change the icon of $role',
+      RequestType.roleMessaging =>
+        'turn ${enabled ? 'on' : 'off'} ${feature == MessagingFeature.taskThreads ? 'task questions' : 'the group chat'} in $role',
       _ => 'make a change',
     };
   }
@@ -755,6 +838,8 @@ class StemRequest {
       taskCompleted: _int(m['taskCompleted']),
       icon: _str(m['icon']),
       iconColor: _str(m['iconColor']),
+      feature: MessagingFeature.values.where((f) => f.name == m['feature']).firstOrNull,
+      enabled: m['enabled'] == true,
     );
   }
 }

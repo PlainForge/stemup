@@ -8,6 +8,7 @@ import type { Task } from "../myDataTypes";
 import { Chip, ChipRow, TaskCard, TaskDescription, TaskHeader, type TaskTone } from "./TaskCardParts";
 import Dropdown from "./Dropdown";
 import DoneButton from "./TaskDoneButton";
+import TaskThreadButton from "./TaskThread";
 
 const DAY = 1000 * 60 * 60 * 24;
 
@@ -16,12 +17,14 @@ const DAY = 1000 * 60 * 60 * 24;
  * for an extension when it's overdue, and submitting it. Used on a role's Tasks
  * tab and on the Tasks page (where [header] adds the role it's from).
  */
-export default function MemberTaskCard({ task, isSubmitted, isNew = false, onSeen, header }: {
+export default function MemberTaskCard({ task, isSubmitted, isNew = false, onSeen, header, threads = false }: {
     task: Task;
     isSubmitted: boolean;
     isNew?: boolean;
     onSeen?: () => void;
     header?: ReactNode;
+    /** The role has task questions on: a button along the bottom opens this task's thread */
+    threads?: boolean;
 }) {
     const overdue = !task.complete && !!task.dueDate && task.dueDate.toDate() < new Date();
     const daysLeft = task.deleteAt ? Math.ceil((task.deleteAt.toDate().getTime() - Date.now()) / DAY) : null;
@@ -78,6 +81,11 @@ export default function MemberTaskCard({ task, isSubmitted, isNew = false, onSee
                     />
                 )}
                 {!overdue && <DoneButton task={task} />}
+                {threads && (
+                    <div className="-mx-2 -mb-2 border-t border-gray-100 pt-1">
+                        <TaskThreadButton task={task} enabled={threads} runsRole={false} />
+                    </div>
+                )}
             </div>
         </TaskCard>
     );

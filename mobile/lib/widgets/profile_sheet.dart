@@ -245,7 +245,9 @@ class _ProfileCardState extends State<_ProfileCard> {
   }
 
   Widget _infoView(BuildContext context, bool isAdmin, bool targetIsAdmin, bool canRemoveFromGlobal) {
-    final theirRoles = _user.roles.where((r) => r.id != globalRoleId).toList();
+    // Roles they've hidden show only to them, admins and whoever runs that role
+    final app = context.read<AppState>();
+    final theirRoles = _user.roles.where((r) => r.id != globalRoleId && app.showsRoleOf(_user, r.id)).toList();
     // The roles the viewer is in, whose chips on this card open the role
     final myRoleIds = {for (final r in context.read<AppState>().userData?.roles ?? const <UserRoleData>[]) r.id};
     return Column(

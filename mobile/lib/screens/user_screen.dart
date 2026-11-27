@@ -46,7 +46,8 @@ class _UserScreenState extends State<UserScreen> {
         }
         final me = app.user?.uid;
         final level = app.accessOf(u.uid);
-        final theirs = app.roles.where((r) => r.id != globalRoleId && r.members.contains(u.uid)).toList()
+        // Roles they've hidden from their page show only to them, admins and whoever runs that role
+        final theirs = app.roles.where((r) => r.id != globalRoleId && r.members.contains(u.uid) && app.showsRoleOf(u, r.id)).toList()
           ..sort((a, b) => a.name.compareTo(b.name));
         final instructing = theirs.where((r) => r.instructors.contains(u.uid)).toList();
         final memberOf = theirs.where((r) => !r.instructors.contains(u.uid)).toList();

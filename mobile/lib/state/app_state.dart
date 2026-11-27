@@ -122,6 +122,71 @@ class AppState extends ChangeNotifier {
   }).toList();
   Set<String> seenTaskIds = {};
 
+  // ── Messages: seen markers (this phone only) and who can use what ─────────
+
+  Map<String, int> _seenMap(String key) {
+    try {
+      final raw = _prefs.getString(key);
+      if (raw == null) return {};
+      return {for (final e in (jsonDecode(raw) as Map).entries) e.key as String: (e.value as num).toInt()};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Role? roleById(String id) => roles.where((r) => r.id == id).firstOrNull;
+
+  /// Who can use a task's thread: the person doing it and whoever gave it. Older
+  /// tasks don't record who gave them, so the role's instructors answer those.
+  bool inTaskThread(Task t) {
+    final uid = user?.uid;
+    if (uid == null) return false;
+    if (uid == t.assignedTo) return true;
+    return t.assignedBy.isNotEmpty ? t.assignedBy == uid : canManage(roleById(t.roleId));
+  }
+
+  /// Someone else has written on the task's thread since it was last opened here.
+  bool threadUnread(Task t) {
+    final uid = user?.uid;
+    if (uid == null || t.messageCount == 0 || t.lastMessageBy.isEmpty || t.lastMessageBy == uid) return false;
+    return t.messageCount > (_seenMap('stemup_thread_seen_$uid')[t.id] ?? 0);
+  }
+
+  void markThreadSeen(Task t) {
+    final uid = user?.uid;
+    if (uid == null) return;
+    final map = _seenMap('stemup_thread_seen_$uid');
+    if (map[t.id] == t.messageCount) return;
+    map[t.id] = t.messageCount;
+    _prefs.setString('stemup_thread_seen_$uid', jsonEncode(map));
+    notifyListeners();
+  }
+
+  /// When a role's group chat was last read here (ms since 1970; 0 if never).
+  int chatSeenAt(String roleId) {
+    final uid = user?.uid;
+    return uid == null ? 0 : _seenMap('stemup_chat_seen_$uid')[roleId] ?? 0;
+  }
+
+  void markChatSeen(String roleId, DateTime at) {
+    final uid = user?.uid;
+    if (uid == null) return;
+    final map = _seenMap('stemup_chat_seen_$uid');
+    final ms = at.millisecondsSinceEpoch;
+    if ((map[roleId] ?? 0) >= ms) return;
+    map[roleId] = ms;
+    _prefs.setString('stemup_chat_seen_$uid', jsonEncode(map));
+    notifyListeners();
+  }
+
+  /// Whether a role shows on [person]'s card and user page. People can hide a role
+  /// there (its Settings tab); they, admins and whoever runs that role still see it.
+  bool showsRoleOf(UserData person, String roleId) {
+    if (!person.hideOnProfile.contains(roleId)) return true;
+    final uid = user?.uid;
+    return isAdmin || person.uid == uid || (isInstructor && (roleById(roleId)?.instructors.contains(uid) ?? false));
+  }
+
   void _onAuth(User? usr) {
     _userSub?.cancel();
     _adminSub?.cancel();

@@ -21,9 +21,12 @@ import * as nodemailer from "nodemailer";
 import { gmailAppPassword, gmailCredentials, gmailUser } from "./secrets";
 
 /** Kept in sync with NOTIFICATION_TYPES in src/myDataTypes.ts and NotifyType in mobile/lib/models/models.dart. */
-export type NotifyType = "newTask" | "taskEdited" | "taskReviewed" | "extension" | "joinRole" | "accessRequest" | "invite";
+export type NotifyType =
+  | "newTask" | "taskEdited" | "taskReviewed" | "extension" | "joinRole" | "accessRequest" | "invite"
+  // Messages: iOS push only, never email
+  | "roleChat" | "taskThread";
 
-type Message = { title: string; body: string; /** App path to open, e.g. /roles/abc */ path: string };
+export type Message = { title: string; body: string; /** App path to open, e.g. /roles/abc */ path: string };
 
 const SITE = "https://stemup.web.app";
 const secrets = [gmailUser, gmailAppPassword];
@@ -74,8 +77,9 @@ async function sendEmail(to: string, msg: Message) {
 /**
  * Sends [msg] to [uid] the ways they've turned on, unless they've switched off
  * this kind, or turned off notifications for [roleId] (the role it's about).
+ * [pushOnly] notifications (chat and thread messages) never go by email.
  */
-export async function notify(uid: string, type: NotifyType, msg: Message, roleId?: unknown) {
+export async function notify(uid: string, type: NotifyType, msg: Message, roleId?: unknown, { pushOnly = false } = {}) {
   if (!uid) return;
   const snap = await getFirestore().doc(`users/${uid}`).get();
   if (!snap.exists) return;
@@ -88,7 +92,7 @@ export async function notify(uid: string, type: NotifyType, msg: Message, roleId
   const email = snap.get("email") as string | undefined;
   const jobs: Promise<unknown>[] = [];
   if (prefs.push === true) jobs.push(sendPush(uid, msg));
-  if (prefs.email === true && email) jobs.push(sendEmail(email, msg));
+  if (prefs.email === true && email && !pushOnly) jobs.push(sendEmail(email, msg));
 
   const results = await Promise.allSettled(jobs);
   for (const r of results) {
@@ -241,6 +245,7 @@ function roleChangeAction(req: DocumentData): string | null {
     case "kickMember": return `remove ${req.targetName || "a member"} from ${role}`;
     case "rewardsTitle": return `change the rewards title of ${role}`;
     case "roleIcon": return `change the icon of ${role}`;
+    case "roleMessaging": return `turn ${req.enabled ? "on" : "off"} ${req.feature === "taskThreads" ? "task questions" : "the group chat"} in ${role}`;
     default: return null;
   }
 }

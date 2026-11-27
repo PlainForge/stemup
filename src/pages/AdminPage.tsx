@@ -32,6 +32,7 @@ const REQUEST_LABELS: Record<StemRequest["type"], string> = {
     kickMember: "Kick member",
     rewardsTitle: "Rewards title",
     roleIcon: "Role icon",
+    roleMessaging: "Role messaging",
 };
 
 export function AccessBadge({ level }: { level: AccessLevel }) {

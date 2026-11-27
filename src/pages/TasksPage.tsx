@@ -278,6 +278,7 @@ export default function TasksPage() {
                                             isSubmitted={isSubmitted}
                                             isNew={!task.complete && !isSubmitted && !seen.has(task.id)}
                                             onSeen={() => markSeen(task.id)}
+                                            threads={role?.taskThreadsEnabled === true}
                                             header={
                                                 <div className="flex items-center justify-between gap-2 -mb-1">
                                                     <button

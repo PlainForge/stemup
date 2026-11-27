@@ -52,6 +52,10 @@ class _RoleScreenState extends State<RoleScreen> {
   List<LeaderboardSnapshot> _snapshots = const [];
   _Tab _tab = _Tab.leaderboard;
 
+  /// The group chat's newest message (while the chat is on), for its preview and unread dot.
+  StreamSubscription<ChatMessage?>? _chatSub;
+  ChatMessage? _latestChat;
+
   /// Which page of the Settings tab is open: its list or Notifications.
   _SettingsPage _settingsPage = _SettingsPage.main;
   final _filters = TaskFilters();
@@ -88,6 +92,16 @@ class _RoleScreenState extends State<RoleScreen> {
       if (mounted && GoRouterState.of(context).matchedLocation.startsWith('/roles/')) context.go('/roles');
       return;
     }
+    // Follow the group chat only while it's on
+    if (role.chatEnabled && _chatSub == null) {
+      _chatSub = Db.latestMessageStream(Db.roleChat(_id)).listen((m) {
+        if (mounted) setState(() => _latestChat = m);
+      }, onError: (_) {});
+    } else if (!role.chatEnabled && _chatSub != null) {
+      _chatSub!.cancel();
+      _chatSub = null;
+      _latestChat = null;
+    }
     final key = role.members.join(',');
     if (key != _membersKey) {
       _membersKey = key;
@@ -104,6 +118,7 @@ class _RoleScreenState extends State<RoleScreen> {
       s.cancel();
     }
     _membersSub?.cancel();
+    _chatSub?.cancel();
     _filters.search.dispose();
     super.dispose();
   }
@@ -209,6 +224,13 @@ class _RoleScreenState extends State<RoleScreen> {
           ],
         ),
         if (roleInstructors.isNotEmpty) _InstructorChips(people: roleInstructors, meUid: me.uid),
+        if (role.chatEnabled)
+          _ChatEntry(
+            latest: _latestChat,
+            meUid: me.uid,
+            unread: _latestChat != null && _latestChat!.uid != me.uid && _latestChat!.at.millisecondsSinceEpoch > app.chatSeenAt(_id),
+            onPressed: () => context.push('/chat/$_id'),
+          ),
         SlidingTabs<_Tab>(
           tabs: tabs,
           selected: tab,
@@ -277,6 +299,7 @@ class _RoleScreenState extends State<RoleScreen> {
     final me = app.userData!;
     final notificationsOn = me.notifications.roleIsOn(_id);
     final showOnHome = !me.hideOnHome.contains(_id);
+    final showOnProfile = !me.hideOnProfile.contains(_id);
     final isDefault = me.currentRole == _id;
     final blue = Palette.resolve(context, Palette.navActive);
 
@@ -368,6 +391,39 @@ class _RoleScreenState extends State<RoleScreen> {
               ),
               const SizedBox(width: 8),
               CupertinoSwitch(value: showOnHome, activeTrackColor: Palette.green500, onChanged: (v) => Db.setShowOnHome(me.uid, _id, v)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          shadow: false,
+          child: Row(
+            children: [
+              badge(CupertinoIcons.person_crop_rectangle_fill, showOnProfile),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Show on My Profile',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                    ),
+                    Muted(
+                      showOnProfile
+                          ? '${role.name} is listed on your card and user page'
+                          : "Hidden from your card and user page. Admins and ${role.name}'s instructors still see it.",
+                      size: 13,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              CupertinoSwitch(
+                value: showOnProfile,
+                activeTrackColor: Palette.green500,
+                onChanged: (v) => Db.setShowOnProfile(me.uid, _id, v),
+              ),
             ],
           ),
         ),
@@ -523,6 +579,58 @@ class _RoleScreenState extends State<RoleScreen> {
 }
 
 /// "INSTRUCTORS" followed by a purple chip per person who runs the role; tap for their profile.
+/// Opens the role's group chat, with its latest message.
+class _ChatEntry extends StatelessWidget {
+  const _ChatEntry({required this.latest, required this.meUid, required this.unread, required this.onPressed});
+
+  final ChatMessage? latest;
+  final String meUid;
+  final bool unread;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final blue = Palette.resolve(context, Palette.navActive);
+    final m = latest;
+    final preview = m == null
+        ? 'No messages yet. Say hello!'
+        : '${m.uid == meUid ? 'You' : m.name.split(' ').first}: ${m.text.replaceAll('\n', ' ')}';
+    return Pressable(
+      scale: .98,
+      onPressed: onPressed,
+      child: AppCard(
+        shadow: false,
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: Palette.resolve(context, Palette.blue50), borderRadius: BorderRadius.circular(12)),
+              child: Icon(CupertinoIcons.chat_bubble_2_fill, size: 20, color: blue),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Group Chat',
+                    style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                  ),
+                  Muted(preview, size: 13, maxLines: 1),
+                ],
+              ),
+            ),
+            if (unread) ...[const SizedBox(width: 8), const PingDot(size: 10)],
+            const SizedBox(width: 8),
+            Icon(CupertinoIcons.chevron_right, size: 16, color: Palette.tertiary(context)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _InstructorChips extends StatelessWidget {
   const _InstructorChips({required this.people, required this.meUid});
 

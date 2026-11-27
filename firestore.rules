@@ -49,7 +49,7 @@ service cloud.firestore {
       allow delete: if signedIn() && me() == userId;
       // Your own profile, but not your own points, tasks completed or role list
       allow update: if signedIn() && me() == userId
-        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email', 'pendingEmail', 'notifications', 'hideOnHome', 'aboutMe'])
+        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email', 'pendingEmail', 'notifications', 'hideOnHome', 'aboutMe', 'hideOnProfile'])
         // About Me is short (200 words, checked in the apps and by the cleanProfileName function)
         && (!('aboutMe' in request.resource.data) || (request.resource.data.aboutMe is string && request.resource.data.aboutMe.size() <= 1500));
       // canSeeGlobal (seeing the global leaderboard) is set by admins only (above)
@@ -98,7 +98,7 @@ service cloud.firestore {
             || (ownsRoleData(resource.data)
                 && request.resource.data.get('owner', '') in resource.data.get('instructors', [])))
         && (ownsRoleData(resource.data)
-            || (!changes().hasAny(['name', 'rewardsTitle', 'icon', 'iconColor', 'inviteOnly'])
+            || (!changes().hasAny(['name', 'rewardsTitle', 'icon', 'iconColor', 'inviteOnly', 'chatEnabled', 'taskThreadsEnabled'])
                 && resource.data.get('members', []).toSet()
                      .difference(request.resource.data.get('members', []).toSet()).size() == 0));
     }
@@ -126,6 +126,28 @@ service cloud.firestore {
         && (roleId == 'r3wUbRSCX7cxwBYhtAdg'
             || request.resource.data.get('members', []).toSet().difference(resource.data.get('members', []).toSet()).size() == 0);
       // Creating and deleting roles is admin-only (above)
+
+      // The role's group chat, for everyone in it, once its owner or an admin turns it on
+      // (chatEnabled). The notifyOnRoleMessage Cloud Function sends iOS push notifications.
+      match /messages/{messageId} {
+        function roleData() { return get(/databases/$(database)/documents/roles/$(roleId)).data; }
+        allow read: if signedIn() && me() in roleData().get('members', []);
+        allow create: if signedIn() && me() in roleData().get('members', [])
+          && roleData().get('chatEnabled', false) == true
+          && validMessage();
+        // Your own messages, or any message in a role you run
+        allow delete: if signedIn() && (resource.data.uid == me() || runsRole(roleId));
+      }
+    }
+
+    // A new chat or thread message: from the signed-in user, sent now, 2000 characters at most
+    function validMessage() {
+      let m = request.resource.data;
+      return m.keys().hasOnly(['uid', 'name', 'photoURL', 'text', 'createdAt'])
+        && m.uid == me()
+        && m.name is string
+        && m.text is string && m.text.size() > 0 && m.text.size() <= 2000
+        && m.createdAt == request.time;
     }
 
     match /rewards/{roleId} {
@@ -143,6 +165,26 @@ service cloud.firestore {
         && changes().hasOnly(['status', 'extensionRequested', 'deleteAt']);
       // Deleting your account removes your tasks
       allow delete: if signedIn() && resource.data.assignedTo == me();
+
+      // The task's thread: only the person doing it and whoever gave it (or, on older
+      // tasks that don't record who gave them, the role's instructors), once the role's
+      // owner or an admin turns threads on (taskThreadsEnabled)
+      match /messages/{messageId} {
+        function task() { return get(/databases/$(database)/documents/tasks/$(taskId)).data; }
+        function inThread() {
+          let t = task();
+          return me() == t.assignedTo
+            || (t.get('assignedBy', '') != '' && me() == t.get('assignedBy', ''))
+            || (t.get('assignedBy', '') == '' && runsRole(t.roleId));
+        }
+        function threadsOn() {
+          return get(/databases/$(database)/documents/roles/$(task().roleId)).data.get('taskThreadsEnabled', false) == true;
+        }
+        allow read: if signedIn() && exists(/databases/$(database)/documents/tasks/$(taskId)) && inThread();
+        allow create: if signedIn() && exists(/databases/$(database)/documents/tasks/$(taskId))
+          && inThread() && threadsOn() && validMessage();
+        allow delete: if signedIn() && resource.data.uid == me();
+      }
     }
 
     match /tasksSubmitted/{taskId} {
@@ -174,7 +216,7 @@ service cloud.firestore {
         && request.resource.data.uid == me()
         && (request.resource.data.type == 'instructor'
             || (request.resource.data.type == 'createRole' && isInstructor())
-            || (request.resource.data.type in ['resetRole', 'renameRole', 'editStats', 'kickMember', 'rewardsTitle', 'roleIcon']
+            || (request.resource.data.type in ['resetRole', 'renameRole', 'editStats', 'kickMember', 'rewardsTitle', 'roleIcon', 'roleMessaging']
                 && runsRole(request.resource.data.roleId)));
       // Withdrawing your own request
       allow delete: if signedIn() && resource.data.uid == me();

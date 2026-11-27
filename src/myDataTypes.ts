@@ -24,6 +24,8 @@ export type UserData = {
     aboutMe?: string,
     /** Tasks this person has given out as an instructor or admin (counted by a Cloud Function) */
     tasksGiven?: number,
+    /** Roles they've hidden from their card and user page (each role's Settings tab); admins and the role's instructors still see them */
+    hideOnProfile?: string[],
 }
 
 /** An invitation to join a role (invites/{roleId}_{uid}), sent by its instructors or an admin */
@@ -50,6 +52,8 @@ export const NOTIFICATION_TYPES = [
     { key: "joinRole", label: "Role join requests", hint: "A request to join a role is accepted or declined" },
     { key: "accessRequest", label: "Instructor and role requests", hint: "Instructor access, new roles and role resets" },
     { key: "invite", label: "Role invitations", hint: "Someone invites you to join a role" },
+    { key: "roleChat", label: "Group chat messages", hint: "New messages in a role's group chat (iOS only, never by email)" },
+    { key: "taskThread", label: "Task questions", hint: "A new message on one of your tasks (iOS only, never by email)" },
 ] as const;
 
 export type NotifyType = (typeof NOTIFICATION_TYPES)[number]["key"];
@@ -100,6 +104,23 @@ export type Role = {
   showInGlobalLeaderboard?: boolean;
   /** Hidden from the Roles page for anyone not in it: people only join through an invitation (owner or admin setting) */
   inviteOnly?: boolean;
+  /** A group chat for everyone in the role (off unless its owner or an admin turns it on) */
+  chatEnabled?: boolean;
+  /** Each task gets a thread between the person doing it and whoever gave it (off unless its owner or an admin turns it on) */
+  taskThreadsEnabled?: boolean;
+};
+
+/** The two kinds of role messaging, each switched on in the role's Config */
+export type MessagingFeature = "chat" | "taskThreads";
+
+/** A message in a role's group chat (roles/{id}/messages) or a task's thread (tasks/{id}/messages) */
+export type ChatMessage = {
+  id: string;
+  uid: string;
+  name: string;
+  photoURL?: string;
+  text: string;
+  createdAt?: Timestamp;
 };
 
 /** User < Instructor < Admin */
@@ -112,7 +133,7 @@ export const ACCESS_LABELS: Record<AccessLevel, string> = {
 };
 
 /** Changes to a role that its instructors ask the role's owner for (or admins, when it has none) */
-export const ROLE_CHANGE_TYPES = ["resetRole", "renameRole", "editStats", "kickMember", "rewardsTitle", "roleIcon"] as const;
+export const ROLE_CHANGE_TYPES = ["resetRole", "renameRole", "editStats", "kickMember", "rewardsTitle", "roleIcon", "roleMessaging"] as const;
 export type RoleChangeType = (typeof ROLE_CHANGE_TYPES)[number];
 
 /** Something to approve, in the `requests` collection: by an admin, or by a role's owner for role changes */
@@ -141,6 +162,9 @@ export type StemRequest = {
   /** roleIcon: the icon and color asked for */
   icon?: string;
   iconColor?: string;
+  /** roleMessaging: which kind of messaging, and whether to turn it on or off */
+  feature?: MessagingFeature;
+  enabled?: boolean;
   /** Set by an admin just before removing the request, so the person can be told the outcome */
   status?: "approved" | "declined";
 };
@@ -182,6 +206,10 @@ export type Task = {
   extensionRequested?: boolean,
   extensionDeclined?: boolean,
   declineCount?: number,
+  /** Its thread (tasks/{id}/messages): how many messages, and the latest one (kept by a Cloud Function) */
+  messageCount?: number,
+  lastMessageAt?: Timestamp,
+  lastMessageBy?: string,
 }
 
 export type SubmittedTask = {

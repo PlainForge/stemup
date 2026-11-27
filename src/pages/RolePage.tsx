@@ -14,12 +14,14 @@ import ProfileImg from "../components/ProfileImg";
 import MedalIcon from "../components/MedalIcon";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowUpWideShort, faBell, faBellSlash, faCalendar, faCalendarDays, faCheck, faChevronRight, faCopy, faHomeAlt, faMagnifyingGlass, faStar, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowUpWideShort, faBell, faBellSlash, faCalendar, faCalendarDays, faCheck, faChevronRight, faCopy, faHomeAlt, faIdCard, faMagnifyingGlass, faStar, faXmark } from "@fortawesome/free-solid-svg-icons";
 import BackButton from "../components/BackButton";
 import { splitLeaderboard } from "../lib/leaderboard";
 import Dropdown from "../components/Dropdown";
 import RoleIcon from "../components/RoleIcon";
 import MemberTaskCard from "../components/MemberTaskCard";
+import ChatPanel from "../components/ChatPanel";
+import { chatSeenAt, listenLatestMessage, markChatSeen, roleChatPath } from "../lib/messages";
 
 
 /** Stable fallback so hooks that depend on these lists don't re-run every render */
@@ -59,6 +61,9 @@ export default function RolePage() {
     const [taskStatusFilter, setTaskStatusFilter] = useState<"all" | "complete" | "incomplete">("all");
     const [seenTaskIds, setSeenTaskIds] = useState<Set<string>>(new Set());
     const [savedData, setSavedData] = useState<SavedData[]>([]);
+    // The group chat's newest message, and when this person last looked (for the dot on its tab)
+    const [latestChat, setLatestChat] = useState<{ at: number; by: string } | null>(null);
+    const [chatSeen, setChatSeen] = useState(0);
 
     const currentMonth = new Date().toLocaleString("en-US", {month: "long"});
 
@@ -173,6 +178,24 @@ export default function RolePage() {
         return () => unsub();
     }, [roleId]);
 
+    // Group chat (when its owner or an admin has turned it on): watch for new messages
+    const chatOn = role?.chatEnabled === true;
+    useEffect(() => {
+        if (!chatOn || !roleId || !user) {
+            setLatestChat(null);
+            return;
+        }
+        setChatSeen(chatSeenAt(user.uid, roleId));
+        return listenLatestMessage(roleChatPath(roleId), m => setLatestChat(m ? { at: m.createdAt?.toMillis() ?? Date.now(), by: m.uid } : null));
+    }, [chatOn, roleId, user]);
+    // Reading the chat marks it seen
+    useEffect(() => {
+        if (pageState !== "chat" || !latestChat || !user || !roleId) return;
+        markChatSeen(user.uid, roleId, latestChat.at);
+        setChatSeen(s => Math.max(s, latestChat.at));
+    }, [pageState, latestChat, user, roleId]);
+    const chatUnread = chatOn && !!latestChat && latestChat.by !== user?.uid && latestChat.at > chatSeen && pageState !== "chat";
+
     useEffect(() => {
         if (!loading && liveRole !== undefined && !isMember) {
             navigate("/roles", { replace: true });
@@ -218,6 +241,12 @@ export default function RolePage() {
     const toggleShowOnHome = async () => {
         if (!user || !roleId) return;
         await roleService.setShowOnHome(user.uid, roleId, !showOnHome);
+    };
+    // This role shows on their card and user page unless hidden here
+    const showOnProfile = !!roleId && !(userData?.hideOnProfile ?? []).includes(roleId);
+    const toggleShowOnProfile = async () => {
+        if (!user || !roleId) return;
+        await roleService.setShowOnProfile(user.uid, roleId, !showOnProfile);
     };
 
     // Their default role opens when they log in (stored as currentRole)
@@ -354,6 +383,7 @@ export default function RolePage() {
                     { key: "rewards", label: "Rewards" },
                     { key: "saved", label: "Saved Data" },
                     ...(!isStaff ? [{ key: "tasks", label: "Tasks" }] : []),
+                    ...(chatOn ? [{ key: "chat", label: "Chat" }] : []),
                     { key: "settings", label: "Settings" },
                 ].map((tab) => {
                     // The Notifications page sits inside Settings
@@ -375,6 +405,9 @@ export default function RolePage() {
                                     : taskCount > 0
                                     ? <span className="ml-1.5 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">{taskCount}</span>
                                     : null
+                            )}
+                            {tab.key === "chat" && chatUnread && (
+                                <span className="ml-1.5 inline-block size-2 rounded-full bg-red-500 align-middle" aria-label="New messages" />
                             )}
                             {tab.key === "settings" && !roleNotificationsOn && (
                                 <FontAwesomeIcon icon={faBellSlash} className="ml-1.5 text-gray-400" aria-label="Notifications off" />
@@ -673,6 +706,7 @@ export default function RolePage() {
                                                 isSubmitted={isSubmitted}
                                                 isNew={!task.complete && !isSubmitted && !seenTaskIds.has(task.id)}
                                                 onSeen={() => markTaskSeen(task.id)}
+                                                threads={role.taskThreadsEnabled === true}
                                             />
                                         </motion.div>
                                     );
@@ -680,6 +714,21 @@ export default function RolePage() {
                             </div>
                         );
                     })()}
+                </motion.div>
+            )}
+
+            {/* Group chat, for everyone in the role (turned on by its owner or an admin) */}
+            {pageState === "chat" && chatOn && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-2">
+                    <ChatPanel
+                        path={roleChatPath(role.id)}
+                        canPost
+                        canModerate={canManage}
+                        className="h-[65vh] min-h-80"
+                        placeholder={`Message ${role.name}...`}
+                        emptyText={`No messages yet. Everyone in ${role.name} can read and write here.`}
+                    />
+                    <p className="text-xs text-gray-400 text-center">Everyone in {role.name} can see these messages. New ones show up as notifications in the iOS app.</p>
                 </motion.div>
             )}
 
@@ -751,6 +800,30 @@ export default function RolePage() {
                             className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 hover:cursor-pointer ${showOnHome ? "bg-green-500" : "bg-gray-300"}`}
                         >
                             <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 ${showOnHome ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                    </div>
+
+                    <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${showOnProfile ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-400"}`}>
+                                <FontAwesomeIcon icon={faIdCard} />
+                            </span>
+                            <div className="min-w-0">
+                                <p className="font-semibold">Show on My Profile</p>
+                                <p className="text-sm text-gray-500">
+                                    {showOnProfile ? `${role.name} is listed on your card and user page` : `Hidden from your card and user page. Admins and ${role.name}'s instructors still see it.`}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={showOnProfile}
+                            aria-label={`Show ${role.name} on your profile`}
+                            onClick={toggleShowOnProfile}
+                            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 hover:cursor-pointer ${showOnProfile ? "bg-green-500" : "bg-gray-300"}`}
+                        >
+                            <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 ${showOnProfile ? "translate-x-6" : "translate-x-1"}`} />
                         </button>
                     </div>
                 </motion.div>

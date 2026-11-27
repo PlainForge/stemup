@@ -16,7 +16,7 @@ import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, ge
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "./firebase";
 import { firebaseAuthService } from "./firebaseService";
-import { ROLE_CHANGE_TYPES, type Role, type RoleChangeType, type RoleInvite, type StemRequest, type UserData, type UserRoleData } from "../myDataTypes";
+import { ROLE_CHANGE_TYPES, type MessagingFeature, type Role, type RoleChangeType, type RoleInvite, type StemRequest, type UserData, type UserRoleData } from "../myDataTypes";
 
 const instructorsRef = () => doc(db, "admins", "instructors");
 const NO_REWARD = "No reward set";
@@ -64,6 +64,7 @@ function roleChangeAction(req: StemRequest): string {
         case "kickMember": return `remove ${req.targetName || "a member"} from ${roleName}`;
         case "rewardsTitle": return req.title ? `change the rewards title to "${req.title}"` : "set the rewards title back to the current month";
         case "roleIcon": return `change the icon of ${roleName}`;
+        case "roleMessaging": return `turn ${req.enabled ? "on" : "off"} ${req.feature === "taskThreads" ? "task questions" : "the group chat"} in ${roleName}`;
         default: return "make a change";
     }
 }
@@ -123,7 +124,7 @@ export const roleService = {
         uid: string,
         userName: string,
         role: { id: string; name: string },
-        details: Pick<StemRequest, "saveName" | "newName" | "title" | "targetUid" | "targetName" | "points" | "taskCompleted" | "icon" | "iconColor">,
+        details: Pick<StemRequest, "saveName" | "newName" | "title" | "targetUid" | "targetName" | "points" | "taskCompleted" | "icon" | "iconColor" | "feature" | "enabled">,
     ) {
         const clean = Object.fromEntries(Object.entries(details).filter(([, v]) => v !== undefined));
         await addDoc(collection(db, "requests"), {
@@ -185,6 +186,9 @@ export const roleService = {
             case "roleIcon":
                 if (req.icon && req.iconColor) await this.setRoleIcon(req.roleId, req.icon, req.iconColor);
                 break;
+            case "roleMessaging":
+                if (req.feature) await this.setRoleMessaging(req.roleId, req.feature, req.enabled === true);
+                break;
             case "editStats":
                 // Only while they're still in the role
                 if (req.targetUid && members.includes(req.targetUid)) {
@@ -217,6 +221,16 @@ export const roleService = {
     /** Shows or hides a role's rewards and top 3 on this person's Home page. */
     async setShowOnHome(uid: string, roleId: string, show: boolean) {
         await updateDoc(doc(db, "users", uid), { hideOnHome: show ? arrayRemove(roleId) : arrayUnion(roleId) });
+    },
+
+    /** Whether a role shows on their card and user page (admins and the role's instructors always see it). */
+    async setShowOnProfile(uid: string, roleId: string, show: boolean) {
+        await updateDoc(doc(db, "users", uid), { hideOnProfile: show ? arrayRemove(roleId) : arrayUnion(roleId) });
+    },
+
+    /** Turns a role's group chat or task questions on or off (its owner or an admin). */
+    async setRoleMessaging(roleId: string, feature: MessagingFeature, enabled: boolean) {
+        await updateDoc(doc(db, "roles", roleId), { [feature === "chat" ? "chatEnabled" : "taskThreadsEnabled"]: enabled });
     },
 
     /** Sets a member's points and tasks completed in one role (their global totals are untouched). */

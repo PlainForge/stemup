@@ -115,7 +115,11 @@ class _InstructorCardState extends State<InstructorCard> {
     final name = p.name.isEmpty ? 'Unknown User' : p.name;
     final stillInstructor = app.instructors.contains(widget.uid);
     final runningIds = {for (final r in running) r.id};
-    final memberOf = p.roles.where((r) => r.id != globalRoleId && !runningIds.contains(r.id)).map((r) => r.name).toList();
+    // Roles they've hidden show only to them, admins and whoever runs that role
+    final memberOf = p.roles
+        .where((r) => r.id != globalRoleId && !runningIds.contains(r.id) && app.showsRoleOf(p, r.id))
+        .map((r) => r.name)
+        .toList();
 
     // Role actions: admins, or this role's owner (who can hand it on and take other instructors off it)
     final role = widget.role;

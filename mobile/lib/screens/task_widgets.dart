@@ -3,6 +3,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -260,6 +261,55 @@ class TaskTitleRow extends StatelessWidget {
   );
 }
 
+/// Opens a task's thread (chat_screens.dart): along the bottom of a task card, when
+/// its role has task questions on, for the person doing it and whoever gave it.
+class TaskThreadButton extends StatelessWidget {
+  const TaskThreadButton({super.key, required this.task});
+
+  final Task task;
+
+  static bool shows(AppState app, Task t) => (app.roleById(t.roleId)?.taskThreadsEnabled ?? false) && app.inTaskThread(t);
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final isDoer = task.assignedTo == app.user?.uid;
+    final unread = app.threadUnread(task);
+    final first = task.assignedName.split(' ').first;
+    return Pressable(
+      scale: .98,
+      onPressed: () => context.push('/thread/${task.id}'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: Palette.fill(context), borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          children: [
+            Icon(FontAwesomeIcons.comments.data, size: 14, color: Palette.blue500),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isDoer || first.isEmpty ? 'Questions' : 'Questions from $first',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Palette.label(context)),
+              ),
+            ),
+            if (unread)
+              const Tag('NEW', color: Palette.red500)
+            else if (task.messageCount > 0)
+              Text(
+                '${task.messageCount}',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Palette.tertiary(context)),
+              ),
+            const SizedBox(width: 6),
+            Icon(CupertinoIcons.chevron_right, size: 14, color: Palette.tertiary(context)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class MemberTaskCard extends StatefulWidget {
   const MemberTaskCard({super.key, required this.task, required this.submitted, this.header});
 
@@ -342,6 +392,7 @@ class _MemberTaskCardState extends State<MemberTaskCard> {
               onChanged: (i) => Db.setTaskStatus(t.id, statuses[i]),
             ),
           if (!overdue) _doneButton(context, t),
+          if (TaskThreadButton.shows(app, t)) TaskThreadButton(task: t),
         ],
       ),
     );

@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChalkboardUser, faChevronRight, faCircleCheck, faClipboardList, faCrown, faTrophy, faUsers, faXmark } from "@fortawesome/free-solid-svg-icons";
 import AboutMeBlock from "./AboutMeBlock";
-import { userPagePath } from "../lib/userPage";
+import { showsRole, userPagePath } from "../lib/userPage";
 import { db } from "../lib/firebase";
 import { GLOBAL_ROLE_ID } from "../lib/firebaseService";
 import { roleOwner, roleService } from "../lib/roleService";
@@ -83,8 +83,10 @@ function CardBody({ uid, onClose, role }: { uid: string; onClose: () => void; ro
 
     const name = person.name || "Unknown User";
     const instructingIds = new Set(instructing.map(r => r.id));
+    // Roles they've hidden show only to them, admins and whoever runs that role
+    const runs = (id: string) => (context?.instructedRoles ?? []).some(r => r.id === id);
     const memberOf = (Array.isArray(person.roles) ? person.roles : [] as UserRoleData[])
-        .filter(r => r.id !== GLOBAL_ROLE_ID && !instructingIds.has(r.id));
+        .filter(r => r.id !== GLOBAL_ROLE_ID && !instructingIds.has(r.id) && showsRole(person, r.id, { uid: me, isAdmin, runs }));
 
     // Role actions: admins, or this role's owner (who can hand the role on, and take other instructors off it)
     const ownerUid = role ? roleOwner(role) : "";

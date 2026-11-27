@@ -11,7 +11,7 @@ import { AccessBadge } from "../pages/AdminPage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronRight, faCircleCheck, faTrophy, faXmark } from "@fortawesome/free-solid-svg-icons";
 import AboutMeBlock from "./AboutMeBlock";
-import { userPagePath } from "../lib/userPage";
+import { showsRole, userPagePath } from "../lib/userPage";
 import { db } from "../lib/firebase";
 
 
@@ -218,7 +218,10 @@ export default function ProfilePage() {
                             <p className="text-xs text-gray-400 text-center -mt-2">{inRolePage ? "In this role" : "Across all roles"}</p>
 
                             {(() => {
-                                const theirRoles = (selectedUser.roles ?? []).filter(r => r.id !== GLOBAL_ROLE_ID);
+                                // Roles they've hidden show only to them, admins and whoever runs that role
+                                const runs = (id: string) => (context?.instructedRoles ?? []).some(r => r.id === id);
+                                const theirRoles = (selectedUser.roles ?? [])
+                                    .filter(r => r.id !== GLOBAL_ROLE_ID && showsRole(selectedUser, r.id, { uid: user.uid, isAdmin, runs }));
                                 if (theirRoles.length === 0) return null;
                                 const chip = "text-xs font-medium bg-blue-50 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900 px-2.5 py-1 rounded-full";
                                 return (

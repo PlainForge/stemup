@@ -9,6 +9,7 @@ import 'widgets/motion.dart';
 import 'screens/admin_user_screen.dart';
 import 'screens/alumni_batch_screen.dart';
 import 'screens/auth_screens.dart';
+import 'screens/chat_screens.dart';
 import 'screens/home_screen.dart';
 import 'screens/instructor_screen.dart';
 import 'screens/role_member_screen.dart';
@@ -67,6 +68,15 @@ GoRouter buildRouter(AppState app) => GoRouter(
     GoRoute(path: '/login', pageBuilder: (_, s) => _page(const LoginScreen(), s)),
     GoRoute(path: '/register', pageBuilder: (_, s) => _page(const RegisterScreen(), s)),
     GoRoute(path: '/verify', pageBuilder: (_, s) => _page(const VerifyEmailScreen(), s)),
+    // Group chats and task threads open full screen, above the tab bar (and are where their notifications land)
+    GoRoute(
+      path: '/chat/:roleId',
+      pageBuilder: (_, s) => _page(RoleChatScreen(roleId: s.pathParameters['roleId']!), s),
+    ),
+    GoRoute(
+      path: '/thread/:taskId',
+      pageBuilder: (_, s) => _page(TaskThreadScreen(taskId: s.pathParameters['taskId']!), s),
+    ),
     StatefulShellRoute(
       builder: (context, state, shell) => AppShell(shell: shell),
       navigatorContainerBuilder: (context, shell, children) => FadingBranchContainer(currentIndex: shell.currentIndex, children: children),

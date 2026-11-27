@@ -258,7 +258,8 @@ class Db {
           RequestType.editStats ||
           RequestType.kickMember ||
           RequestType.rewardsTitle ||
-          RequestType.roleIcon:
+          RequestType.roleIcon ||
+          RequestType.roleMessaging:
         await _applyRoleChange(r);
       case null:
         break;
@@ -282,6 +283,8 @@ class Db {
         await setRewardsTitle(r.roleId, r.title);
       case RequestType.roleIcon when r.icon.isNotEmpty && r.iconColor.isNotEmpty:
         await setRoleIcon(r.roleId, r.icon, r.iconColor);
+      case RequestType.roleMessaging when r.feature != null:
+        await setRoleMessaging(r.roleId, r.feature!, r.enabled);
       // Only while they're still in the role
       case RequestType.editStats when members.contains(r.targetUid):
         await setMemberRoleStats(r.targetUid, r.roleId, points: r.points, tasks: r.taskCompleted, alsoGlobal: false);
@@ -413,6 +416,48 @@ class Db {
   static Future<void> setShowOnHome(String uid, String roleId, bool show) => _user(uid).update({
     'hideOnHome': show ? FieldValue.arrayRemove([roleId]) : FieldValue.arrayUnion([roleId]),
   });
+
+  /// Whether a role shows on their card and user page (admins and the role's instructors always see it).
+  static Future<void> setShowOnProfile(String uid, String roleId, bool show) => _user(uid).update({
+    'hideOnProfile': show ? FieldValue.arrayRemove([roleId]) : FieldValue.arrayUnion([roleId]),
+  });
+
+  // ── Messages (role group chats and task threads; src/lib/messages.ts) ───
+
+  static CollectionReference<Map<String, dynamic>> roleChat(String roleId) => _db.collection('roles/$roleId/messages');
+  static CollectionReference<Map<String, dynamic>> taskThread(String taskId) => _db.collection('tasks/$taskId/messages');
+
+  /// The latest 200 messages, oldest first.
+  static Stream<List<ChatMessage>> messagesStream(CollectionReference<Map<String, dynamic>> c) => c
+      .orderBy('createdAt', descending: true)
+      .limit(200)
+      .snapshots()
+      .map((s) => s.docs.map(ChatMessage.fromDoc).toList().reversed.toList());
+
+  /// Just the newest message (for the unread dot on a role's chat).
+  static Stream<ChatMessage?> latestMessageStream(CollectionReference<Map<String, dynamic>> c) =>
+      c.orderBy('createdAt', descending: true).limit(1).snapshots().map((s) => s.docs.isEmpty ? null : ChatMessage.fromDoc(s.docs.first));
+
+  static Future<void> sendMessage(CollectionReference<Map<String, dynamic>> c, UserData from, String text) async {
+    var clean = text.trim();
+    if (clean.isEmpty) return;
+    if (clean.length > maxMessageLength) clean = clean.substring(0, maxMessageLength);
+    await c.add({
+      'uid': from.uid,
+      'name': from.name,
+      if (from.photoURL.isNotEmpty) 'photoURL': from.photoURL,
+      'text': clean,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Future<void> deleteMessage(CollectionReference<Map<String, dynamic>> c, String id) => c.doc(id).delete();
+
+  static Stream<Task?> taskStream(String id) => _task(id).snapshots().map((s) => s.exists ? Task.fromDoc(s) : null);
+
+  /// Turns a role's group chat or task questions on or off (its owner or an admin).
+  static Future<void> setRoleMessaging(String roleId, MessagingFeature f, bool on) =>
+      _role(roleId).update({f == MessagingFeature.chat ? 'chatEnabled' : 'taskThreadsEnabled': on});
 
   /// Remembers this phone's push token so Cloud Functions can reach it.
   static Future<void> saveDevice(String uid, String token) =>

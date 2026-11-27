@@ -842,6 +842,7 @@ class _AdminTaskCardState extends State<_AdminTaskCard> {
             ),
           ]),
         if (sub != null) _ReviewButtons(s: sub),
+        if (TaskThreadButton.shows(context.watch<AppState>(), t)) TaskThreadButton(task: t),
         divider,
         AnimatedSize(
           duration: const Duration(milliseconds: 200),
@@ -1526,11 +1527,42 @@ class _ConfigTab extends StatefulWidget {
 }
 
 /// The Config tab's categories, each with its own page (like Settings).
-enum _ConfigPage { general, icon, privacy, reset, delete }
+enum _ConfigPage { general, icon, messages, privacy, reset, delete }
 
 class _ConfigTabState extends State<_ConfigTab> {
   final _name = TextEditingController();
   bool _resetting = false;
+
+  /// Which messaging switch or request is being saved.
+  MessagingFeature? _messagingBusy;
+
+  // The owner and admins switch group chat and task questions; the role's other instructors ask them
+  Future<void> _changeMessaging(MessagingFeature f, bool on) async {
+    final app = context.read<AppState>();
+    final canChange = app.canChangeRole(widget.role);
+    setState(() => _messagingBusy = f);
+    try {
+      if (canChange) {
+        await Db.setRoleMessaging(widget.role.id, f, on);
+      } else {
+        await Db.requestRoleChange(RequestType.roleMessaging, app.user!.uid, app.userData?.name ?? '', widget.role, {
+          'feature': f.name,
+          'enabled': on,
+        });
+        if (mounted) showToast(context, 'Request sent. ${_cap(widget.approver)} will review it.');
+      }
+    } catch (_) {
+      if (mounted) {
+        showToast(
+          context,
+          canChange ? "Couldn't change that. Please try again." : "Couldn't send the request. Please try again.",
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _messagingBusy = null);
+    }
+  }
 
   /// The open category, or null for the list.
   _ConfigPage? _open;
@@ -1632,6 +1664,13 @@ class _ConfigTabState extends State<_ConfigTab> {
         label: 'Icon',
         hint: "The icon and color on the Roles screen and this role's page",
         icon: FontAwesomeIcons.palette.data,
+        danger: false,
+      ),
+      (
+        key: _ConfigPage.messages,
+        label: 'Messages',
+        hint: 'Group chat ${role.chatEnabled ? 'on' : 'off'} · Task questions ${role.taskThreadsEnabled ? 'on' : 'off'}',
+        icon: FontAwesomeIcons.comments.data,
         danger: false,
       ),
       // Only the owner and admins decide who can find the role
@@ -1750,6 +1789,62 @@ class _ConfigTabState extends State<_ConfigTab> {
     );
   }
 
+  Widget _messagingCard(BuildContext context, MessagingFeature f, bool canChange, String? me) {
+    final role = widget.role;
+    final on = role.messagingOn(f);
+    final busy = _messagingBusy == f;
+    final pending = widget.roleRequests.where((r) => r.type == RequestType.roleMessaging && r.feature == f).firstOrNull;
+    final hint = f == MessagingFeature.chat
+        ? "A chat with everyone in ${role.name}, opened from the role's page. New messages come as notifications on iPhone (never by email). "
+              'Instructors and admins can delete any message.'
+        : 'A Questions button on each task, where the person doing it and whoever gave it can talk about it. Nobody else can read it. '
+              'New messages come as notifications on iPhone (never by email).';
+    return AppCard(
+      shadow: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (canChange)
+            SwitchRow(label: f.label, hint: hint, value: on, onChanged: busy ? null : (v) => _changeMessaging(f, v))
+          else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    f.label,
+                    style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                  ),
+                ),
+                Tag(on ? 'On' : 'Off', color: on ? Palette.green700 : const Color(0xFF6B7280)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Muted(hint, size: 13),
+            const SizedBox(height: 12),
+            if (pending != null)
+              PendingNotice(
+                '${pending.uid == me ? 'You asked' : '${pending.userName.isEmpty ? 'An instructor' : pending.userName} asked'}'
+                ' to turn it ${pending.enabled ? 'on' : 'off'}. Waiting for ${widget.approver}.',
+                actionLabel: pending.uid == me ? 'Withdraw' : null,
+                onAction: () => Db.deleteRequest(pending.id),
+              )
+            else
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(
+                  label: on ? 'Request to Turn Off' : 'Request to Turn On',
+                  size: AppButtonSize.md,
+                  style: on ? AppButtonStyle.gray : AppButtonStyle.blue,
+                  loading: busy,
+                  onPressed: () => _changeMessaging(f, !on),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _page(BuildContext context, _ConfigPage page, bool canChange, bool on, StemRequest? pending, String? me) => switch (page) {
     _ConfigPage.icon => RoleIconPicker(role: widget.role),
     // The role's name and whether its members see the global leaderboard, on one page
@@ -1778,6 +1873,15 @@ class _ConfigTabState extends State<_ConfigTab> {
             onChanged: (v) => Db.setShowInGlobal(widget.role.id, v),
           ),
         ),
+      ],
+    ),
+    _ConfigPage.messages => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final f in MessagingFeature.values) ...[
+          if (f != MessagingFeature.values.first) const SizedBox(height: 12),
+          _messagingCard(context, f, canChange, me),
+        ],
       ],
     ),
     _ConfigPage.privacy => Column(
