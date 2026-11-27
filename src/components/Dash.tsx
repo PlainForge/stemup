@@ -284,17 +284,17 @@ export default function Dash() {
             {/* Stat cards */}
             {!admins.includes(user.uid) && (
                 <div className={`grid gap-4 w-full ${access === "instructor" ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"}`}>
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col gap-1">
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center gap-1">
                         <p className="text-xs text-gray-400 uppercase tracking-widest">Total Points</p>
                         <p className="text-4xl font-bold">{userData?.points ?? 0}</p>
                     </div>
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col gap-1">
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center gap-1">
                         <p className="text-xs text-gray-400 uppercase tracking-widest">Tasks Done</p>
                         <p className="text-4xl font-bold">{userData?.taskCompleted ?? 0}</p>
                     </div>
                     {/* Only instructors see how many tasks they've given out */}
                     {access === "instructor" && (
-                        <div className="col-span-2 sm:col-span-1 bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col gap-1">
+                        <div className="col-span-2 sm:col-span-1 bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center gap-1">
                             <p className="text-xs text-gray-400 uppercase tracking-widest">Tasks Given</p>
                             <p className="text-4xl font-bold">{userData?.tasksGiven ?? 0}</p>
                         </div>

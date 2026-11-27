@@ -18,7 +18,7 @@ import { faBell, faBug, faCheck, faChevronRight, faCopy, faCircleHalfStroke, faS
 import Dropdown from "../components/Dropdown";
 import type { ThemeMode } from "../context/MainProvider";
 import { NOTIFICATION_TYPES, type StemRequest } from "../myDataTypes";
-import { roleService } from "../lib/roleService";
+import { roleOwner, roleService } from "../lib/roleService";
 import { BLOCKED_NAME_MESSAGE, isProfaneName } from "../lib/nameFilter";
 import { ABOUT_ME_MAX_CHARS, ABOUT_ME_MAX_WORDS, aboutMeProblem, countWords, tidyAboutMe } from "../lib/aboutMe";
 import { AccessBadge } from "./AdminPage";
@@ -57,7 +57,7 @@ const SETTINGS_SECTIONS = [
     { key: "profile", label: "Profile", hint: "Photo, display name, about me and email", icon: faUser },
     { key: "access", label: "Access", hint: "Your access level and Instructor requests", icon: faUserShield },
     { key: "notifications", label: "Notifications", hint: "Push, email and what to be notified about", icon: faBell },
-    { key: "app", label: "App", hint: "Appearance and bug reports", icon: faSliders },
+    { key: "app", label: "App", hint: "Appearance, bug reports and feature requests", icon: faSliders },
     { key: "account", label: "Account", hint: "Sign out and delete your account", icon: faUserGear },
 ] as const;
 type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["key"];
@@ -104,6 +104,8 @@ export default function Settings() {
     const access = context?.access ?? "user";
 
     const fileRef = useRef<HTMLInputElement | null>(null);
+    // Leaving Instructor mode (Settings > Access)
+    const [leaving, setLeaving] = useState(false);
 
     // A User's open request to become an Instructor
     useEffect(() => {
@@ -134,6 +136,29 @@ export default function Settings() {
             await alertDialog("Couldn't send your request. Please try again.", "Request not sent");
         } finally {
             setRequesting(false);
+        }
+    };
+
+    // Instructors can step back to being a User; admins have to make them one again
+    const leaveInstructor = async () => {
+        const running = context.instructedRoles ?? [];
+        const owned = running.filter(r => roleOwner(r) === user.uid);
+        const ok = await confirmDialog(
+            "You'll go back to being a User. You'll stay a member of your roles, but you won't be able to run them, assign tasks or request new roles." +
+            (running.length > 0 ? ` You'll stop running ${running.length} role${running.length === 1 ? "" : "s"} (${running.map(r => r.name).join(", ")}).` : "") +
+            (owned.length > 0 ? ` ${owned.length === 1 ? `${owned[0].name} will be left` : `${owned.length} roles you own will be left`} without an owner.` : "") +
+            " Only an admin can make you an Instructor again.",
+            { title: "Leave Instructor Mode?", confirmLabel: "Leave", danger: true }
+        );
+        if (!ok) return;
+        setLeaving(true);
+        try {
+            await roleService.leaveInstructor();
+        } catch (err) {
+            console.error(err);
+            await alertDialog("Couldn't leave Instructor mode. Please try again.", "Something went wrong");
+        } finally {
+            setLeaving(false);
         }
     };
 
@@ -496,6 +521,21 @@ export default function Settings() {
                             </div>
                         )}
 
+                        {/* Stepping back to User, with a warning first */}
+                        {access === "instructor" && (
+                            <div className="flex flex-col gap-3 bg-red-50 border border-red-100 px-4 py-3 rounded-xl dark:bg-red-500/10 dark:border-red-500/30">
+                                <div>
+                                    <p className="text-sm font-medium text-red-600 dark:text-red-400">Leave Instructor mode</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">Go back to being a User. You'll stop running your roles, and only an admin can make you an Instructor again.</p>
+                                </div>
+                                <div>
+                                    <Button onClick={leaveInstructor} color="red" size="sm" type="button" disabled={leaving}>
+                                        {leaving ? "Leaving..." : "Leave Instructor Mode"}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
                         {access === "user" && (instructorRequest ? (
                             <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 px-4 py-3 rounded-xl">
                                 <p className="text-sm text-amber-700">Your request to become an Instructor is waiting for an admin.</p>
@@ -579,12 +619,21 @@ export default function Settings() {
                             />
                         </div>
                         <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
-                            <span className="text-sm">{isAdmin ? "Bug Reports" : "Report a bug"}</span>
+                            <span className="text-sm">{isAdmin ? "Bug reports and feature requests" : "Report a bug or request a feature"}</span>
                             <Button onClick={() => setBugReportOpen?.(true)} color="blue" size="sm" type="button" extraClasses="flex items-center justify-center gap-2 whitespace-nowrap shrink-0">
                                 <FontAwesomeIcon icon={isAdmin ? faWrench : faBug} />
-                                {isAdmin ? "View" : "Report"}
+                                {isAdmin ? "View" : "Send"}
                             </Button>
                         </div>
+                        {/* Admins only: an email for every new report */}
+                        {isAdmin && (
+                            <SwitchRow
+                                label="Email me new bugs and feature requests"
+                                hint={`Sent to ${userData.email || user.email || "your account email"} as soon as one comes in.`}
+                                checked={notifyPrefs.feedbackEmails === true}
+                                onChange={(v) => setNotify("feedbackEmails", v)}
+                            />
+                        )}
                     </div>
                 </div>
 

@@ -285,6 +285,11 @@ export const roleService = {
         })));
     },
 
+    /** The signed-in instructor gives up Instructor access (the leaveInstructor function). */
+    async leaveInstructor() {
+        await httpsCallable(functions, "leaveInstructor")({});
+    },
+
     /**
      * Clears what's left of someone who deleted their account but still shows up
      * (the purgeDeletedAccount function refuses if they can still sign in).

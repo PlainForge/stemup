@@ -1526,7 +1526,7 @@ class _ConfigTab extends StatefulWidget {
 }
 
 /// The Config tab's categories, each with its own page (like Settings).
-enum _ConfigPage { general, icon, reset, delete }
+enum _ConfigPage { general, icon, privacy, reset, delete }
 
 class _ConfigTabState extends State<_ConfigTab> {
   final _name = TextEditingController();
@@ -1634,6 +1634,15 @@ class _ConfigTabState extends State<_ConfigTab> {
         icon: FontAwesomeIcons.palette.data,
         danger: false,
       ),
+      // Only the owner and admins decide who can find the role
+      if (canChange)
+        (
+          key: _ConfigPage.privacy,
+          label: 'Privacy',
+          hint: role.inviteOnly ? 'Invite only: hidden from the Roles screen' : 'Public: anyone can find it and ask to join',
+          icon: FontAwesomeIcons.lock.data,
+          danger: false,
+        ),
       (
         key: _ConfigPage.reset,
         label: 'Reset Role',
@@ -1769,6 +1778,35 @@ class _ConfigTabState extends State<_ConfigTab> {
             onChanged: (v) => Db.setShowInGlobal(widget.role.id, v),
           ),
         ),
+      ],
+    ),
+    _ConfigPage.privacy => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppCard(
+          shadow: false,
+          child: SwitchRow(
+            label: 'Invite only',
+            hint:
+                "When on, ${widget.role.name} is hidden from the Roles screen for anyone who isn't in it, and nobody can ask to join. "
+                'People join only when an instructor or admin invites them from the Members tab.',
+            value: widget.role.inviteOnly,
+            onChanged: (v) async {
+              try {
+                await Db.setInviteOnly(widget.role.id, v);
+              } catch (_) {
+                if (context.mounted) showToast(context, "Couldn't change that. Please try again.", error: true);
+              }
+            },
+          ),
+        ),
+        if (widget.role.inviteOnly && widget.role.pendingRequests.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          PendingNotice(
+            '${widget.role.pendingRequests.length} join request${widget.role.pendingRequests.length == 1 ? ' is' : 's are'} still waiting from before. '
+            'You can still accept or decline ${widget.role.pendingRequests.length == 1 ? 'it' : 'them'} in the Members tab.',
+          ),
+        ],
       ],
     ),
     _ConfigPage.reset => _Section(

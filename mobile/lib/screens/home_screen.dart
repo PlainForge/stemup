@@ -314,7 +314,7 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) => AppCard(
     padding: const EdgeInsets.all(24),
     child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SectionLabel(label, size: 12, padding: const EdgeInsets.only(bottom: 4)),
         TweenAnimationBuilder<double>(

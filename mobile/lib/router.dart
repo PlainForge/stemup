@@ -16,11 +16,18 @@ import 'screens/role_screen.dart';
 import 'screens/roles_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/tasks_screen.dart';
+import 'screens/user_screen.dart';
 import 'screens/shell.dart';
 import 'state/app_state.dart';
 import 'widgets/page_scaffold.dart';
 
 Page<void> _page(Widget child, GoRouterState state) => AppPage<void>(key: state.pageKey, child: child);
+
+/// Anyone's page, under whichever tab it was opened from (admins see their admin user page).
+final _userRoute = GoRoute(
+  path: 'users/:uid',
+  pageBuilder: (_, s) => _page(UserScreen(uid: s.pathParameters['uid']!), s),
+);
 
 /// A role member's page, under both the role page and the admin role page.
 final _memberRoute = GoRoute(
@@ -65,7 +72,9 @@ GoRouter buildRouter(AppState app) => GoRouter(
       navigatorContainerBuilder: (context, shell, children) => FadingBranchContainer(currentIndex: shell.currentIndex, children: children),
       branches: [
         StatefulShellBranch(
-          routes: [GoRoute(path: '/', pageBuilder: (_, s) => _page(const HomeScreen(), s))],
+          routes: [
+            GoRoute(path: '/', pageBuilder: (_, s) => _page(const HomeScreen(), s), routes: [_userRoute]),
+          ],
         ),
         StatefulShellBranch(
           routes: [
@@ -73,6 +82,7 @@ GoRouter buildRouter(AppState app) => GoRouter(
               path: '/roles',
               pageBuilder: (_, s) => _page(const RolesScreen(), s),
               routes: [
+                _userRoute,
                 GoRoute(
                   path: ':id',
                   pageBuilder: (_, s) => _page(RoleScreen(roleId: s.pathParameters['id']!), s),
@@ -111,6 +121,7 @@ GoRouter buildRouter(AppState app) => GoRouter(
               path: '/settings',
               pageBuilder: (_, s) => _page(const SettingsScreen(), s),
               routes: [
+                _userRoute,
                 GoRoute(
                   path: ':section',
                   pageBuilder: (_, s) => _page(SettingsScreen(section: s.pathParameters['section']), s),
@@ -126,6 +137,7 @@ GoRouter buildRouter(AppState app) => GoRouter(
               path: '/instructor',
               pageBuilder: (_, s) => _page(const InstructorScreen(), s),
               routes: [
+                _userRoute,
                 GoRoute(
                   path: 'roles/:id',
                   pageBuilder: (_, s) => _page(AdminRoleScreen(roleId: s.pathParameters['id']!, instructorMode: true), s),
@@ -137,7 +149,9 @@ GoRouter buildRouter(AppState app) => GoRouter(
         ),
         // Every task you've been given, across your roles (users and instructors; shown after Roles)
         StatefulShellBranch(
-          routes: [GoRoute(path: '/tasks', pageBuilder: (_, s) => _page(const TasksScreen(), s))],
+          routes: [
+            GoRoute(path: '/tasks', pageBuilder: (_, s) => _page(const TasksScreen(), s), routes: [_userRoute]),
+          ],
         ),
       ],
     ),

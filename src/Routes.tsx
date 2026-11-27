@@ -13,6 +13,7 @@ import AlumniBatchPage from "./pages/AlumniBatchPage";
 import AdminPage from "./pages/AdminPage";
 import AdminRolePage from "./pages/AdminRolePage";
 import AdminUserPage from "./pages/AdminUserPage";
+import UserPage from "./pages/UserPage";
 import InstructorPage from "./pages/InstructorPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import TasksPage from "./pages/TasksPage";
@@ -43,6 +44,12 @@ export const router = createBrowserRouter([
       { path: "settings/:section", element: <Settings /> },
       { path: "roles", element: <RolesSelectorPage /> },
       { path: "tasks", element: <TasksPage /> },
+      // Anyone's page, under whichever tab it was opened from (admins see the full admin user page)
+      { path: "users/:uid", element: <UserPage /> },
+      { path: "roles/users/:uid", element: <UserPage /> },
+      { path: "tasks/users/:uid", element: <UserPage /> },
+      { path: "instructor/users/:uid", element: <UserPage /> },
+      { path: "settings/users/:uid", element: <UserPage /> },
       { path: "admin", element: <AdminPage /> },
       { path: "admin/roles/:id", element: <AdminRolePage /> },
       // A member's page opened from the Admin or Instructor tab stays under that tab

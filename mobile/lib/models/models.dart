@@ -59,7 +59,16 @@ class NotificationPrefs {
   /// Roles (by id) whose notifications are turned off on the role's Notifications tab.
   final Set<String> rolesOff;
 
-  const NotificationPrefs({this.push = false, this.email = false, this.off = const {}, this.rolesOff = const {}});
+  /// Admins only: email them every new bug report and feature request (off unless turned on).
+  final bool feedbackEmails;
+
+  const NotificationPrefs({
+    this.push = false,
+    this.email = false,
+    this.off = const {},
+    this.rolesOff = const {},
+    this.feedbackEmails = false,
+  });
 
   factory NotificationPrefs.fromMap(dynamic m) {
     if (m is! Map) return const NotificationPrefs();
@@ -68,6 +77,7 @@ class NotificationPrefs {
     return NotificationPrefs(
       push: m['push'] == true,
       email: m['email'] == true,
+      feedbackEmails: m['feedbackEmails'] == true,
       off: {
         for (final t in NotifyType.values)
           if (types[t.name] == false) t,
@@ -229,6 +239,10 @@ class Role {
   final List<String> pendingRequests;
   final bool showInGlobalLeaderboard;
 
+  /// Hidden from the Roles screen for anyone not in it: people only join through
+  /// an invitation (an owner or admin setting).
+  final bool inviteOnly;
+
   /// Instructors who run this role (its creator plus anyone they add). They're
   /// members too, but leaderboards leave them out, like admins.
   final List<String> instructors;
@@ -252,6 +266,7 @@ class Role {
     this.members = const [],
     this.pendingRequests = const [],
     this.showInGlobalLeaderboard = false,
+    this.inviteOnly = false,
     this.instructors = const [],
     this.createdBy = '',
     this.ownerField,
@@ -269,6 +284,7 @@ class Role {
       members: _strList(m['members']),
       pendingRequests: _strList(m['pendingRequests']),
       showInGlobalLeaderboard: m['showInGlobalLeaderboard'] == true,
+      inviteOnly: m['inviteOnly'] == true,
       instructors: _strList(m['instructors']),
       createdBy: _str(m['createdBy']),
       ownerField: m['owner'] is String ? m['owner'] as String : null,
@@ -537,19 +553,37 @@ class AlumniMember implements Ranked {
   }
 }
 
+/// What someone sends from Settings > App (the bugs collection's `type`).
+enum FeedbackType { bug, feature }
+
 class Bug {
   final String id;
+
+  /// Reports from before feature requests have no type and are bugs.
+  final FeedbackType type;
   final String bugTitle;
   final String bugDesc;
   final String userEmail;
   final String userId;
 
-  const Bug({required this.id, required this.bugTitle, required this.bugDesc, required this.userEmail, required this.userId});
+  final DateTime? createdAt;
+
+  const Bug({
+    required this.id,
+    this.type = FeedbackType.bug,
+    this.createdAt,
+    required this.bugTitle,
+    required this.bugDesc,
+    required this.userEmail,
+    required this.userId,
+  });
 
   factory Bug.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final m = doc.data() ?? {};
     return Bug(
       id: doc.id,
+      type: m['type'] == 'feature' ? FeedbackType.feature : FeedbackType.bug,
+      createdAt: m['createdAt'] is Timestamp ? (m['createdAt'] as Timestamp).toDate() : null,
       bugTitle: _str(m['bugTitle']),
       bugDesc: _str(m['bugDesc']),
       userEmail: _str(m['userEmail']),

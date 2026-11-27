@@ -236,18 +236,19 @@ class _InstructorCardState extends State<InstructorCard> {
                     onPressed: () => _remove(role, name),
                   ),
               ],
-              if (app.isAdmin) ...[
+              ...[
                 const SizedBox(height: 12),
                 Center(
                   child: LinkText(
-                    'Open their user page',
+                    'View their page',
                     size: 14,
                     bold: true,
                     color: Palette.navActive,
+                    icon: FontAwesomeIcons.chevronRight.data,
                     onPressed: () {
                       final router = GoRouter.of(context);
                       Navigator.of(context).pop();
-                      router.push('/admin/users/${widget.uid}');
+                      router.push(AppState.userPagePath(widget.uid, router.state.uri.path));
                     },
                   ),
                 ),

@@ -1,9 +1,11 @@
 import { useContext, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChalkboardUser, faCircleCheck, faClipboardList, faCrown, faTrophy, faUsers, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faChalkboardUser, faChevronRight, faCircleCheck, faClipboardList, faCrown, faTrophy, faUsers, faXmark } from "@fortawesome/free-solid-svg-icons";
+import AboutMeBlock from "./AboutMeBlock";
+import { userPagePath } from "../lib/userPage";
 import { db } from "../lib/firebase";
 import { GLOBAL_ROLE_ID } from "../lib/firebaseService";
 import { roleOwner, roleService } from "../lib/roleService";
@@ -50,6 +52,7 @@ export default function InstructorCard({ uid, onClose, role }: { uid: string | n
 function CardBody({ uid, onClose, role }: { uid: string; onClose: () => void; role?: Role }) {
     const context = useContext(MainContext);
     const navigate = useNavigate();
+    const location = useLocation();
     const [person, setPerson] = useState<UserData | null | undefined>(undefined);
     const [instructing, setInstructing] = useState<{ id: string; name: string }[]>([]);
     const [busy, setBusy] = useState(false);
@@ -66,6 +69,7 @@ function CardBody({ uid, onClose, role }: { uid: string; onClose: () => void; ro
     const me = context?.user?.uid ?? "";
     const isAdmin = (context?.admins ?? []).includes(me);
     const stillInstructor = (context?.instructors ?? []).includes(uid);
+    const pagePath = userPagePath(uid, location.pathname);
 
     if (person === undefined) return <p className="text-sm text-gray-400 text-center py-12">Loading...</p>;
     if (person === null) {
@@ -169,12 +173,7 @@ function CardBody({ uid, onClose, role }: { uid: string; onClose: () => void; ro
                     </div>
                 </div>
 
-                {person.aboutMe?.trim() && (
-                    <div className="w-full rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 text-left">
-                        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-1">About Me</p>
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">{person.aboutMe.trim()}</p>
-                    </div>
-                )}
+                <AboutMeBlock text={person.aboutMe} />
 
                 <div className="grid grid-cols-3 gap-2 w-full">
                     {stats.map(s => (
@@ -197,13 +196,14 @@ function CardBody({ uid, onClose, role }: { uid: string; onClose: () => void; ro
                         {canRemove && <Button onClick={remove} size="full" color="red" disabled={busy}>Remove as Instructor</Button>}
                     </div>
                 )}
-                {isAdmin && (
+                {pagePath && (
                     <button
                         type="button"
-                        onClick={() => navigate(`/admin/users/${uid}`)}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:cursor-pointer"
+                        onClick={() => { onClose(); navigate(pagePath); }}
+                        className="group inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:cursor-pointer"
                     >
-                        Open their user page
+                        View their page
+                        <FontAwesomeIcon icon={faChevronRight} className="text-xs transition-transform group-hover:translate-x-0.5" />
                     </button>
                 )}
             </div>

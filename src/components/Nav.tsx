@@ -217,7 +217,7 @@ export default function Nav() {
                     pillClassName="bg-black/10 dark:bg-white/15"
                     className="pointer-events-auto flex items-center w-full max-w-md p-1.5 rounded-full bg-white/40 dark:bg-gray-900/40 backdrop-blur-2xl backdrop-saturate-200 border border-white/50 dark:border-white/10 shadow-xl shadow-black/10"
                 >
-                    <MobileNavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
+                    <MobileNavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/" || path.startsWith("/users/")} />
                     <MobileNavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
                     {!isAdmin && (
                         <MobileNavItem icon={faListCheck} label="Tasks" onClick={() => navigate("/tasks")} active={path.startsWith("/tasks")} />
@@ -249,7 +249,7 @@ export default function Nav() {
                 {/* Divider */}
                 <div className="w-px h-4 bg-gray-200 dark:bg-white/10 mx-1" />
 
-                <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
+                <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/" || path.startsWith("/users/")} />
                 <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
                 {/* Admins aren't given tasks, so only users and instructors get this tab */}
                 {!isAdmin && (

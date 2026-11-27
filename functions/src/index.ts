@@ -81,3 +81,5 @@ export { checkName, cleanProfileName } from "./nameFilter";
 export { cleanUpDeletedAccount, purgeDeletedAccount } from "./accountCleanup";
 export { notifyOnTaskChange, notifyOnJoinDecision, notifyOnRequestDecision, notifyOnRoleRequest, notifyOnInvite, removeDevicesOnUserDelete } from "./notifications";
 export { respondToInvite, countTaskGiven } from "./invites";
+export { notifyAdminsOnFeedback } from "./feedback";
+export { leaveInstructor } from "./leaveInstructor";

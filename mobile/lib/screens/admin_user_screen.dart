@@ -105,7 +105,7 @@ class _AdminUserScreenState extends State<AdminUserScreen> {
         final request = app.adminRequests.where((r) => r.type == RequestType.instructor && r.uid == u.uid).firstOrNull;
 
         return PageScaffold(
-          backLabel: 'Users',
+          backLabel: 'Back',
           backPath: '/admin',
           children: [
             _header(context, u, level),
@@ -229,6 +229,7 @@ class _AdminUserScreenState extends State<AdminUserScreen> {
                   ),
                 const SizedBox(height: 8),
                 CopyIdChip(u.uid, copiedMessage: 'User ID copied'),
+                if (u.aboutMe.isNotEmpty) ...[const SizedBox(height: 14), AboutMeBox(u.aboutMe)],
               ],
             ),
           ),

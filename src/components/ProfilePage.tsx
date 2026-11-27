@@ -9,7 +9,9 @@ import { collection, doc, getDoc, getDocs, onSnapshot, query, updateDoc, where }
 import type { AccessLevel, UserRoleData } from "../myDataTypes";
 import { AccessBadge } from "../pages/AdminPage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleCheck, faTrophy, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faChevronRight, faCircleCheck, faTrophy, faXmark } from "@fortawesome/free-solid-svg-icons";
+import AboutMeBlock from "./AboutMeBlock";
+import { userPagePath } from "../lib/userPage";
 import { db } from "../lib/firebase";
 
 
@@ -76,6 +78,12 @@ export default function ProfilePage() {
     const openRole = (id: string) => {
         swtch();
         navigate(`/roles/${id}`);
+    };
+    // Their user page (admins) or member page (instructors), if the viewer has one for them
+    const pagePath = userPagePath(selectedUser.uid, location.pathname);
+    const openPage = () => {
+        swtch();
+        navigate(pagePath);
     };
     const targetAccess: AccessLevel = admins.includes(selectedUser.uid) ? "admin" : instructors.includes(selectedUser.uid) ? "instructor" : "user";
 
@@ -178,14 +186,15 @@ export default function ProfilePage() {
                 <div className="flex flex-col items-center gap-1.5 text-center">
                     <h1 className="text-xl font-bold break-words">{selectedUser.name}</h1>
                     {targetAccess !== "user" && <AccessBadge level={targetAccess} />}
+                    {pagePath && (
+                        <button type="button" onClick={openPage} className="group inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:cursor-pointer">
+                            View their page
+                            <FontAwesomeIcon icon={faChevronRight} className="text-xs transition-transform group-hover:translate-x-0.5" />
+                        </button>
+                    )}
                 </div>
 
-                {aboutMe && (
-                    <div className="w-full rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 text-left">
-                        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-1">About Me</p>
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">{aboutMe}</p>
-                    </div>
-                )}
+                <AboutMeBlock text={aboutMe} />
 
                 {/* Admins are in every role automatically, so their card is just who they are */}
                 {targetAccess === "admin" ? null : !isEditing ? (

@@ -14,10 +14,14 @@ import type { AccessLevel, Role, StemRequest, UserData } from "../myDataTypes";
 import Loading from "./Loading";
 import Button from "../components/Button";
 import ProfileImg from "../components/ProfileImg";
+import AboutMeBlock from "../components/AboutMeBlock";
 import { AccessBadge } from "./AdminPage";
 import BackButton from "../components/BackButton";
 
-/** /admin/users/:uid — one user's details, with their access and global leaderboard switches. */
+/**
+ * /admin/users/:uid — one user's details, with their access and global leaderboard
+ * switches. Also what admins see on a user page opened from another tab.
+ */
 export default function AdminUserPage() {
     const context = useContext(MainContext);
     const navigate = useNavigate();
@@ -59,7 +63,8 @@ export default function AdminUserPage() {
     if (loading || !user || !isAdmin || target === undefined || !uid) return <Loading />;
 
     const back = (
-        <BackButton label="Users" onClick={() => navigate("/admin?tab=users")} />
+        // Back to wherever they came from (any tab), or the Admin page's Users tab
+        <BackButton label="Back" onClick={() => (window.history.state?.idx ?? 0) > 0 ? navigate(-1) : navigate("/admin?tab=users", { replace: true })} />
     );
 
     if (target === null) {
@@ -165,6 +170,7 @@ export default function AdminUserPage() {
                         <span className="break-all">{uid}</span>
                         <FontAwesomeIcon icon={copied === "uid" ? faCheck : faCopy} className={`shrink-0 ${copied === "uid" ? "text-green-500" : ""}`} />
                     </button>
+                    <AboutMeBlock text={target.aboutMe} className="mt-2" />
                 </div>
             </div>
 

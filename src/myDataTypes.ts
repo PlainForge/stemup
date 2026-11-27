@@ -62,7 +62,17 @@ export type NotificationPrefs = {
     types?: Partial<Record<NotifyType, boolean>>,
     /** Per role (by id), from the role's Notifications tab: false is off; missing roles are on */
     roles?: Record<string, boolean>,
+    /** Admins only: email them every new bug report and feature request (off unless turned on) */
+    feedbackEmails?: boolean,
 }
+
+/** What someone sends from Settings > App: a bug report or a feature request (the bugs collection's `type`) */
+export const FEEDBACK_TYPES = [
+    { key: "bug", label: "Bug" },
+    { key: "feature", label: "Feature" },
+] as const;
+
+export type FeedbackType = (typeof FEEDBACK_TYPES)[number]["key"];
 
 export type RoleUserData = {
   id: string
@@ -88,6 +98,8 @@ export type Role = {
   icon?: string;
   iconColor?: string;
   showInGlobalLeaderboard?: boolean;
+  /** Hidden from the Roles page for anyone not in it: people only join through an invitation (owner or admin setting) */
+  inviteOnly?: boolean;
 };
 
 /** User < Instructor < Admin */

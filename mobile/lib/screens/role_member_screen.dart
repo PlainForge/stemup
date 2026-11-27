@@ -237,6 +237,7 @@ class _RoleMemberScreenState extends State<RoleMemberScreen> {
                     onPressed: () => context.go('/admin/users/${m.uid}'),
                   ),
                 ],
+                if (m.aboutMe.isNotEmpty) ...[const SizedBox(height: 14), AboutMeBox(m.aboutMe)],
               ],
             ),
           ),

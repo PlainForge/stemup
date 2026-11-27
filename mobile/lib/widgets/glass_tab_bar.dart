@@ -2,6 +2,9 @@
 // with its own velocity while travelling and settles back to the tab's width, the
 // Flutter counterpart of the web Nav's "squishy" PillBar. The pill can also be
 // dragged to scrub between tabs, like the system tab bar.
+//
+// It can also collapse (AppShell does this while a page scrolls down) into a
+// small bubble showing just the active tab's icon; tapping the bubble expands it.
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
@@ -22,17 +25,28 @@ class GlassTabItem {
 }
 
 const _barHeight = 64.0;
+
+/// Width and height of the collapsed bubble.
+const _collapsedSize = 54.0;
 const _inset = 5.0;
 const _spring = SpringDescription(mass: 1, stiffness: 900, damping: 42);
 
 class GlassTabBar extends StatefulWidget {
-  const GlassTabBar({super.key, required this.items, required this.currentIndex, required this.onSelect});
+  const GlassTabBar({super.key, required this.items, required this.currentIndex, required this.onSelect, this.collapse = 0, this.onExpand});
 
   final List<GlassTabItem> items;
   final int currentIndex;
   final ValueChanged<int> onSelect;
 
+  /// 0 for the full bar, 1 for the bubble showing only the active tab's icon,
+  /// in between while animating. The bar shrinks toward the left edge.
+  final double collapse;
+
+  /// Tapping the collapsed bubble.
+  final VoidCallback? onExpand;
+
   static const height = _barHeight;
+  static const collapsedSize = _collapsedSize;
 
   @override
   State<GlassTabBar> createState() => _GlassTabBarState();
@@ -79,59 +93,141 @@ class _GlassTabBarState extends State<GlassTabBar> with TickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: _barHeight,
-      child: GlassSurface(
-        radius: _barHeight / 2,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final tabW = (constraints.maxWidth - _inset * 2) / _count;
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart: (_) {
-                _dragging = true;
-                _pos.stop();
-                _lift.forward();
-              },
-              onHorizontalDragUpdate: (d) {
-                _pos.value = (_pos.value + d.delta.dx / tabW).clamp(-.25, _count - .75);
-              },
-              onHorizontalDragEnd: (d) {
-                _dragging = false;
-                _lift.reverse();
-                final v = d.velocity.pixelsPerSecond.dx / tabW;
-                final target = (_pos.value + v * .12).round().clamp(0, _count - 1);
-                _select(target, v);
-              },
-              child: AnimatedBuilder(
-                animation: Listenable.merge([_pos, _lift]),
-                builder: (context, _) => Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    _indicator(context, tabW),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: _inset),
-                      child: Row(
+    return LayoutBuilder(
+      builder: (context, outer) {
+        final fullW = outer.maxWidth;
+        final t = widget.collapse.clamp(0.0, 1.0);
+        if (t == 0) {
+          return SizedBox(
+            height: _barHeight,
+            child: GlassSurface(radius: _barHeight / 2, child: _full(context, fullW)),
+          );
+        }
+
+        // Shrinks toward the left: the full bar fades out early, the active icon fades in late
+        final w = _lerp(fullW, _collapsedSize, t);
+        final h = _lerp(_barHeight, _collapsedSize, t);
+        final item = widget.items[widget.currentIndex.clamp(0, _count - 1)];
+        final anyBadge = widget.items.any((i) => i.badge);
+        return SizedBox(
+          height: _barHeight,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: w,
+              height: h,
+              child: Semantics(
+                button: true,
+                label: 'Show navigation (${item.label})',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: t > .5 ? widget.onExpand : null,
+                  child: GlassSurface(
+                    radius: h / 2,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(h / 2),
+                      child: Stack(
+                        clipBehavior: Clip.none,
                         children: [
-                          for (var i = 0; i < _count; i++)
-                            Expanded(
-                              child: _TabButton(
-                                item: widget.items[i],
-                                // 1 when the pill is centered on this tab, fading out as it leaves
-                                activeness: (1 - (_pos.value - i).abs()).clamp(0.0, 1.0),
-                                selected: i == widget.currentIndex,
-                                onTap: () => _select(i),
+                          // The full bar, kept at full width so nothing squeezes while it fades
+                          Opacity(
+                            opacity: (1 - t / .45).clamp(0.0, 1.0),
+                            child: IgnorePointer(
+                              child: OverflowBox(
+                                alignment: Alignment.centerLeft,
+                                minWidth: fullW,
+                                maxWidth: fullW,
+                                minHeight: _barHeight,
+                                maxHeight: _barHeight,
+                                child: _full(context, fullW),
                               ),
                             ),
+                          ),
+                          // Just the active page's icon
+                          Center(
+                            child: Opacity(
+                              opacity: ((t - .35) / .65).clamp(0.0, 1.0),
+                              child: Transform.scale(
+                                scale: .7 + .3 * t,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Icon(item.icon, size: 21, color: Palette.resolve(context, Palette.navActive)),
+                                    // Something on another tab still needs attention
+                                    if (anyBadge) const Positioned(top: -3, right: -7, child: PingDot()),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static double _lerp(double a, double b, double t) => a + (b - a) * t;
+
+  /// The full bar: the sliding pill and every tab.
+  Widget _full(BuildContext context, double width) {
+    return SizedBox(
+      width: width,
+      height: _barHeight,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tabW = (constraints.maxWidth - _inset * 2) / _count;
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: (_) {
+              _dragging = true;
+              _pos.stop();
+              _lift.forward();
+            },
+            onHorizontalDragUpdate: (d) {
+              _pos.value = (_pos.value + d.delta.dx / tabW).clamp(-.25, _count - .75);
+            },
+            onHorizontalDragEnd: (d) {
+              _dragging = false;
+              _lift.reverse();
+              final v = d.velocity.pixelsPerSecond.dx / tabW;
+              final target = (_pos.value + v * .12).round().clamp(0, _count - 1);
+              _select(target, v);
+            },
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_pos, _lift]),
+              builder: (context, _) => Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _indicator(context, tabW),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: _inset),
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < _count; i++)
+                          Expanded(
+                            child: _TabButton(
+                              item: widget.items[i],
+                              // 1 when the pill is centered on this tab, fading out as it leaves
+                              activeness: (1 - (_pos.value - i).abs()).clamp(0.0, 1.0),
+                              selected: i == widget.currentIndex,
+                              onTap: () => _select(i),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

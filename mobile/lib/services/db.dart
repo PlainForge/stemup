@@ -116,7 +116,12 @@ class Db {
     return list;
   });
 
-  static Stream<List<Bug>> bugsStream() => _db.collection('bugs').snapshots().map((s) => s.docs.map(Bug.fromDoc).toList());
+  /// Every bug report and feature request, newest first.
+  static Stream<List<Bug>> bugsStream() => _db.collection('bugs').snapshots().map((s) {
+    final list = s.docs.map(Bug.fromDoc).toList();
+    list.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+    return list;
+  });
 
   /// Live profiles for a set of uids — one listener per user, as the web app does.
   static Stream<List<UserData>> usersStream(List<String> uids) {
@@ -297,6 +302,9 @@ class Db {
   }
 
   /// Takes Instructor access away. They stay a member of their roles, but no longer run them.
+  /// The signed-in instructor gives up Instructor access (the leaveInstructor function).
+  static Future<void> leaveInstructor() => FirebaseFunctions.instance.httpsCallable('leaveInstructor').call<dynamic>({});
+
   static Future<void> revokeInstructor(String uid) async {
     await _db.doc('admins/instructors').set({
       'ids': FieldValue.arrayRemove([uid]),
@@ -551,6 +559,9 @@ class Db {
       _reward(roleId).update({'first': first, 'second': second, 'third': third});
 
   static Future<void> setShowInGlobal(String roleId, bool value) => _role(roleId).update({'showInGlobalLeaderboard': value});
+
+  /// Owner and admin only: hides the role from the Roles screen, so people only join by invitation.
+  static Future<void> setInviteOnly(String roleId, bool value) => _role(roleId).update({'inviteOnly': value});
 
   /// Updates a member's stats for one role; with [alsoGlobal], the same delta
   /// is applied to their global totals.
@@ -893,8 +904,20 @@ class Db {
 
   // ── Bugs ───────────────────────────────────────────────────────────────
 
-  static Future<void> submitBug({required String title, required String desc, required String email, required String uid}) =>
-      _db.collection('bugs').add({'bugTitle': title, 'bugDesc': desc, 'userEmail': email, 'userId': uid, 'createdAt': Timestamp.now()});
+  static Future<void> submitBug({
+    required FeedbackType type,
+    required String title,
+    required String desc,
+    required String email,
+    required String uid,
+  }) => _db.collection('bugs').add({
+    'type': type.name,
+    'bugTitle': title,
+    'bugDesc': desc,
+    'userEmail': email,
+    'userId': uid,
+    'createdAt': Timestamp.now(),
+  });
 
   static Future<void> dismissBug(String id) => _db.doc('bugs/$id').delete();
 }

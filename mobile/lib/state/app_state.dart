@@ -86,6 +86,17 @@ class AppState extends ChangeNotifier {
   List<StemRequest> adminRequests = const [];
 
   /// The roles an Instructor runs (empty for admins and users), by name.
+  /// Where "View their page" on a profile or instructor card goes (src/lib/userPage.ts).
+  /// Anyone can open anyone's page, under the tab [location] is in so the tab
+  /// bar stays put: /users/:uid under Home, /roles/users/:uid under Roles, and
+  /// so on. Admins see the full admin user page there; everyone else the
+  /// read-only page.
+  static String userPagePath(String targetUid, String location) {
+    final first = Uri.parse(location).pathSegments.firstOrNull ?? '';
+    const tabs = {'roles', 'tasks', 'admin', 'instructor', 'settings'};
+    return '${tabs.contains(first) ? '/$first' : ''}/users/$targetUid';
+  }
+
   List<Role> get instructedRoles {
     final uid = user?.uid;
     if (uid == null || isAdmin || !isInstructor) return const [];

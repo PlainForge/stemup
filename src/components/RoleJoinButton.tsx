@@ -8,7 +8,7 @@ import { faArrowRight, faHourglassHalf, faPaperPlane, faPlus, faSpinner, faXmark
 import { confirmDialog } from "../lib/confirm";
 
 interface JoinProps {
-    role: {name: string, id: string}
+    role: {name: string, id: string, inviteOnly?: boolean}
 }
 
 export default function JoinButton({ role } : JoinProps) {
@@ -108,6 +108,11 @@ export default function JoinButton({ role } : JoinProps) {
                 <span className="hidden group-hover/join:inline">Withdraw</span>
             </button>
         );
+    }
+
+    // Invite-only roles take no join requests: people answer their invitation above instead
+    if (role.inviteOnly) {
+        return <span className="text-sm font-medium text-gray-400 whitespace-nowrap">Invite only</span>;
     }
 
     return (

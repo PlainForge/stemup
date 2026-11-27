@@ -14,7 +14,7 @@ import Input from "./Input";
 import { Alert } from "./PhraseAlert";
 import ProfileImg from "./ProfileImg";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowRightArrowLeft, faArrowUpWideShort, faCalendar, faCalendarDays, faChevronRight, faPalette, faRotate, faTrash, faCircleCheck, faCircleDot, faClock, faFlagCheckered, faInbox, faMagnifyingGlass, faPen, faPersonRunning, faRotateLeft, faTrashCan, faTriangleExclamation, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowRightArrowLeft, faArrowUpWideShort, faCalendar, faCalendarDays, faChevronRight, faLock, faPalette, faRotate, faTrash, faCircleCheck, faCircleDot, faClock, faFlagCheckered, faInbox, faMagnifyingGlass, faPen, faPersonRunning, faRotateLeft, faTrashCan, faTriangleExclamation, faXmark } from "@fortawesome/free-solid-svg-icons";
 import PersonPicker from "./PersonPicker";
 import Dropdown from "./Dropdown";
 import DatePicker from "./DatePicker";
@@ -667,6 +667,17 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
 
     const toggleGlobalLeaderboard = async () => {
         await updateDoc(doc(db, "roles", role.id), { showInGlobalLeaderboard: !showInGlobal });
+    };
+
+    // Owner and admin only: hides the role from the Roles page, so people only join by invitation
+    const inviteOnly = role.inviteOnly ?? false;
+    const toggleInviteOnly = async () => {
+        try {
+            await updateDoc(doc(db, "roles", role.id), { inviteOnly: !inviteOnly });
+        } catch (err) {
+            console.error("Error changing who can find this role:", err);
+            await alertDialog("Couldn't change that. Please try again.", "Something went wrong");
+        }
     };
 
     const assignee = (uid: string, name: string, note?: string) => (
@@ -1326,6 +1337,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                 const sections = [
                     { key: "general", label: "General", hint: `Name and global leaderboard (${showInGlobal ? "on" : "off"})`, icon: faPen },
                     { key: "icon", label: "Icon", hint: "The icon and color on the Roles page and this role's page", icon: faPalette },
+                    ...(canChange ? [{ key: "privacy", label: "Privacy", hint: inviteOnly ? "Invite only: hidden from the Roles page" : "Public: anyone can find it and ask to join", icon: faLock }] : []),
                     { key: "reset", label: "Reset Role", hint: pendingReset ? `Reset waiting for ${waitingOn}` : "Save the leaderboard and start fresh", icon: faRotate },
                     ...(isAdmin ? [{ key: "delete", label: "Delete Role", hint: "Permanently delete this role and its data", icon: faTrash, danger: true }] : []),
                 ] as { key: string; label: string; hint: string; icon: typeof faPen; danger?: boolean }[];
@@ -1402,6 +1414,34 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                         <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 ${showInGlobal ? "translate-x-6" : "translate-x-1"}`} />
                                     </button>
                                 </div>
+                            </div>
+                        )}
+
+                        {open.key === "privacy" && canChange && (
+                            <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="min-w-0">
+                                        <p className="font-semibold">Invite only</p>
+                                        <p className="text-sm text-gray-500">
+                                            When on, {role.name} is hidden from the Roles page for anyone who isn't in it, and nobody can ask to join. People join only when an instructor or admin invites them from the Members tab.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={inviteOnly}
+                                        aria-label="Make this role invite only"
+                                        onClick={toggleInviteOnly}
+                                        className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 hover:cursor-pointer ${inviteOnly ? "bg-green-500" : "bg-gray-300"}`}
+                                    >
+                                        <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 ${inviteOnly ? "translate-x-6" : "translate-x-1"}`} />
+                                    </button>
+                                </div>
+                                {inviteOnly && (role.pendingRequests ?? []).length > 0 && (
+                                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 dark:text-amber-300 dark:bg-amber-500/15 dark:border-amber-500/40">
+                                        {(role.pendingRequests ?? []).length} join request{(role.pendingRequests ?? []).length === 1 ? " is" : "s are"} still waiting from before. You can still accept or decline {(role.pendingRequests ?? []).length === 1 ? "it" : "them"} in the Members tab.
+                                    </p>
+                                )}
                             </div>
                         )}
 

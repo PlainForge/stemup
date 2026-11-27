@@ -173,6 +173,22 @@ class _ProfileCardState extends State<_ProfileCard> {
             children: [
               Heading(_user.name, size: 20, maxLines: 2),
               if (access != AccessLevel.user) ...[const SizedBox(height: 6), AccessTag(access)],
+              // Their user page (admins) or member page (instructors), if the viewer has one for them
+              ...[
+                const SizedBox(height: 8),
+                LinkText(
+                  'View their page',
+                  size: 14,
+                  bold: true,
+                  color: Palette.navActive,
+                  icon: FontAwesomeIcons.chevronRight.data,
+                  onPressed: () {
+                    final router = GoRouter.of(context);
+                    Navigator.of(context).pop();
+                    router.push(AppState.userPagePath(_user.uid, router.state.uri.path));
+                  },
+                ),
+              ],
               StreamBuilder<UserData?>(
                 stream: _profile,
                 builder: (context, snap) {

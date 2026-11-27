@@ -30,7 +30,7 @@ enum _SettingsTab {
   profile('Profile', 'Photo, display name, about me and email'),
   access('Access', 'Your access level and Instructor requests'),
   notifications('Notifications', 'Push, email and what to be notified about'),
-  app('App', 'Appearance, bug reports and glass effects'),
+  app('App', 'Appearance, bug reports, feature requests and motion'),
   account('Account', 'Sign out and delete your account');
 
   const _SettingsTab(this.label, this.hint);
@@ -361,15 +361,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               _InsetRow(
-                label: app.isAdmin ? 'Bug Reports' : 'Report a bug',
+                label: app.isAdmin ? 'Bugs and feature requests' : 'Report a bug or request a feature',
                 action: AppButton(
-                  label: app.isAdmin ? 'View' : 'Report',
+                  label: app.isAdmin ? 'View' : 'Send',
                   icon: (app.isAdmin ? FontAwesomeIcons.wrench : FontAwesomeIcons.bug).data,
                   style: AppButtonStyle.gray,
                   size: AppButtonSize.sm,
                   onPressed: () => showBugReportSheet(context),
                 ),
               ),
+              // Admins only: an email for every new report
+              if (app.isAdmin)
+                _InsetRow(
+                  label: 'Email me new bugs and feature requests',
+                  action: CupertinoSwitch(
+                    value: app.userData?.notifications.feedbackEmails ?? false,
+                    activeTrackColor: Palette.blue600,
+                    onChanged: (v) async {
+                      try {
+                        await Db.setNotificationChannel(app.user!.uid, 'feedbackEmails', v);
+                      } catch (_) {
+                        if (context.mounted) showToast(context, "Couldn't save that. Please try again.", error: true);
+                      }
+                    },
+                  ),
+                ),
               _InsetRow(
                 label: 'Reduce glass effects',
                 action: CupertinoSwitch(value: app.reduceGlass, activeTrackColor: Palette.blue600, onChanged: app.setReduceGlass),
@@ -768,6 +784,34 @@ class _AccessCardState extends State<_AccessCard> {
     }
   }
 
+  bool _leaving = false;
+
+  Future<void> _leaveInstructor(AppState app) async {
+    final me = app.user!.uid;
+    final running = app.instructedRoles;
+    final owned = running.where((r) => r.owner == me).toList();
+    final ok = await confirmDialog(
+      context,
+      title: 'Leave Instructor Mode?',
+      message:
+          "You'll go back to being a User. You'll stay a member of your roles, but you won't be able to run them, assign tasks or request new roles."
+          '${running.isEmpty ? '' : " You'll stop running ${running.length} role${running.length == 1 ? '' : 's'} (${running.map((r) => r.name).join(', ')})."}'
+          '${owned.isEmpty ? '' : ' ${owned.length == 1 ? '${owned.first.name} will be left' : '${owned.length} roles you own will be left'} without an owner.'}'
+          ' Only an admin can make you an Instructor again.',
+      confirmLabel: 'Leave',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    setState(() => _leaving = true);
+    try {
+      await Db.leaveInstructor();
+    } catch (_) {
+      if (mounted) showToast(context, "Couldn't leave Instructor mode. Please try again.", error: true);
+    } finally {
+      if (mounted) setState(() => _leaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
@@ -789,6 +833,19 @@ class _AccessCardState extends State<_AccessCard> {
               value: app.userData?.showGlobalLeaderboard ?? true,
               activeTrackColor: Palette.green500,
               onChanged: (v) => Db.setShowGlobalLeaderboard(app.userData!.uid, v),
+            ),
+          ),
+        // Stepping back to User, with a warning first
+        if (access == AccessLevel.instructor)
+          DangerZone(
+            title: 'Leave Instructor Mode',
+            text: "Go back to being a User. You'll stop running your roles, and only an admin can make you an Instructor again.",
+            button: AppButton(
+              label: 'Leave Instructor Mode',
+              style: AppButtonStyle.red,
+              size: AppButtonSize.sm,
+              loading: _leaving,
+              onPressed: () => _leaveInstructor(app),
             ),
           ),
         if (access == AccessLevel.user)

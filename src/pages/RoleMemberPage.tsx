@@ -13,6 +13,7 @@ import type { AccessLevel, Role, StemRequest, SubmittedTask, Task, UserData, Use
 import Loading from "./Loading";
 import Button from "../components/Button";
 import ProfileImg from "../components/ProfileImg";
+import AboutMeBlock from "../components/AboutMeBlock";
 import { AccessBadge } from "./AdminPage";
 import BackButton from "../components/BackButton";
 
@@ -217,6 +218,7 @@ export default function RoleMemberPage() {
                         <FontAwesomeIcon icon={faChevronRight} className="text-xs transition-transform group-hover:translate-x-0.5" />
                     </button>
                 )}
+                <AboutMeBlock text={member.aboutMe} className="mt-2" />
             </div>
         </div>
 

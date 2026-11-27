@@ -17,6 +17,7 @@ import '../widgets/dialogs.dart';
 import '../widgets/glass_tab_bar.dart' show PingDot;
 import '../widgets/page_scaffold.dart';
 import '../widgets/role_icons.dart';
+import '../widgets/sliding_tabs.dart';
 
 class RolesScreen extends StatefulWidget {
   const RolesScreen({super.key});
@@ -25,10 +26,12 @@ class RolesScreen extends StatefulWidget {
   State<RolesScreen> createState() => _RolesScreenState();
 }
 
+/// Every role, only the ones you're in, or only the ones you're not.
+enum _Access { all, joined, notJoined }
+
 class _RolesScreenState extends State<RolesScreen> {
-  final _newRole = TextEditingController();
-  final _purpose = TextEditingController();
-  bool _creating = false;
+  final _search = TextEditingController();
+  _Access _access = _Access.all;
   StreamSubscription<List<StemRequest>>? _requestsSub;
   List<StemRequest> _myRoleRequests = const [];
   StreamSubscription<List<RoleInvite>>? _invitesSub;
@@ -157,44 +160,36 @@ class _RolesScreenState extends State<RolesScreen> {
 
   @override
   void dispose() {
-    _newRole.dispose();
-    _purpose.dispose();
+    _search.dispose();
     _requestsSub?.cancel();
     _invitesSub?.cancel();
     super.dispose();
-  }
-
-  // Admins create roles straight away; instructors send the name and purpose to an admin
-  Future<void> _createRole(AppState app) async {
-    final name = _newRole.text.trim();
-    if (name.isEmpty) return;
-    if (!app.isAdmin && _purpose.text.trim().isEmpty) {
-      await alertDialog(context, title: 'Purpose needed', message: 'Please describe what this role is for, so an admin can review it.');
-      return;
-    }
-    setState(() => _creating = true);
-    try {
-      if (app.isAdmin) {
-        await Db.createRole(name);
-        if (mounted) showToast(context, 'Created "$name"');
-      } else {
-        await Db.requestRoleCreation(app.user!.uid, app.userData?.name ?? '', name, _purpose.text);
-        if (mounted) showToast(context, 'Sent "$name" to an admin for review');
-      }
-      _newRole.clear();
-      _purpose.clear();
-    } catch (_) {
-      if (mounted) showToast(context, "Couldn't send that. Please try again.", error: true);
-    } finally {
-      if (mounted) setState(() => _creating = false);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final uid = app.user!.uid;
-    final roles = app.roles.where((r) => !r.isGlobal).toList();
+    // Invite-only roles are hidden from everyone except their members, staff, and people invited to (or who already asked to join) them
+    final listed = app.roles
+        .where(
+          (r) =>
+              !r.isGlobal &&
+              (!r.inviteOnly ||
+                  r.members.contains(uid) ||
+                  app.canManage(r) ||
+                  r.pendingRequests.contains(uid) ||
+                  _invites.any((inv) => inv.roleId == r.id)),
+        )
+        .toList();
+    final joined = listed.where((r) => r.members.contains(uid)).length;
+    final term = _search.text.trim().toLowerCase();
+    final roles = listed.where((r) {
+      final isMember = r.members.contains(uid);
+      if (_access == _Access.joined && !isMember) return false;
+      if (_access == _Access.notJoined && isMember) return false;
+      return term.isEmpty || r.name.toLowerCase().contains(term) || r.purpose.toLowerCase().contains(term);
+    }).toList();
     final todo = app.incompletePerRole;
     final attention = app.adminAttentionPerRole;
 
@@ -203,8 +198,53 @@ class _RolesScreenState extends State<RolesScreen> {
       subtitle: 'Select a role to join and start earning points.',
       spacing: 12,
       children: [
+        // Search and the joined / not joined filter
+        if (listed.isNotEmpty || app.access != AccessLevel.user) ...[
+          Row(
+            children: [
+              Expanded(
+                child: AppTextField(controller: _search, placeholder: 'Search roles...', onChanged: (_) => setState(() {})),
+              ),
+              // Instructors and admins: create a role (admins) or ask for one (instructors)
+              if (app.access != AccessLevel.user) ...[
+                const SizedBox(width: 8),
+                Semantics(
+                  button: true,
+                  label: app.isAdmin ? 'Create a role' : 'Request a new role',
+                  child: Pressable(
+                    onPressed: () => showModalCard<void>(context, builder: (_) => const _CreateRoleCard()),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(color: Palette.resolve(context, Palette.blue600), borderRadius: BorderRadius.circular(12)),
+                      child: Icon(FontAwesomeIcons.plus.data, size: 16, color: const Color(0xFFFFFFFF)),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (listed.isNotEmpty)
+            SlidingTabs<_Access>(
+              tabs: [
+                SlidingTab(_Access.all, 'All', count: listed.length, countColor: Palette.gray400),
+                SlidingTab(_Access.joined, 'Joined', count: joined, countColor: Palette.blue600),
+                SlidingTab(_Access.notJoined, 'Not Joined', count: listed.length - joined, countColor: Palette.gray400),
+              ],
+              selected: _access,
+              onChanged: (v) => setState(() => _access = v),
+            ),
+        ],
         if (roles.isEmpty)
-          const EmptyState('No roles available at the moment.')
+          EmptyState(
+            listed.isEmpty
+                ? 'No roles available at the moment.'
+                : term.isNotEmpty
+                ? 'No roles match "${_search.text.trim()}".'
+                : _access == _Access.joined
+                ? "You haven't joined any roles yet."
+                : "You're in every role.",
+          )
         else
           for (var i = 0; i < roles.length; i++)
             FadeSlideIn(
@@ -225,7 +265,8 @@ class _RolesScreenState extends State<RolesScreen> {
             ),
         // Invitations, under the list and above creating a role
         if (_invites.isNotEmpty) _invitesSection(context),
-        if (app.access != AccessLevel.user)
+        // Role requests this instructor sent, still waiting for an admin
+        if (!app.isAdmin && app.access != AccessLevel.user && _myRoleRequests.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 12),
             padding: const EdgeInsets.only(top: 24),
@@ -235,63 +276,133 @@ class _RolesScreenState extends State<RolesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Heading(app.isAdmin ? 'Create a Role' : 'Request a New Role', size: 16),
-                if (!app.isAdmin) ...[
-                  const SizedBox(height: 4),
-                  const Muted("An admin reviews it first. Once approved, you'll run the new role as its instructor."),
-                ],
-                const SizedBox(height: 12),
-                AppTextField(
-                  controller: _newRole,
-                  placeholder: 'Role name',
-                  maxLength: 32,
-                  textInputAction: app.isAdmin ? TextInputAction.done : TextInputAction.next,
-                ),
-                const SizedBox(height: 12),
-                // Admins create roles directly, so only instructors explain what a role is for
-                if (!app.isAdmin) ...[
-                  AppTextField(controller: _purpose, placeholder: 'What is this role for?', maxLines: 3, maxLength: 500),
-                  const SizedBox(height: 12),
-                ],
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: AppButton(
-                    label: app.isAdmin ? 'Create' : 'Send Request',
-                    size: AppButtonSize.sm,
-                    loading: _creating,
-                    onPressed: () => _createRole(app),
-                  ),
-                ),
-                if (!app.isAdmin && _myRoleRequests.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const SectionLabel('Waiting for an admin', size: 12, padding: EdgeInsets.only(bottom: 8)),
-                  for (final r in _myRoleRequests)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Palette.fill(context),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Palette.separator(context)),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              r.roleName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.label(context)),
-                            ),
-                          ),
-                          LinkText('Withdraw', size: 13, onPressed: () => Db.deleteRequest(r.id)),
-                        ],
-                      ),
+                const SectionLabel('Waiting for an admin', size: 12, padding: EdgeInsets.only(bottom: 8)),
+                for (final r in _myRoleRequests)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Palette.fill(context),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Palette.separator(context)),
                     ),
-                ],
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            r.roleName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.label(context)),
+                          ),
+                        ),
+                        LinkText('Withdraw', size: 13, onPressed: () => Db.deleteRequest(r.id)),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// The + menu: admins name a new role and create it; instructors name it, say
+/// what it's for and send it to an admin.
+class _CreateRoleCard extends StatefulWidget {
+  const _CreateRoleCard();
+
+  @override
+  State<_CreateRoleCard> createState() => _CreateRoleCardState();
+}
+
+class _CreateRoleCardState extends State<_CreateRoleCard> {
+  final _name = TextEditingController();
+  final _purpose = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _purpose.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final app = context.read<AppState>();
+    final name = _name.text.trim();
+    if (name.isEmpty) return;
+    if (!app.isAdmin && _purpose.text.trim().isEmpty) {
+      await alertDialog(context, title: 'Purpose needed', message: 'Please describe what this role is for, so an admin can review it.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      if (app.isAdmin) {
+        await Db.createRole(name);
+      } else {
+        await Db.requestRoleCreation(app.user!.uid, app.userData?.name ?? '', name, _purpose.text);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        showToast(context, "Couldn't send that. Please try again.", error: true);
+      }
+      return;
+    }
+    if (!mounted) return;
+    final overlay = Overlay.of(context, rootOverlay: true);
+    Navigator.pop(context);
+    showCenterNotice(
+      overlay,
+      title: app.isAdmin ? 'Role created' : 'Request sent',
+      message: app.isAdmin ? '"$name" is ready.' : 'An admin will review "$name".',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isAdmin = context.read<AppState>().isAdmin;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Heading(isAdmin ? 'Create a Role' : 'Request a New Role', size: 18),
+        const SizedBox(height: 4),
+        Muted(
+          isAdmin
+              ? 'Give the new role a name. You can change it later.'
+              : "An admin reviews it first. Once approved, you'll run the new role as its instructor.",
+          size: 13,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: _name,
+          placeholder: 'Role name',
+          maxLength: 32,
+          autofocus: true,
+          textInputAction: isAdmin ? TextInputAction.done : TextInputAction.next,
+          onSubmitted: isAdmin ? (_) => _submit() : null,
+        ),
+        // Admins create roles directly, so only instructors explain what a role is for
+        if (!isAdmin) ...[
+          const SizedBox(height: 10),
+          AppTextField(controller: _purpose, placeholder: 'What is this role for?', maxLines: 3, maxLength: 500),
+        ],
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            AppButton(
+              label: 'Cancel',
+              style: AppButtonStyle.gray,
+              size: AppButtonSize.sm,
+              onPressed: _busy ? null : () => Navigator.pop(context),
+            ),
+            const SizedBox(width: 8),
+            AppButton(label: isAdmin ? 'Create' : 'Send Request', size: AppButtonSize.sm, loading: _busy, onPressed: _submit),
+          ],
+        ),
       ],
     );
   }
@@ -379,6 +490,9 @@ class _RoleRow extends StatelessWidget {
                               style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
                             ),
                           ),
+                          // Whether anyone can ask to join, or only people who are invited
+                          const SizedBox(width: 6),
+                          _AccessChip(inviteOnly: role.inviteOnly),
                           if (needsAttention) ...[const SizedBox(width: 8), const PingDot(size: 10)],
                         ],
                       ),
@@ -400,6 +514,35 @@ class _RoleRow extends StatelessWidget {
         ),
         if (todoCount > 0) Positioned(top: -8, right: -8, child: CountBadge(todoCount)),
       ],
+    );
+  }
+}
+
+/// "Public" (green) or "Invite only" (gray) next to a role's name.
+class _AccessChip extends StatelessWidget {
+  const _AccessChip({required this.inviteOnly});
+
+  final bool inviteOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Palette.isDark(context);
+    final fg = inviteOnly ? Palette.secondary(context) : (dark ? const Color(0xFF86EFAC) : const Color(0xFF15803D));
+    final bg = inviteOnly ? Palette.resolve(context, Palette.gray100) : const Color(0xFF22C55E).withValues(alpha: dark ? .15 : .1);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon((inviteOnly ? FontAwesomeIcons.lock : FontAwesomeIcons.earthAmericas).data, size: 8, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            inviteOnly ? 'Invite only' : 'Public',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -523,6 +666,13 @@ class _JoinPillState extends State<_JoinPill> {
         bg: amber.withValues(alpha: Palette.isDark(context) ? .18 : .1),
         border: amber.withValues(alpha: .35),
         onTap: _withdraw,
+      );
+    }
+    // Invite-only roles take no join requests: people answer their invitation instead
+    if (widget.role.inviteOnly) {
+      return Text(
+        'Invite only',
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Palette.tertiary(context)),
       );
     }
     return _pill(

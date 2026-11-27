@@ -98,7 +98,7 @@ service cloud.firestore {
             || (ownsRoleData(resource.data)
                 && request.resource.data.get('owner', '') in resource.data.get('instructors', [])))
         && (ownsRoleData(resource.data)
-            || (!changes().hasAny(['name', 'rewardsTitle', 'icon', 'iconColor'])
+            || (!changes().hasAny(['name', 'rewardsTitle', 'icon', 'iconColor', 'inviteOnly'])
                 && resource.data.get('members', []).toSet()
                      .difference(request.resource.data.get('members', []).toSet()).size() == 0));
     }
@@ -119,6 +119,10 @@ service cloud.firestore {
         && changes().hasOnly(['members', 'pendingRequests'])
         && onlyMeChanged(resource.data.get('members', []), request.resource.data.get('members', []))
         && onlyMeChanged(resource.data.get('pendingRequests', []), request.resource.data.get('pendingRequests', []))
+        // Invite-only roles take no new join requests (withdrawing one is still fine)
+        && (!resource.data.get('inviteOnly', false)
+            || request.resource.data.get('pendingRequests', []).toSet()
+                 .difference(resource.data.get('pendingRequests', []).toSet()).size() == 0)
         && (roleId == 'r3wUbRSCX7cxwBYhtAdg'
             || request.resource.data.get('members', []).toSet().difference(resource.data.get('members', []).toSet()).size() == 0);
       // Creating and deleting roles is admin-only (above)
@@ -195,7 +199,9 @@ service cloud.firestore {
     }
 
     match /bugs/{bugId} {
-      allow create: if signedIn() && request.resource.data.userId == me();
+      // Bug reports and feature requests ('type'; older reports have none and are bugs)
+      allow create: if signedIn() && request.resource.data.userId == me()
+        && request.resource.data.get('type', 'bug') in ['bug', 'feature'];
     }
 
     // Inactive Users archives (alumni/{batch}/members/{uid}) are admin-only (above).
