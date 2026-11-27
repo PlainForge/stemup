@@ -25,7 +25,7 @@ extension AccessLevelLabel on AccessLevel {
 
 /// Kinds of notification, each with its own switch in Settings. Names match
 /// NotifyType in functions/src/notifications.ts.
-enum NotifyType { newTask, taskEdited, taskReviewed, extension, joinRole, accessRequest }
+enum NotifyType { newTask, taskEdited, taskReviewed, extension, joinRole, accessRequest, invite }
 
 extension NotifyTypeText on NotifyType {
   String get label => switch (this) {
@@ -35,6 +35,7 @@ extension NotifyTypeText on NotifyType {
     NotifyType.extension => 'Extension requests',
     NotifyType.joinRole => 'Role join requests',
     NotifyType.accessRequest => 'Instructor and role requests',
+    NotifyType.invite => 'Role invitations',
   };
 
   String get hint => switch (this) {
@@ -44,6 +45,7 @@ extension NotifyTypeText on NotifyType {
     NotifyType.extension => 'An extension you asked for is approved or declined',
     NotifyType.joinRole => 'A request to join a role is accepted or declined',
     NotifyType.accessRequest => 'Instructor access, new roles and role resets',
+    NotifyType.invite => 'Someone invites you to join a role',
   };
 }
 
@@ -135,6 +137,12 @@ class UserData implements Ranked {
 
   final NotificationPrefs notifications;
 
+  /// Roles whose rewards and top 3 they've hidden from Home (each role's Settings tab).
+  final List<String> hideOnHome;
+
+  /// Tasks this person has given out as an instructor or admin (counted by a Cloud Function).
+  final int tasksGiven;
+
   const UserData({
     required this.uid,
     required this.name,
@@ -148,6 +156,8 @@ class UserData implements Ranked {
     this.canSeeGlobal = false,
     this.pendingEmail = '',
     this.notifications = const NotificationPrefs(),
+    this.hideOnHome = const [],
+    this.tasksGiven = 0,
   });
 
   factory UserData.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) => UserData.fromMap(doc.id, doc.data() ?? {});
@@ -167,6 +177,8 @@ class UserData implements Ranked {
     canSeeGlobal: m['canSeeGlobal'] == true,
     pendingEmail: _str(m['pendingEmail']),
     notifications: NotificationPrefs.fromMap(m['notifications']),
+    hideOnHome: m['hideOnHome'] is List ? (m['hideOnHome'] as List).whereType<String>().toList() : const [],
+    tasksGiven: _int(m['tasksGiven']),
   );
 
   UserRoleData? roleData(String roleId) {
@@ -199,6 +211,8 @@ class UserData implements Ranked {
         canSeeGlobal: canSeeGlobal,
         pendingEmail: pendingEmail,
         notifications: notifications,
+        hideOnHome: hideOnHome,
+        tasksGiven: tasksGiven,
       );
 }
 
@@ -547,6 +561,51 @@ extension RequestTypeInfo on RequestType {
 
 /// Something to approve, from the `requests` collection: by an admin, or by a
 /// role's owner for changes to that role.
+/// An invitation to join a role (invites/{roleId}_{uid}), sent by its
+/// instructors or an admin. The person invited accepts or declines it.
+class RoleInvite {
+  final String id;
+  final String roleId;
+  final String roleName;
+
+  /// Who's invited.
+  final String uid;
+  final String userName;
+
+  /// Joining as one of the role's instructors (Instructors only) rather than a member.
+  final bool asInstructor;
+  final String invitedBy;
+  final String invitedByName;
+  final DateTime? createdAt;
+
+  const RoleInvite({
+    required this.id,
+    required this.roleId,
+    required this.roleName,
+    required this.uid,
+    this.userName = '',
+    this.asInstructor = false,
+    this.invitedBy = '',
+    this.invitedByName = '',
+    this.createdAt,
+  });
+
+  factory RoleInvite.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final m = doc.data() ?? {};
+    return RoleInvite(
+      id: doc.id,
+      roleId: _str(m['roleId']),
+      roleName: _str(m['roleName']),
+      uid: _str(m['uid']),
+      userName: _str(m['userName']),
+      asInstructor: m['as'] == 'instructor',
+      invitedBy: _str(m['invitedBy']),
+      invitedByName: _str(m['invitedByName']),
+      createdAt: _date(m['createdAt']),
+    );
+  }
+}
+
 class StemRequest {
   final String id;
   final RequestType? type;
@@ -604,7 +663,8 @@ class StemRequest {
       RequestType.renameRole => 'rename $role to "$newName"',
       RequestType.editStats => "set $who's stats to $points pts and $taskCompleted tasks",
       RequestType.kickMember => 'remove $who from $role',
-      RequestType.rewardsTitle => title.isEmpty ? 'set the rewards title back to the current month' : 'change the rewards title to "$title"',
+      RequestType.rewardsTitle =>
+        title.isEmpty ? 'set the rewards title back to the current month' : 'change the rewards title to "$title"',
       _ => 'make a change',
     };
   }

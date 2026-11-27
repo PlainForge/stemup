@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faChevronDown, faMagnifyingGlass, faUserPlus } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faChevronDown, faMagnifyingGlass, faUserPlus, faUsers } from "@fortawesome/free-solid-svg-icons";
 import ProfileImg from "./ProfileImg";
 
 export type PickablePerson = { uid: string; name: string; photoURL?: string; hint?: string };
@@ -18,13 +18,17 @@ interface Props {
     /** Keep showing the placeholder after a pick (for adding several people one at a time) */
     resetAfterPick?: boolean;
     emptyText?: string;
+    /** Use as a filter: adds an "everyone" row with this label at the top, picked as "" */
+    allLabel?: string;
+    /** "gray" matches the gray-filled inputs in filter bars; "white" (default) matches cards */
+    tone?: "white" | "gray";
 }
 
 /**
  * Styled person dropdown with photos and a search box, in place of a native
  * <select>. Keyboard: arrows move, Enter picks, Esc closes; typing filters.
  */
-export default function PersonPicker({ people, value, onChange, placeholder, label, chosen = [], resetAfterPick = false, emptyText = "No one to pick." }: Props) {
+export default function PersonPicker({ people, value, onChange, placeholder, label, chosen = [], resetAfterPick = false, emptyText = "No one to pick.", allLabel, tone = "white" }: Props) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
     const [active, setActive] = useState(0);
@@ -35,7 +39,10 @@ export default function PersonPicker({ people, value, onChange, placeholder, lab
 
     const selected = resetAfterPick ? undefined : people.find(p => p.uid === value);
     const q = search.trim().toLowerCase();
-    const shown = q ? people.filter(p => p.name.toLowerCase().includes(q)) : people;
+    const matches = q ? people.filter(p => p.name.toLowerCase().includes(q)) : people;
+    // As a filter, the "everyone" row comes first (hidden while searching)
+    const ALL: PickablePerson = { uid: "", name: allLabel ?? "" };
+    const shown = allLabel !== undefined && !q ? [ALL, ...matches] : matches;
 
     useEffect(() => {
         if (!open) return;
@@ -49,7 +56,7 @@ export default function PersonPicker({ people, value, onChange, placeholder, lab
 
     const openList = () => {
         setSearch("");
-        setActive(Math.max(0, people.findIndex(p => p.uid === value)));
+        setActive(allLabel !== undefined ? (value ? people.findIndex(p => p.uid === value) + 1 : 0) : Math.max(0, people.findIndex(p => p.uid === value)));
         setOpen(true);
     };
 
@@ -102,18 +109,22 @@ export default function PersonPicker({ people, value, onChange, placeholder, lab
                 aria-expanded={open}
                 aria-controls={open ? listId : undefined}
                 onClick={() => (open ? setOpen(false) : openList())}
-                className={`group flex w-full items-center gap-3 rounded-xl border bg-white px-3 py-2.5 text-left text-sm transition-all hover:cursor-pointer focus:outline-none ${
+                className={`group flex w-full items-center gap-3 rounded-xl border ${tone === "gray" ? "bg-gray-50" : "bg-white"} ${allLabel !== undefined ? "py-2" : "py-2.5"} px-3 text-left text-sm transition-all hover:cursor-pointer focus:outline-none ${
                     open ? "border-blue-400 ring-4 ring-blue-500/10" : "border-gray-200 hover:border-gray-400 focus-visible:border-blue-400"
                 }`}
             >
                 {selected ? (
                     <ProfileImg src={selected.photoURL} alt={selected.name} size="xxs" />
+                ) : allLabel !== undefined ? (
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                        <FontAwesomeIcon icon={faUsers} className="text-[10px]" />
+                    </span>
                 ) : (
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
                         <FontAwesomeIcon icon={faUserPlus} className="text-xs" />
                     </span>
                 )}
-                <span className={`min-w-0 flex-1 truncate ${selected ? "font-medium" : "text-gray-500"}`}>{selected?.name ?? placeholder}</span>
+                <span className={`min-w-0 flex-1 truncate ${selected ? "font-medium" : allLabel !== undefined ? "" : "text-gray-500"}`}>{selected?.name ?? allLabel ?? placeholder}</span>
                 <FontAwesomeIcon icon={faChevronDown} className={`shrink-0 text-xs text-gray-400 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
             </button>
 
@@ -135,6 +146,22 @@ export default function PersonPicker({ people, value, onChange, placeholder, lab
                             <li className="px-3 py-3 text-center text-sm text-gray-400">{people.length === 0 ? emptyText : "No matches."}</li>
                         ) : shown.map((p, i) => {
                             const isChosen = p.uid === value || chosen.includes(p.uid);
+                            if (p === ALL) return (
+                                <li
+                                    key="__all"
+                                    role="option"
+                                    aria-selected={!value}
+                                    onPointerEnter={() => setActive(i)}
+                                    onClick={() => pick(ALL)}
+                                    className={`flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors hover:cursor-pointer ${i === active ? "bg-gray-100" : ""}`}
+                                >
+                                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                                        <FontAwesomeIcon icon={faUsers} className="text-xs" />
+                                    </span>
+                                    <span className={`min-w-0 flex-1 truncate ${!value ? "font-medium" : ""}`}>{allLabel}</span>
+                                    {!value && <FontAwesomeIcon icon={faCheck} className="shrink-0 text-xs text-blue-600" />}
+                                </li>
+                            );
                             return (
                                 <li
                                     key={p.uid}

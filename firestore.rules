@@ -5,8 +5,9 @@ rules_version = '2';
 //   Instructors: ids in admins/instructors (set by admins from the Admin page)
 //   A role's instructors are listed in roles/{id}.instructors; an Instructor can
 //   run only the roles they're listed on. Admins can do everything.
-//   A role's owner (roles/{id}.owner, set by admins) is one of its instructors
-//   and makes the bigger changes to it; its other instructors request those.
+//   A role's owner (roles/{id}.owner, set by admins or handed on by the current
+//   owner) is one of its instructors and makes the bigger changes to it; its
+//   other instructors request those.
 //
 // Deploy with: firebase deploy --only firestore:rules
 // This replaces whatever rules are in the Firebase console.
@@ -48,7 +49,7 @@ service cloud.firestore {
       allow delete: if signedIn() && me() == userId;
       // Your own profile, but not your own points, tasks completed or role list
       allow update: if signedIn() && me() == userId
-        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email', 'pendingEmail', 'notifications']);
+        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email', 'pendingEmail', 'notifications', 'hideOnHome']);
       // canSeeGlobal (seeing the global leaderboard) is set by admins only (above)
       // Instructors award points, edit stats, accept members and remove them
       allow update: if isInstructor()
@@ -87,9 +88,13 @@ service cloud.firestore {
     }
 
     // Instructors who don't own the role ask the owner to rename it, change the
-    // rewards title or kick members. Only admins choose the owner.
+    // rewards title or kick members. Admins choose the owner; the owner can also
+    // hand the role on to another of its instructors.
     function ownerOnlyChangesAllowed() {
-      return !changes().hasAny(['owner', 'createdBy'])
+      return !changes().hasAny(['createdBy'])
+        && (!changes().hasAny(['owner'])
+            || (ownsRoleData(resource.data)
+                && request.resource.data.get('owner', '') in resource.data.get('instructors', [])))
         && (ownsRoleData(resource.data)
             || (!changes().hasAny(['name', 'rewardsTitle'])
                 && resource.data.get('members', []).toSet()
@@ -170,6 +175,21 @@ service cloud.firestore {
       // The role's owner approves or declines: records the decision, then removes it
       allow update: if ownsRole(resource.data.get('roleId', '')) && changes().hasOnly(['status']);
       allow delete: if ownsRole(resource.data.get('roleId', ''));
+    }
+
+    // Invitations to join a role, as a member or one of its instructors
+    // (invites/{roleId}_{uid}). The role's instructors and admins send and cancel
+    // them; the person invited declines by deleting it, or accepts through the
+    // respondToInvite Cloud Function, which adds them to the role.
+    match /invites/{inviteId} {
+      allow read: if signedIn() && (resource.data.uid == me() || runsRole(resource.data.roleId));
+      allow create: if runsRole(request.resource.data.roleId)
+        && request.resource.data.invitedBy == me()
+        && inviteId == request.resource.data.roleId + '_' + request.resource.data.uid
+        && (request.resource.data.as == 'member'
+            || (request.resource.data.as == 'instructor'
+                && request.resource.data.uid in get(/databases/$(database)/documents/admins/instructors).data.get('ids', [])));
+      allow delete: if signedIn() && (resource.data.uid == me() || runsRole(resource.data.roleId));
     }
 
     match /bugs/{bugId} {

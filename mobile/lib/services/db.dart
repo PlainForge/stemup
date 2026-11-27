@@ -239,11 +239,7 @@ class Db {
         await grantInstructor(r.uid);
       case RequestType.createRole:
         await createRole(r.roleName.isEmpty ? 'Untitled Role' : r.roleName, purpose: r.purpose, ownerUid: r.uid);
-      case RequestType.resetRole ||
-          RequestType.renameRole ||
-          RequestType.editStats ||
-          RequestType.kickMember ||
-          RequestType.rewardsTitle:
+      case RequestType.resetRole || RequestType.renameRole || RequestType.editStats || RequestType.kickMember || RequestType.rewardsTitle:
         await _applyRoleChange(r);
       case null:
         break;
@@ -318,6 +314,42 @@ class Db {
   /// Makes one of the role's instructors its owner; '' leaves it with none. Admin-only in the rules.
   static Future<void> setRoleOwner(String roleId, String uid) => _role(roleId).update({'owner': uid});
 
+  // ── Invitations ────────────────────────────────────────────────────────
+
+  static Stream<List<RoleInvite>> _invites(Query<Map<String, dynamic>> q) => q.snapshots().map(
+    (s) => s.docs.map(RoleInvite.fromDoc).toList()..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0))),
+  );
+
+  /// Invitations waiting for this person, newest first.
+  static Stream<List<RoleInvite>> myInvitesStream(String uid) => _invites(_db.collection('invites').where('uid', isEqualTo: uid));
+
+  /// Open invitations to one role (for its instructors and admins).
+  static Stream<List<RoleInvite>> roleInvitesStream(String roleId) =>
+      _invites(_db.collection('invites').where('roleId', isEqualTo: roleId));
+
+  /// Invites someone to a role, as a member or (Instructors only) one of its instructors.
+  static Future<void> sendInvite(Role role, UserData person, {required bool asInstructor, required UserData from}) =>
+      _db.doc('invites/${role.id}_${person.uid}').set({
+        'roleId': role.id,
+        'roleName': role.name,
+        'uid': person.uid,
+        'userName': person.name,
+        'as': asInstructor ? 'instructor' : 'member',
+        'invitedBy': from.uid,
+        'invitedByName': from.name,
+        'createdAt': Timestamp.now(),
+      });
+
+  static Future<void> cancelInvite(String roleId, String uid) => _db.doc('invites/${roleId}_$uid').delete();
+
+  /// Accepts (joins the role, on the server) or declines an invitation.
+  static Future<void> respondToInvite(String roleId, {required bool accept}) =>
+      FirebaseFunctions.instance.httpsCallable('respondToInvite').call({'roleId': roleId, 'accept': accept});
+
+  /// Every role [uid] runs.
+  static Stream<List<Role>> rolesRunByStream(String uid) =>
+      _db.collection('roles').where('instructors', arrayContains: uid).snapshots().map((s) => s.docs.map(Role.fromDoc).toList());
+
   static Future<void> setRewardsTitle(String roleId, String title) => _role(roleId).update({'rewardsTitle': title.trim()});
 
   static Future<void> setShowGlobalLeaderboard(String uid, bool value) => _user(uid).update({'showGlobalLeaderboard': value});
@@ -344,8 +376,12 @@ class Db {
       _user(uid).update({'notifications.types.${type.name}': on});
 
   /// Turns notifications for one role on or off (they're on unless turned off).
-  static Future<void> setRoleNotifications(String uid, String roleId, bool on) =>
-      _user(uid).update({'notifications.roles.$roleId': on});
+  static Future<void> setRoleNotifications(String uid, String roleId, bool on) => _user(uid).update({'notifications.roles.$roleId': on});
+
+  /// Shows or hides a role's rewards and top 3 on this person's Home screen.
+  static Future<void> setShowOnHome(String uid, String roleId, bool show) => _user(uid).update({
+    'hideOnHome': show ? FieldValue.arrayRemove([roleId]) : FieldValue.arrayUnion([roleId]),
+  });
 
   /// Remembers this phone's push token so Cloud Functions can reach it.
   static Future<void> saveDevice(String uid, String token) =>
@@ -386,11 +422,14 @@ class Db {
     required String description,
     required int points,
     DateTime? dueDay,
+    String? assignedBy,
   }) async {
     final due = dueDay == null ? null : _dueFields(dueDay);
     for (final m in members) {
       await _tasks.add({
         'assignedTo': m.uid,
+        // Who gave it: counted as their "tasks given"
+        if (assignedBy != null) 'assignedBy': assignedBy,
         'assignedName': m.name,
         'description': description,
         'points': points,
@@ -582,6 +621,7 @@ class Db {
       _submittedCol.where('roleId', isEqualTo: roleId).get(),
       _db.collection('leaderboardSnapshots').where('roleId', isEqualTo: roleId).get(),
       _db.collection('requests').where('roleId', isEqualTo: roleId).get(),
+      _db.collection('invites').where('roleId', isEqualTo: roleId).get(),
     ]);
     for (final snap in results) {
       for (final d in snap.docs) {

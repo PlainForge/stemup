@@ -16,7 +16,7 @@ import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, ge
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "./firebase";
 import { firebaseAuthService } from "./firebaseService";
-import { ROLE_CHANGE_TYPES, type Role, type RoleChangeType, type StemRequest, type UserData, type UserRoleData } from "../myDataTypes";
+import { ROLE_CHANGE_TYPES, type Role, type RoleChangeType, type RoleInvite, type StemRequest, type UserData, type UserRoleData } from "../myDataTypes";
 
 const instructorsRef = () => doc(db, "admins", "instructors");
 const NO_REWARD = "No reward set";
@@ -210,6 +210,11 @@ export const roleService = {
         await updateDoc(doc(db, "users", uid), { [`notifications.roles.${roleId}`]: on });
     },
 
+    /** Shows or hides a role's rewards and top 3 on this person's Home page. */
+    async setShowOnHome(uid: string, roleId: string, show: boolean) {
+        await updateDoc(doc(db, "users", uid), { hideOnHome: show ? arrayRemove(roleId) : arrayUnion(roleId) });
+    },
+
     /** Sets a member's points and tasks completed in one role (their global totals are untouched). */
     async setMemberRoleStats(uid: string, roleId: string, points: number, taskCompleted: number) {
         const ref = doc(db, "users", uid);
@@ -225,7 +230,33 @@ export const roleService = {
         await updateDoc(doc(db, "roles", roleId), { name: name.trim() });
     },
 
-    /** Makes one of the role's instructors its owner; "" leaves it with none. Admin-only in the rules. */
+    // ── Invitations ───────────────────────────────────────────────────────
+
+    /** Invites someone to a role, as a member or (Instructors only) one of its instructors. One open invitation per person per role. */
+    async sendInvite(role: { id: string; name: string }, person: { uid: string; name: string }, as: RoleInvite["as"], from: { uid: string; name: string }) {
+        await setDoc(doc(db, "invites", `${role.id}_${person.uid}`), {
+            roleId: role.id,
+            roleName: role.name,
+            uid: person.uid,
+            userName: person.name,
+            as,
+            invitedBy: from.uid,
+            invitedByName: from.name,
+            createdAt: Timestamp.now(),
+        });
+    },
+
+    /** Withdraws an invitation (by the role's instructors or an admin). */
+    async cancelInvite(roleId: string, uid: string) {
+        await deleteDoc(doc(db, "invites", `${roleId}_${uid}`));
+    },
+
+    /** The invited person accepts (joins the role, on the server) or declines. */
+    async respondToInvite(roleId: string, accept: boolean) {
+        await httpsCallable(functions, "respondToInvite")({ roleId, accept });
+    },
+
+    /** Makes one of the role's instructors its owner; "" leaves it with none. Admins, or the current owner handing it on. */
     async setRoleOwner(roleId: string, uid: string) {
         await updateDoc(doc(db, "roles", roleId), { owner: uid });
     },
@@ -354,14 +385,15 @@ export const roleService = {
     async deleteRole(roleId: string) {
         const roleSnap = await getDoc(doc(db, "roles", roleId));
         const memberIds: string[] = roleSnap.exists() ? (roleSnap.data().members ?? []) : [];
-        const [tasksSnap, submittedSnap, savedSnap, requestsSnap] = await Promise.all([
+        const [tasksSnap, submittedSnap, savedSnap, requestsSnap, invitesSnap] = await Promise.all([
             getDocs(query(collection(db, "tasks"), where("roleId", "==", roleId))),
             getDocs(query(collection(db, "tasksSubmitted"), where("roleId", "==", roleId))),
             getDocs(query(collection(db, "leaderboardSnapshots"), where("roleId", "==", roleId))),
             getDocs(query(collection(db, "requests"), where("roleId", "==", roleId))),
+            getDocs(query(collection(db, "invites"), where("roleId", "==", roleId))),
         ]);
         const batch = writeBatch(db);
-        [...tasksSnap.docs, ...submittedSnap.docs, ...savedSnap.docs, ...requestsSnap.docs].forEach(d => batch.delete(d.ref));
+        [...tasksSnap.docs, ...submittedSnap.docs, ...savedSnap.docs, ...requestsSnap.docs, ...invitesSnap.docs].forEach(d => batch.delete(d.ref));
         await Promise.all([batch.commit(), ...memberIds.map(uid => removeRoleFromUser(uid, roleId))]);
         await deleteDoc(doc(db, "rewards", roleId)).catch(() => {});
         await deleteDoc(doc(db, "roles", roleId));

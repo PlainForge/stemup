@@ -185,9 +185,13 @@ export default function Dash() {
 
     const globalBoard = splitLeaderboard(sorted);
 
+    // Roles they've hidden from Home in the role's Settings tab are left out
+    const hiddenOnHome = userData.hideOnHome ?? [];
+    const homeBoards = roleLeaderboards.filter(rl => !hiddenOnHome.includes(rl.roleId));
+
     // Roles where the user currently places top 3, best placing first
     const currentMonth = new Date().toLocaleString("en-US", { month: "long" });
-    const placings = roleLeaderboards
+    const placings = homeBoards
         .filter(rl => rl.myRank !== null && rl.myRank <= 3)
         .sort((a, b) => (a.myRank as number) - (b.myRank as number));
     const placeLabels = ["1st", "2nd", "3rd"];
@@ -195,17 +199,21 @@ export default function Dash() {
     const isRealPrize = (reward?: string) => !!reward && reward !== "No reward set" && reward !== "not set";
 
     // Admins aren't ranked, so they see each role's current top 3 and prizes instead
-    const adminOverviewCard = isAdmin && roleLeaderboards.length > 0 ? (
+    const adminOverviewCard = isAdmin && homeBoards.length > 0 ? (
         <div className="w-full rounded-2xl border-2 border-yellow-300 bg-white shadow-sm p-4 flex flex-col gap-4">
             <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">{currentMonth} Rewards Overview</h2>
-            {roleLeaderboards.map(rl => (
+            {homeBoards.map(rl => (
                 <div key={rl.roleId} className="flex flex-col gap-2">
                     <p className="font-semibold leading-tight truncate">{rl.roleName}</p>
                     {rl.rewardsTitle && <p className="text-xs text-gray-400 -mt-1.5 truncate">{rl.rewardsTitle}</p>}
                     {rl.top3.length === 0 ? (
                         <p className="text-xs text-gray-400">No one has earned points yet.</p>
                     ) : rl.top3.map((m, idx) => (
-                        <div key={m.uid} className="flex items-center gap-2.5">
+                        <div
+                            key={m.uid}
+                            onClick={() => context.setShowAccount(m)}
+                            className="flex items-center gap-2.5 -mx-2 px-2 py-1 rounded-xl transition-colors hover:bg-gray-50 hover:cursor-pointer"
+                        >
                             <span className="text-xl shrink-0 w-7 text-center"><MedalIcon rank={idx} /></span>
                             <div className="min-w-0 flex flex-col">
                                 <p className="text-sm font-medium leading-tight truncate">{m.name}</p>
@@ -275,7 +283,7 @@ export default function Dash() {
 
             {/* Stat cards */}
             {!admins.includes(user.uid) && (
-                <div className="grid grid-cols-2 gap-4 w-full">
+                <div className={`grid gap-4 w-full ${access === "instructor" ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"}`}>
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col gap-1">
                         <p className="text-xs text-gray-400 uppercase tracking-widest">Total Points</p>
                         <p className="text-4xl font-bold">{userData?.points ?? 0}</p>
@@ -284,6 +292,13 @@ export default function Dash() {
                         <p className="text-xs text-gray-400 uppercase tracking-widest">Tasks Done</p>
                         <p className="text-4xl font-bold">{userData?.taskCompleted ?? 0}</p>
                     </div>
+                    {/* Only instructors see how many tasks they've given out */}
+                    {access === "instructor" && (
+                        <div className="col-span-2 sm:col-span-1 bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col gap-1">
+                            <p className="text-xs text-gray-400 uppercase tracking-widest">Tasks Given</p>
+                            <p className="text-4xl font-bold">{userData?.tasksGiven ?? 0}</p>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -332,22 +347,22 @@ export default function Dash() {
                                             return (
                                                 <motion.div
                                                     key={u.uid}
-                                                    className={`flex-1 flex flex-col items-center gap-1 ${cfg.mt}`}
+                                                    className={`group flex-1 flex flex-col items-center gap-1 cursor-pointer select-none ${cfg.mt}`}
                                                     initial={{ opacity: 0, y: 20 }}
                                                     animate={{ opacity: 1, y: 0 }}
                                                     transition={{ delay: idx * 0.05 }}
+                                                    onClick={() => context.setShowAccount(u)}
                                                 >
                                                     <span className="text-lg"><MedalIcon rank={cfg.rank - 1} /></span>
                                                     <motion.div
-                                                        className="flex flex-col items-center gap-1 cursor-pointer select-none"
+                                                        className="flex flex-col items-center gap-1"
                                                         whileHover={{ scale: 1.05 }}
-                                                        onClick={() => context.setShowAccount(u)}
                                                     >
                                                         <ProfileImg src={u.photoURL} alt={u.name} size={cfg.avatarSize} />
                                                         <p className={`font-semibold text-center truncate w-full ${cfg.textSize}`}>{u.name}</p>
                                                     </motion.div>
                                                     <p className={`text-gray-500 ${cfg.textSize} pointer-events-none`}><strong className="text-black">{u.points ?? 0}</strong> pts</p>
-                                                    <div className={`w-full ${cfg.barH} rounded-t-xl flex items-center justify-center ${
+                                                    <div className={`w-full ${cfg.barH} rounded-t-xl flex items-center justify-center transition-transform duration-200 group-hover:-translate-y-0.5 ${
                                                         cfg.rank === 1
                                                             ? isMe ? "bg-yellow-200 border-2 border-yellow-400" : "bg-yellow-100 border-2 border-yellow-300"
                                                             : cfg.rank === 2
@@ -367,9 +382,11 @@ export default function Dash() {
                             {globalBoard.rest.map((u, idx) => (
                                 <motion.div
                                     key={u.uid}
-                                    className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
+                                    // The whole row opens their profile, same as clicking the name
+                                    onClick={() => context.setShowAccount(u)}
+                                    className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all hover:cursor-pointer hover:shadow-sm ${
                                         u.uid === user.uid
-                                            ? "bg-blue-50 border-blue-200"
+                                            ? "bg-blue-50 border-blue-200 hover:border-blue-300"
                                             : "bg-white border-gray-100 hover:border-gray-300"
                                     }`}
                                     initial={{ opacity: 0, y: 8 }}
@@ -392,11 +409,11 @@ export default function Dash() {
             )}
 
             {/* Per-role leaderboards, for users who don't have a global leaderboard */}
-            {!seesGlobal && (roleLeaderboardsLoading || roleLeaderboards.length > 0) && (
+            {!seesGlobal && (roleLeaderboardsLoading || homeBoards.length > 0) && (
                 <div className="w-full flex flex-col gap-6">
                     {roleLeaderboardsLoading ? (
                         <p className="text-gray-400 text-sm text-center py-4">Loading leaderboards...</p>
-                    ) : roleLeaderboards.map(rl => (
+                    ) : homeBoards.map(rl => (
                         <div key={rl.roleId} className="w-full flex flex-col gap-2">
                             <h2 className="text-lg font-semibold truncate">{rl.roleName} Leaderboard</h2>
                             {rl.top3.length === 0 ? (
@@ -409,7 +426,8 @@ export default function Dash() {
                                         return (
                                             <motion.div
                                                 key={m.uid}
-                                                className={`flex items-center gap-3 rounded-2xl border-2 px-3 py-3 sm:px-4 ${
+                                                onClick={() => context.setShowAccount(m)}
+                                                className={`flex items-center gap-3 rounded-2xl border-2 px-3 py-3 sm:px-4 transition-shadow hover:cursor-pointer hover:shadow-md ${
                                                     m.uid === user.uid
                                                         ? "bg-blue-50 border-blue-300"
                                                         : `bg-white ${idx === 0 ? "border-yellow-300" : idx === 1 ? "border-gray-300" : "border-orange-300"}`
@@ -420,9 +438,8 @@ export default function Dash() {
                                             >
                                                 <span className="text-2xl shrink-0 w-8 text-center"><MedalIcon rank={idx} /></span>
                                                 <motion.div
-                                                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer select-none"
+                                                    className="flex items-center gap-3 min-w-0 flex-1 select-none"
                                                     whileHover={{ scale: 1.02 }}
-                                                    onClick={() => context.setShowAccount(m)}
                                                 >
                                                     <ProfileImg src={m.photoURL} alt={m.name} size="xxs" />
                                                     <div className="min-w-0 flex flex-col">

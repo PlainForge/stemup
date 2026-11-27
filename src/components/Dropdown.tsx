@@ -15,6 +15,10 @@ interface DropdownProps<T extends string> {
     /** Accessible name, e.g. "Appearance" */
     label: string;
     id?: string;
+    /** Stretch to the width of its container (e.g. under a full-width search box) */
+    fullWidth?: boolean;
+    /** "gray" matches the gray-filled inputs in filter bars; "white" (default) matches cards */
+    tone?: "white" | "gray";
 }
 
 /**
@@ -22,7 +26,7 @@ interface DropdownProps<T extends string> {
  * background (and follow dark mode), which a native select can't do reliably.
  * Keyboard: Enter/Space/Arrow keys open, arrows move, Enter picks, Esc closes.
  */
-export default function Dropdown<T extends string>({ value, options, onChange, label, id }: DropdownProps<T>) {
+export default function Dropdown<T extends string>({ value, options, onChange, label, id, fullWidth = false, tone = "white" }: DropdownProps<T>) {
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(0);
     const rootRef = useRef<HTMLDivElement>(null);
@@ -40,6 +44,11 @@ export default function Dropdown<T extends string>({ value, options, onChange, l
         document.addEventListener("pointerdown", onPointerDown);
         return () => document.removeEventListener("pointerdown", onPointerDown);
     }, [open]);
+
+    // Long lists scroll: keep the highlighted option in view while using the keyboard
+    useEffect(() => {
+        if (open) document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" });
+    }, [open, active, listId]);
 
     const openList = () => {
         setActive(selectedIndex);
@@ -90,7 +99,7 @@ export default function Dropdown<T extends string>({ value, options, onChange, l
     };
 
     return (
-        <div ref={rootRef} className="relative shrink-0">
+        <div ref={rootRef} className={`relative ${fullWidth ? "w-full" : "shrink-0"}`}>
             <button
                 ref={buttonRef}
                 id={id}
@@ -102,7 +111,7 @@ export default function Dropdown<T extends string>({ value, options, onChange, l
                 aria-activedescendant={open ? `${listId}-${active}` : undefined}
                 onClick={() => (open ? setOpen(false) : openList())}
                 onKeyDown={onKeyDown}
-                className={`flex items-center gap-2 min-w-40 bg-white border rounded-xl pl-3 pr-3 py-2 text-sm hover:cursor-pointer transition-colors focus:outline-none ${
+                className={`flex items-center gap-2 min-w-40 ${fullWidth ? "w-full" : ""} ${tone === "gray" ? "bg-gray-50" : "bg-white"} border rounded-xl pl-3 pr-3 py-2 text-sm hover:cursor-pointer transition-colors focus:outline-none ${
                     open ? "border-gray-400" : "border-gray-200 hover:border-gray-300 focus-visible:border-gray-400"
                 }`}
             >
@@ -119,7 +128,7 @@ export default function Dropdown<T extends string>({ value, options, onChange, l
                     id={listId}
                     role="listbox"
                     aria-label={label}
-                    className="absolute right-0 z-30 mt-1.5 w-full min-w-40 bg-white border border-gray-200 rounded-xl shadow-lg p-1 flex flex-col gap-0.5"
+                    className="absolute right-0 z-30 mt-1.5 w-full min-w-40 max-h-72 overflow-y-auto overscroll-contain bg-white border border-gray-200 rounded-xl shadow-lg p-1 flex flex-col gap-0.5"
                 >
                     {options.map((option, i) => {
                         const isSelected = option.value === value;

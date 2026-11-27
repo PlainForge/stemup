@@ -18,6 +18,25 @@ export type UserData = {
     pendingEmail?: string,
     /** How to tell them about their tasks and requests; push and email are off when unset */
     notifications?: NotificationPrefs,
+    /** Roles whose rewards and top 3 they've hidden from Home (each role's Settings tab) */
+    hideOnHome?: string[],
+    /** Tasks this person has given out as an instructor or admin (counted by a Cloud Function) */
+    tasksGiven?: number,
+}
+
+/** An invitation to join a role (invites/{roleId}_{uid}), sent by its instructors or an admin */
+export type RoleInvite = {
+    id: string;
+    roleId: string;
+    roleName: string;
+    /** Who's invited */
+    uid: string;
+    userName: string;
+    /** Join as a member, or as one of the role's instructors (Instructors only) */
+    as: "member" | "instructor";
+    invitedBy: string;
+    invitedByName: string;
+    createdAt?: Timestamp;
 }
 
 /** Kinds of notification, each with its own switch in Settings (kept in sync with functions/src/notifications.ts) */
@@ -28,6 +47,7 @@ export const NOTIFICATION_TYPES = [
     { key: "extension", label: "Extension requests", hint: "An extension you asked for is approved or declined" },
     { key: "joinRole", label: "Role join requests", hint: "A request to join a role is accepted or declined" },
     { key: "accessRequest", label: "Instructor and role requests", hint: "Instructor access, new roles and role resets" },
+    { key: "invite", label: "Role invitations", hint: "Someone invites you to join a role" },
 ] as const;
 
 export type NotifyType = (typeof NOTIFICATION_TYPES)[number]["key"];
@@ -126,6 +146,8 @@ export type UserRoleData = {
 
 export type Task = {
   assignedTo: string,
+  /** Who gave the task (counted as their "tasks given"); missing on older tasks */
+  assignedBy?: string,
   assignedName: string,
   description: string,
   points: number,

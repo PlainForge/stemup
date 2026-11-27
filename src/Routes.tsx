@@ -43,8 +43,11 @@ export const router = createBrowserRouter([
       { path: "roles", element: <RolesSelectorPage /> },
       { path: "admin", element: <AdminPage /> },
       { path: "admin/roles/:id", element: <AdminRolePage /> },
+      // A member's page opened from the Admin or Instructor tab stays under that tab
+      { path: "admin/roles/:id/members/:uid", element: <RoleMemberPage /> },
       { path: "instructor", element: <InstructorPage /> },
       { path: "instructor/roles/:id", element: <AdminRolePage mode="instructor" /> },
+      { path: "instructor/roles/:id/members/:uid", element: <RoleMemberPage /> },
       { path: "admin/users/:uid", element: <AdminUserPage /> },
       { path: "admin/inactive/:id", element: <AlumniBatchPage /> },
       // Alumni and Old Users became the Admin page's Inactive Users tab

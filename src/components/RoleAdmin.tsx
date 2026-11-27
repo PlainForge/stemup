@@ -1,12 +1,12 @@
-import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, onSnapshot, query, Timestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, Timestamp, updateDoc, where } from "firebase/firestore";
 import { alertDialog, confirmDialog, promptDialog } from "../lib/confirm";
 import { roleService, isRoleStaff, canChangeRole, roleOwner, describeRoleChange, isRoleChange } from "../lib/roleService";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { motion } from "motion/react";
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { db } from "../lib/firebase";
-import { type Role, type StemRequest, type SubmittedTask, type Task, type UserData, type UserRoleData } from "../myDataTypes";
+import { type Role, type RoleInvite, type StemRequest, type SubmittedTask, type Task, type UserData, type UserRoleData } from "../myDataTypes";
 import { MainContext } from "../context/MainContext";
 import LinkButton from "./LinkButton";
 import Button from "./Button";
@@ -14,10 +14,22 @@ import Input from "./Input";
 import { Alert } from "./PhraseAlert";
 import ProfileImg from "./ProfileImg";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
+import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowRightArrowLeft, faArrowUpWideShort, faCalendar, faCalendarDays, faChevronRight, faCircleCheck, faCircleDot, faClock, faFlagCheckered, faInbox, faMagnifyingGlass, faPen, faPersonRunning, faRotateLeft, faTrashCan, faTriangleExclamation, faXmark } from "@fortawesome/free-solid-svg-icons";
 import PersonPicker from "./PersonPicker";
+import Dropdown from "./Dropdown";
+import DatePicker from "./DatePicker";
+import { CardAction, Chip, ChipRow, TaskCard, TaskDescription, TaskHeader, type TaskTone } from "./TaskCardParts";
+import { dueInfo, shortDateTime } from "../lib/taskDates";
 import MedalIcon from "./MedalIcon";
 import ErrorMessage from "./ErrorMessage";
+import InstructorCard from "./InstructorCard";
+import { GLOBAL_ROLE_ID } from "../lib/firebaseService";
+
+/** Today as "YYYY-MM-DD" in local time (the earliest due date for a new task) */
+function todayKey(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function taskIsOverdue(task: Task): boolean {
     return !task.complete && !!task.dueDate && task.dueDate.toDate() < new Date();
@@ -72,11 +84,20 @@ interface prop {
 export default function RoleAdminPage({ role, membersWithData, requested } : prop) {
     const context = useContext(MainContext);
     const navigate = useNavigate();
+    // /admin/roles/:id or /instructor/roles/:id: member pages open under the same tab
+    const { pathname } = useLocation();
     // Changes this role's instructors have asked its owner for (a reset, a rename, ...)
     const [roleRequests, setRoleRequests] = useState<StemRequest[]>([]);
     const [busyRequest, setBusyRequest] = useState<string | null>(null);
     const [instructorProfiles, setInstructorProfiles] = useState<{ uid: string; name: string; photoURL: string }[]>([]);
-    const [addInstructorUid, setAddInstructorUid] = useState("");
+    // Open invitations to this role, and everyone who could be invited
+    const [invites, setInvites] = useState<RoleInvite[]>([]);
+    const [activeUsers, setActiveUsers] = useState<{ uid: string; name: string; photoURL: string }[]>([]);
+    const [inviteUid, setInviteUid] = useState("");
+    const [inviteInstructorUid, setInviteInstructorUid] = useState("");
+    const [inviting, setInviting] = useState(false);
+    // The instructor whose card is open (Instructors tab)
+    const [cardUid, setCardUid] = useState<string | null>(null);
     const [rewardsTitle, setRewardsTitle] = useState(role.rewardsTitle ?? "");
     const [phrase5, setPhrase5] = useState(""); // Rewards title phrase
     // The open tab lives in the URL (?tab=), so coming back from a member's page lands on the same tab
@@ -98,6 +119,10 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [allTasks, setAllTasks] = useState<Task[]>([]);
     const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "done" | "submitted">("all");
     const [taskSearch, setTaskSearch] = useState("");
+    // Only this member's tasks ("" for everyone)
+    const [taskMember, setTaskMember] = useState("");
+    // The Assign Task form's due date ("YYYY-MM-DD", "" for none)
+    const [newDue, setNewDue] = useState("");
     const [taskMonthFilter, setTaskMonthFilter] = useState("all");
     const [taskSort, setTaskSort] = useState("date-desc");
     const [allSubmitted, setAllSubmitted] = useState<SubmittedTask[]>([]);
@@ -156,6 +181,27 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     }, [instructorsKey]);
 
     useEffect(() => setRewardsTitle(role.rewardsTitle ?? ""), [role.rewardsTitle]);
+
+    useEffect(() => onSnapshot(query(collection(db, "invites"), where("roleId", "==", role.id)), snap => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as RoleInvite));
+        list.sort((a, b) => (a.createdAt?.toMillis() ?? 0) - (b.createdAt?.toMillis() ?? 0));
+        setInvites(list);
+    }, err => console.error("Error loading invitations:", err)), [role.id]);
+
+    // Active users (everyone still on the global leaderboard), for the Members tab's invite picker
+    const inviteTabOpen = page === "members";
+    useEffect(() => {
+        if (!inviteTabOpen) return;
+        let cancelled = false;
+        getDocs(collection(db, "users")).then(snap => {
+            if (cancelled) return;
+            setActiveUsers(snap.docs
+                .filter(d => (Array.isArray(d.data().roles) ? d.data().roles as UserRoleData[] : []).some(r => r.id === GLOBAL_ROLE_ID))
+                .map(d => ({ uid: d.id, name: (d.data().name as string) ?? "Unknown User", photoURL: (d.data().photoURL as string) ?? "" }))
+                .sort((a, b) => a.name.localeCompare(b.name)));
+        }).catch(err => console.error("Error loading users:", err));
+        return () => { cancelled = true; };
+    }, [inviteTabOpen]);
 
     const me = context?.user ?? null;
     const myName = context?.userData?.name ?? "";
@@ -234,6 +280,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
 
                 await addDoc(collection(db, "tasks"), {
                     assignedTo: selectedUser.uid,
+                    ...(me ? { assignedBy: me.uid } : {}),
                     assignedName: selectedUser.name,
                     description: desc,
                     points: pts,
@@ -248,6 +295,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
             // Reset
             setPhrase4("Task(s) created successfully");
             form.reset();
+            setNewDue("");
             setCreateSetTaskFor([]);
         } catch (err) {
             console.error(err);
@@ -544,48 +592,62 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     }
 
     const roleInstructors = role.instructors ?? [];
-    // Only Instructors who are already members of this role can be given access to run it
     const roleMembers = role.members ?? [];
-    const addableInstructors = instructorProfiles.filter(p => allInstructors.includes(p.uid) && roleMembers.includes(p.uid) && !roleInstructors.includes(p.uid) && !admins.includes(p.uid));
+    const invitedUids = new Set(invites.map(i => i.uid));
+    const memberInvites = invites.filter(i => i.as === "member");
+    const instructorInvites = invites.filter(i => i.as === "instructor");
+    // Anyone active who isn't in the role yet (admins are in every role already)
+    const invitableMembers = activeUsers.filter(p => !roleMembers.includes(p.uid) && !admins.includes(p.uid) && !invitedUids.has(p.uid));
+    // Any Instructor who doesn't run this role yet, whether or not they're in it
+    const invitableInstructors = instructorProfiles.filter(p => allInstructors.includes(p.uid) && !roleInstructors.includes(p.uid) && !admins.includes(p.uid) && !invitedUids.has(p.uid));
 
-    const addInstructor = async () => {
-        const person = instructorProfiles.find(p => p.uid === addInstructorUid);
+    const sendInvite = async (uid: string, as: RoleInvite["as"]) => {
+        const person = (as === "instructor" ? instructorProfiles : activeUsers).find(p => p.uid === uid);
         if (!person) return;
+        setInviting(true);
         try {
-            await roleService.addRoleInstructor(role, person.uid);
-            setAddInstructorUid("");
+            await roleService.sendInvite(role, person, as, { uid: user.uid, name: userData.name ?? "" });
+            if (as === "instructor") setInviteInstructorUid(""); else setInviteUid("");
         } catch (err) {
-            console.error("Error adding instructor:", err);
+            console.error("Error sending invitation:", err);
+            await alertDialog("Couldn't send the invitation. Please try again.", "Something went wrong");
+        } finally {
+            setInviting(false);
         }
     };
 
-    const removeInstructor = async (uid: string, name: string) => {
-        const ok = await confirmDialog(
-            `${name} will stay a member of this role but won't be able to run it any more.`,
-            { title: "Remove Instructor?", confirmLabel: "Remove", danger: true }
-        );
+    const cancelInvite = async (invite: RoleInvite) => {
+        const ok = await confirmDialog(`Withdraw ${invite.userName || "their"} invitation to ${role.name}?`, { title: "Cancel Invitation?", confirmLabel: "Withdraw", danger: true });
         if (!ok) return;
-        await roleService.removeRoleInstructor(role, uid);
+        await roleService.cancelInvite(role.id, invite.uid).catch(err => console.error("Error cancelling invitation:", err));
     };
 
-    // Admins choose which of the role's instructors owns it
-    const makeOwner = async (uid: string, name: string) => {
-        const ok = await confirmDialog(
-            `${name} will own ${role.name}. The role's other instructors will need ${name}'s approval to rename or reset it, edit members' stats, kick members or change the rewards title.`,
-            { title: "Make Owner?", confirmLabel: "Make Owner" }
-        );
-        if (!ok) return;
-        await roleService.setRoleOwner(role.id, uid);
-    };
-
-    const clearOwner = async () => {
-        const ok = await confirmDialog(
-            `${role.name} will have no owner, so its instructors' change requests will come to admins instead.`,
-            { title: "Remove Owner?", confirmLabel: "Remove Owner", danger: true }
-        );
-        if (!ok) return;
-        await roleService.setRoleOwner(role.id, "");
-    };
+    const inviteList = (list: RoleInvite[]) => list.length > 0 && (
+        <div className="flex flex-col gap-2">
+            <p className="text-xs text-gray-400 uppercase tracking-widest">Waiting for a reply</p>
+            {list.map(inv => {
+                const photo = activeUsers.find(p => p.uid === inv.uid)?.photoURL ?? instructorProfiles.find(p => p.uid === inv.uid)?.photoURL;
+                return (
+                    <div key={inv.id} className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <ProfileImg src={photo} alt={inv.userName} size="xxs" />
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{inv.userName || "Someone"}</p>
+                                <p className="text-xs text-gray-400 truncate">Invited by {inv.invitedBy === user.uid ? "you" : inv.invitedByName || "an instructor"}</p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => cancelInvite(inv)}
+                            className="text-xs text-gray-400 hover:text-red-500 transition-colors hover:cursor-pointer shrink-0"
+                        >
+                            Withdraw
+                        </button>
+                    </div>
+                );
+            })}
+        </div>
+    );
 
     // Requests the signed-in person can approve, and the ones they sent and can withdraw
     const toReview = canChange ? roleRequests.filter(r => r.uid !== user.uid) : [];
@@ -595,6 +657,14 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const toggleGlobalLeaderboard = async () => {
         await updateDoc(doc(db, "roles", role.id), { showInGlobalLeaderboard: !showInGlobal });
     };
+
+    const assignee = (uid: string, name: string, note?: string) => (
+        <div className="flex items-center gap-2 min-w-0">
+            <ProfileImg src={membersWithData.find(m => m.uid === uid)?.photoURL} alt={name} size="xxs" />
+            <span className="text-sm font-medium truncate">{name}</span>
+            {note && <span className="ml-auto text-xs text-gray-400 whitespace-nowrap">{note}</span>}
+        </div>
+    );
 
     // Admins and the role's instructors aren't given tasks or ranked
     const nonAdminMembers = membersWithData.filter((m) => !isRoleStaff(role, m.uid, admins));
@@ -829,12 +899,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                         <Input type="number" id="pts" name="pts" placeholder="Points" required={true} autocomplete="false" size="full" />
                         <div className="flex flex-col gap-1">
                             <label className="text-xs text-gray-400">Due Date (optional)</label>
-                            <input
-                                type="date"
-                                name="dueDate"
-                                min={new Date().toISOString().split("T")[0]}
-                                className="w-full px-2 py-2 rounded-xl bg-white border-2 border-transparent hover:border-black/30 focus:border-black/30 focus:outline-none text-sm transition-all duration-200"
-                            />
+                            <DatePicker name="dueDate" value={newDue} onChange={setNewDue} min={todayKey()} placeholder="No due date" />
                         </div>
                         <Button type="submit" size="sm" color="green">Assign Task</Button>
                         {assignError && <ErrorMessage>{assignError}</ErrorMessage>}
@@ -848,23 +913,69 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
                     {/* Search + Filter */}
                     <div className="flex flex-col gap-2">
-                        <input
-                            type="text"
-                            value={taskSearch}
-                            onChange={e => setTaskSearch(e.target.value)}
-                            placeholder="Search by title or assignee..."
-                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                        {/* Whose tasks: a member filter, like the invite picker */}
+                        <PersonPicker
+                            label="Member"
+                            placeholder="All members"
+                            allLabel="All members"
+                            value={taskMember}
+                            onChange={setTaskMember}
+                            emptyText="No members in this role yet."
+                            people={nonAdminMembers.map(m => ({ uid: m.uid, name: m.name, photoURL: m.photoURL }))}
                         />
-                        <select
-                            value={taskMonthFilter}
-                            onChange={e => setTaskMonthFilter(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
-                        >
-                            <option value="all">All months</option>
-                            {MONTH_OPTIONS.map(opt => (
-                                <option key={opt.key} value={opt.key}>{opt.label}</option>
-                            ))}
-                        </select>
+                        {/* Task titles: a plain field with no fill, like the picker's search */}
+                        <label className="flex items-center gap-2.5 rounded-xl border border-gray-200 px-3 py-2 transition-colors hover:border-gray-400 focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-500/10">
+                            <FontAwesomeIcon icon={faMagnifyingGlass} className="text-xs text-gray-400" />
+                            <input
+                                type="text"
+                                value={taskSearch}
+                                onChange={e => setTaskSearch(e.target.value)}
+                                placeholder="Search task titles..."
+                                aria-label="Search task titles"
+                                className="w-full min-w-0 bg-transparent text-sm focus:outline-none"
+                            />
+                            {taskSearch && (
+                                <button
+                                    type="button"
+                                    onClick={() => setTaskSearch("")}
+                                    aria-label="Clear search"
+                                    className="flex size-5 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 hover:cursor-pointer"
+                                >
+                                    <FontAwesomeIcon icon={faXmark} className="text-[10px]" />
+                                </button>
+                            )}
+                        </label>
+                        {/* Month and sort side by side (stacked on narrow phones) */}
+                        <div className="flex flex-col min-[420px]:flex-row gap-2">
+                            <div className="flex-1 min-w-0">
+                                <Dropdown
+                                    label="Month"
+                                    fullWidth
+                                    tone="gray"
+                                    value={taskMonthFilter}
+                                    onChange={setTaskMonthFilter}
+                                    options={[
+                                        { value: "all", label: "All months", icon: faCalendarDays },
+                                        ...MONTH_OPTIONS.map(opt => ({ value: opt.key, label: opt.label, icon: faCalendar })),
+                                    ]}
+                                />
+                            </div>
+                            <div className="min-[420px]:w-44 shrink-0">
+                                <Dropdown
+                                    label="Sort"
+                                    fullWidth
+                                    tone="gray"
+                                    value={taskSort}
+                                    onChange={setTaskSort}
+                                    options={[
+                                        { value: "date-desc", label: "Newest first", icon: faArrowDownWideShort },
+                                        { value: "date-asc", label: "Oldest first", icon: faArrowUpWideShort },
+                                        { value: "title-asc", label: "Title A–Z", icon: faArrowDownAZ },
+                                        { value: "title-desc", label: "Title Z–A", icon: faArrowDownZA },
+                                    ]}
+                                />
+                            </div>
+                        </div>
                         <div className="flex gap-2 flex-wrap">
                             {(["all", "submitted", "pending", "done"] as const).map((f) => (
                                 <button
@@ -880,26 +991,6 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                 </button>
                             ))}
                         </div>
-                        <div className="flex gap-2 flex-wrap">
-                            {([
-                                { key: "date-desc", label: "Newest" },
-                                { key: "date-asc",  label: "Oldest" },
-                                { key: "title-asc", label: "A-Z" },
-                                { key: "title-desc",label: "Z-A" },
-                            ]).map(s => (
-                                <button
-                                    key={s.key}
-                                    onClick={() => setTaskSort(s.key)}
-                                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors hover:cursor-pointer ${
-                                        taskSort === s.key
-                                            ? "bg-gray-700 text-white"
-                                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                    }`}
-                                >
-                                    {s.label}
-                                </button>
-                            ))}
-                        </div>
                     </div>
 
                     {taskFilter === "submitted" ? (() => {
@@ -910,37 +1001,29 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                 const d = t.submission?.toDate();
                                 if (!d || d.getFullYear() !== y || d.getMonth() !== m) return false;
                             }
-                            const q = taskSearch.toLowerCase();
-                            return !t.complete && (!q || t.title.toLowerCase().includes(q) || t.assignedName.toLowerCase().includes(q));
+                            const q = taskSearch.trim().toLowerCase();
+                            return !t.complete && (!taskMember || t.assignedTo === taskMember) && (!q || t.title.toLowerCase().includes(q));
                         });
                         const sorted = applySortSubmitted(filtered, taskSort);
                         if (sorted.length === 0) return (
                             <p className="text-gray-400 text-sm text-center py-8">No pending submissions.</p>
                         );
                         return (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {sorted.map((submitted) => (
-                                    <motion.div
-                                        key={submitted.id}
-                                        className="flex flex-col gap-3 p-4 rounded-2xl border-2 border-yellow-200 bg-white"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <h3 className="font-semibold leading-tight">{submitted.title}</h3>
-                                            <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
-                                                {submitted.points} pts
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-500 flex-1">{submitted.description || "No description"}</p>
-                                        <div className="text-xs text-gray-400 flex flex-col gap-0.5">
-                                            <span>By <strong className="text-gray-600">{submitted.assignedName}</strong></span>
-                                            <span>{submitted.submission ? submitted.submission.toDate().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "N/A"}</span>
-                                        </div>
-                                        <div className="flex gap-2 mt-auto">
-                                            <Button onClick={() => acceptTask(submitted)} size="full" color="green">Approve</Button>
-                                            <Button onClick={() => declineTask(submitted)} size="full" color="red">Decline</Button>
-                                        </div>
+                                    <motion.div key={submitted.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                                        <TaskCard tone="amber">
+                                            <TaskHeader title={submitted.title} points={submitted.points} />
+                                            <TaskDescription text={submitted.description} />
+                                            {assignee(submitted.assignedTo, submitted.assignedName)}
+                                            <ChipRow>
+                                                <Chip tone="amber" icon={faInbox}>Submitted {shortDateTime(submitted.submission)}</Chip>
+                                            </ChipRow>
+                                            <div className="flex gap-2 mt-auto pt-1">
+                                                <Button onClick={() => acceptTask(submitted)} size="full" color="green">Approve</Button>
+                                                <Button onClick={() => declineTask(submitted)} size="full" color="red">Decline</Button>
+                                            </div>
+                                        </TaskCard>
                                     </motion.div>
                                 ))}
                             </div>
@@ -959,87 +1042,45 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                 const d = t.createdOn?.toDate();
                                 if (!d || d.getFullYear() !== y || d.getMonth() !== m) return false;
                             }
-                            const q = taskSearch.toLowerCase();
-                            return !q || t.title.toLowerCase().includes(q) || t.assignedName.toLowerCase().includes(q);
+                            const q = taskSearch.trim().toLowerCase();
+                            return (!taskMember || t.assignedTo === taskMember) && (!q || t.title.toLowerCase().includes(q));
                         });
                         const sorted = applySortTasks(filtered, taskSort);
                         if (sorted.length === 0) return (
                             <p className="text-gray-400 text-sm text-center py-8">No tasks to show.</p>
                         );
                         return (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {sorted.map((task) => {
                                     const submission = allSubmitted.find(s => s.id === task.id && !s.complete);
                                     const overdue = taskIsOverdue(task);
                                     const daysLeft = daysUntilDeleteAt(task);
+                                    const declines = task.declineCount ?? 0;
+                                    const tone: TaskTone = task.complete ? "green" : submission ? "amber" : overdue ? "red"
+                                        : task.status === "Almost Done" ? "orange" : task.status === "In Progress" ? "blue" : "gray";
+                                    const due = task.dueDate && !task.complete && !submission ? dueInfo(task.dueDate) : null;
                                     return (
-                                    <motion.div
-                                        key={task.id}
-                                        className={`flex flex-col gap-3 p-4 rounded-2xl border-2 bg-white ${
-                                            task.complete ? "border-green-300" : overdue ? "border-red-300" : submission ? "border-yellow-200" : "border-gray-200"
-                                        }`}
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <h3 className="font-semibold leading-tight">{task.title}</h3>
-                                            <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
-                                                {task.points} pts
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-500 flex-1">{task.description || "No description"}</p>
-                                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                                            <span className="text-xs text-gray-400">{task.assignedName}</span>
-                                            <div className="flex gap-1 flex-wrap">
-                                                {overdue && !submission && (
-                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Overdue</span>
-                                                )}
-                                                {task.extensionRequested && (
-                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">Extension Requested</span>
-                                                )}
-                                                {task.extensionDeclined && (
-                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Extension Declined</span>
-                                                )}
-                                                {(task.declineCount ?? 0) > 0 && (
-                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
-                                                        Declined {task.declineCount}×{task.declineCount === 3 ? " · Closed" : ""}
-                                                    </span>
-                                                )}
-                                                {task.status && !task.complete && !submission && (
-                                                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                                        task.status === "In Progress" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
-                                                    }`}>
-                                                        {task.status}
-                                                    </span>
-                                                )}
-                                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                                    task.complete ? "bg-green-100 text-green-700" : submission ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-500"
-                                                }`}>
-                                                    {task.complete ? "Done" : submission ? "Submitted" : "Pending"}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        {task.dueDate && !task.complete && (
-                                            <p className={`text-xs ${overdue && !submission ? "text-red-400" : "text-gray-400"}`}>
-                                                Due: {task.dueDate.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                                                {overdue && !submission && daysLeft !== null && (
-                                                    <span className="ml-1">· {daysLeft > 0 ? `Deletes in ${daysLeft}d` : "Deleting soon"}</span>
-                                                )}
-                                            </p>
-                                        )}
-                                        {submission && (
-                                            <p className="text-xs text-yellow-600">
-                                                Submitted: {submission.submission.toDate().toLocaleString("en-US", {
-                                                    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit"
-                                                })}
-                                            </p>
-                                        )}
-                                        <p className="text-xs text-gray-300">
-                                            {task.createdOn?.toDate().toLocaleString("en-US", {
-                                                month: "short", day: "numeric", year: "numeric",
-                                                hour: "numeric", minute: "2-digit"
-                                            })}
-                                        </p>
+                                    <motion.div key={task.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                                    <TaskCard tone={tone} faded={task.complete}>
+                                        <TaskHeader title={task.title} points={task.points} done={task.complete} />
+                                        <TaskDescription text={task.description} />
+                                        {assignee(task.assignedTo, task.assignedName, task.createdOn ? `Given ${shortDateTime(task.createdOn)}` : undefined)}
+                                        <ChipRow>
+                                            {task.complete ? <Chip tone="green" icon={faCircleCheck}>Done</Chip>
+                                                : submission ? <Chip tone="amber" icon={faInbox}>Submitted {shortDateTime(submission.submission)}</Chip>
+                                                : task.status === "In Progress" ? <Chip tone="blue" icon={faPersonRunning}>In Progress</Chip>
+                                                : task.status === "Almost Done" ? <Chip tone="orange" icon={faFlagCheckered}>Almost Done</Chip>
+                                                : <Chip icon={faCircleDot}>Not started</Chip>}
+                                            {due && <Chip tone={due.tone} icon={faCalendarDays}>{due.label}</Chip>}
+                                            {overdue && !submission && (
+                                                <Chip tone="red" icon={faTriangleExclamation}>
+                                                    {daysLeft === null ? "Overdue" : daysLeft > 0 ? `Deletes in ${daysLeft}d` : "Deleting soon"}
+                                                </Chip>
+                                            )}
+                                            {task.extensionRequested && <Chip tone="amber" icon={faClock}>Extension requested</Chip>}
+                                            {task.extensionDeclined && <Chip>Extension declined</Chip>}
+                                            {declines > 0 && <Chip tone="red" icon={faRotateLeft}>Sent back {declines}×{declines === 3 ? " · Closed" : ""}</Chip>}
+                                        </ChipRow>
                                         {task.extensionRequested && (
                                             <div className="flex gap-2">
                                                 <Button onClick={() => acceptExtension(task.id, task.points)} size="full" color="green">Accept Extension</Button>
@@ -1075,12 +1116,9 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                         onChange={e => setEditPts(Math.max(0, +e.target.value))}
                                                         className="w-1/3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400"
                                                     />
-                                                    <input
-                                                        type="date"
-                                                        value={editDue}
-                                                        onChange={e => setEditDue(e.target.value)}
-                                                        className="flex-1 min-w-0 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400"
-                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <DatePicker value={editDue} onChange={setEditDue} align="right" placeholder="No due date" />
+                                                    </div>
                                                 </div>
                                                 <div className="flex gap-2">
                                                     <Button onClick={() => saveTaskEdit(task)} size="full" color="blue" disabled={!editTitle.trim()}>Save</Button>
@@ -1103,16 +1141,17 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="flex gap-2 pt-3 border-t border-gray-100">
+                                            <div className="flex gap-1 pt-2 mt-auto border-t border-gray-100">
                                                 {!task.complete && !submission && (
-                                                    <Button onClick={() => startEditTask(task)} size="full" color="blue">Edit</Button>
+                                                    <CardAction onClick={() => startEditTask(task)} icon={faPen}>Edit</CardAction>
                                                 )}
                                                 {!task.complete && !submission && (
-                                                    <Button onClick={() => { setEditTaskId(null); setReassignTaskId(task.id); setReassignTo(""); }} size="full" color="gray">Reassign</Button>
+                                                    <CardAction onClick={() => { setEditTaskId(null); setReassignTaskId(task.id); setReassignTo(""); }} icon={faArrowRightArrowLeft}>Reassign</CardAction>
                                                 )}
-                                                <Button onClick={() => removeTask(task)} size="full" color="red">Remove</Button>
+                                                <CardAction onClick={() => removeTask(task)} icon={faTrashCan} danger>Remove</CardAction>
                                             </div>
                                         )}
+                                    </TaskCard>
                                     </motion.div>
                                     );
                                 })}
@@ -1125,6 +1164,24 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
             {/* Members */}
             {page.match("members") && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3 mb-2">
+                        <div>
+                            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Invite someone</h2>
+                            <p className="text-sm text-gray-500 mt-1">They'll find the invitation on their Roles page and can accept or decline it.</p>
+                        </div>
+                        <PersonPicker
+                            label="Person to invite"
+                            placeholder="Select someone to invite"
+                            value={inviteUid}
+                            onChange={setInviteUid}
+                            emptyText="Everyone is already in this role or invited."
+                            people={invitableMembers}
+                        />
+                        <Button onClick={() => sendInvite(inviteUid, "member")} size="sm" disabled={!inviteUid || inviting}>
+                            {inviting ? "Sending..." : "Send Invite"}
+                        </Button>
+                        {inviteList(memberInvites)}
+                    </div>
                     {nonAdminMembers.length === 0 ? (
                         <p className="text-gray-400 text-sm text-center py-8">No members in this role.</p>
                     ) : nonAdminMembers.map((m) => (
@@ -1132,7 +1189,7 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                             key={m.uid}
                             type="button"
                             // Each member has their own page: stats, tasks in this role, edit and kick
-                            onClick={() => navigate(`/roles/${role.id}/members/${m.uid}`)}
+                            onClick={() => navigate(`${pathname.replace(/\/+$/, "")}/members/${m.uid}`)}
                             className="group flex items-center gap-3 w-full text-left px-4 py-3 rounded-2xl border border-gray-200 bg-white transition-all duration-200 hover:border-gray-400 hover:shadow-sm hover:cursor-pointer"
                             initial={{ x: -10, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
@@ -1155,9 +1212,9 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                         <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Running this role</h2>
                         <p className="text-sm text-gray-500">Instructors here can give, edit and review tasks, accept members and set prizes. The role's owner can also rename or reset it, edit members' stats, kick members and change the rewards title; other instructors send the owner a request for those. Admins can always run every role.</p>
                         {isAdmin ? (
-                            <p className="text-xs text-gray-400">{ownerUid ? "Only the owner, or an admin, can remove other instructors." : "This role has no owner, so its instructors' change requests come to admins. Make one of them the owner below."}</p>
+                            <p className="text-xs text-gray-400">{ownerUid ? "Open an instructor to make them the owner or take them off this role." : "This role has no owner, so its instructors' change requests come to admins. Open an instructor to make them the owner."}</p>
                         ) : (
-                            <p className="text-xs text-gray-400">Only the role's owner, or an admin, can remove other instructors. To step down yourself, ask an admin.</p>
+                            <p className="text-xs text-gray-400">{ownerUid === user.uid ? "Open an instructor to hand the role on to them or take them off it." : "Only the role's owner, or an admin, can remove other instructors. To step down yourself, ask an admin."} Open anyone to see their stats.</p>
                         )}
                         {roleInstructors.length === 0 ? (
                             <p className="text-sm text-gray-400">No instructors yet.</p>
@@ -1165,7 +1222,12 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                             const person = instructorProfiles.find(p => p.uid === uid);
                             const lostAccess = !allInstructors.includes(uid);
                             return (
-                                <div key={uid} className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl">
+                                <button
+                                    key={uid}
+                                    type="button"
+                                    onClick={() => setCardUid(uid)}
+                                    className="group flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-left transition-colors hover:border-gray-400 hover:cursor-pointer"
+                                >
                                     <div className="flex items-center gap-2 min-w-0">
                                         <ProfileImg src={person?.photoURL} alt={person?.name} size="xxs" />
                                         <div className="min-w-0">
@@ -1176,42 +1238,30 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="flex gap-2 shrink-0">
-                                        {isAdmin && ownerUid !== uid && !lostAccess && (
-                                            <Button onClick={() => makeOwner(uid, person?.name ?? "This instructor")} size="xsm" color="blue">Make Owner</Button>
-                                        )}
-                                        {isAdmin && ownerUid === uid && (
-                                            <Button onClick={clearOwner} size="xsm" color="gray">Remove Owner</Button>
-                                        )}
-                                        {(isAdmin || (uid !== user.uid && ownerUid === user.uid)) && (
-                                            <Button onClick={() => removeInstructor(uid, person?.name ?? "This instructor")} size="xsm" color="red">Remove</Button>
-                                        )}
-                                    </div>
-                                </div>
+                                    <FontAwesomeIcon icon={faChevronRight} className="shrink-0 text-gray-300 transition-all duration-200 group-hover:text-gray-600 group-hover:translate-x-1" />
+                                </button>
                             );
                         })}
                     </div>
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
-                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Add an instructor</h2>
-                        {addableInstructors.length === 0 ? (
-                            <p className="text-sm text-gray-400">No other Instructors are members of this role. Only Instructors who have joined this role can be given access to run it.</p>
-                        ) : (
-                            <>
-                                <PersonPicker
-                                    label="Instructor to add"
-                                    placeholder="Select an instructor"
-                                    value={addInstructorUid}
-                                    onChange={setAddInstructorUid}
-                                    people={addableInstructors.map(p => ({
-                                        uid: p.uid,
-                                        name: p.name,
-                                        photoURL: p.photoURL,
-                                    }))}
-                                />
-                                <Button onClick={addInstructor} size="sm" disabled={!addInstructorUid}>Give Access</Button>
-                            </>
-                        )}
+                        <div>
+                            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Invite an instructor</h2>
+                            <p className="text-sm text-gray-500 mt-1">Any Instructor can be invited to help run this role, whether or not they're in it. They join once they accept.</p>
+                        </div>
+                        <PersonPicker
+                            label="Instructor to invite"
+                            placeholder="Select an instructor"
+                            value={inviteInstructorUid}
+                            onChange={setInviteInstructorUid}
+                            emptyText="Every Instructor already runs this role or has been invited."
+                            people={invitableInstructors}
+                        />
+                        <Button onClick={() => sendInvite(inviteInstructorUid, "instructor")} size="sm" disabled={!inviteInstructorUid || inviting}>
+                            {inviting ? "Sending..." : "Send Invite"}
+                        </Button>
+                        {inviteList(instructorInvites)}
                     </div>
+                    <InstructorCard uid={cardUid} onClose={() => setCardUid(null)} role={role} />
                 </motion.div>
             )}
 

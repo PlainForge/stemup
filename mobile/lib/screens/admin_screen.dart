@@ -16,11 +16,12 @@ import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/instructor_card.dart';
 import '../widgets/page_scaffold.dart';
 import '../widgets/sliding_tabs.dart';
 import 'role_admin.dart';
 
-enum _AdminTab { requests, users, roles, inactive }
+enum _AdminTab { requests, users, instructors, roles, inactive }
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -125,6 +126,7 @@ class _AdminScreenState extends State<AdminScreen> {
           tabs: [
             SlidingTab(_AdminTab.requests, 'Requests', count: app.adminQueue.length),
             const SlidingTab(_AdminTab.users, 'Users'),
+            const SlidingTab(_AdminTab.instructors, 'Instructors'),
             const SlidingTab(_AdminTab.roles, 'Roles'),
             const SlidingTab(_AdminTab.inactive, 'Inactive Users'),
           ],
@@ -139,6 +141,7 @@ class _AdminScreenState extends State<AdminScreen> {
           child: switch (_tab) {
             _AdminTab.requests => _requestsTab(context, app),
             _AdminTab.users => _usersTab(context, app),
+            _AdminTab.instructors => _instructorsTab(context, app),
             _AdminTab.roles => _rolesTab(context, app),
             _AdminTab.inactive => _inactiveTab(context),
           },
@@ -169,11 +172,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SectionLabel(
-                      r.type?.label ?? 'Request',
-                      size: 12,
-                      padding: EdgeInsets.zero,
-                    ),
+                    SectionLabel(r.type?.label ?? 'Request', size: 12, padding: EdgeInsets.zero),
                     const SizedBox(height: 4),
                     Text(switch (r.type) {
                       RequestType.instructor => '${_who(r, 'Someone')} wants to be an Instructor',
@@ -181,7 +180,8 @@ class _AdminScreenState extends State<AdminScreen> {
                       null => '',
                       _ => '${_who(r, 'An instructor')} wants to ${r.roleChangeAction}',
                     }, style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context))),
-                    if (r.type?.isRoleChange == true) Muted('${r.roleName} has no owner, so this came to admins.', size: 12, color: Palette.gray400),
+                    if (r.type?.isRoleChange == true)
+                      Muted('${r.roleName} has no owner, so this came to admins.', size: 12, color: Palette.gray400),
                     if (r.createdAt != null) Muted(DateFormat('MMM d', 'en_US').format(r.createdAt!), size: 12, color: Palette.gray400),
                     if (r.type == RequestType.instructor && r.reason.isNotEmpty) ...[const SizedBox(height: 10), _Quote(r.reason)],
                     if (r.type == RequestType.createRole) ...[
@@ -233,6 +233,67 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   // ── Users ──
+
+  // ── Instructors: each opens their instructor card ──
+
+  Widget _instructorsTab(BuildContext context, AppState app) {
+    final active = _users.where((u) => u.isInGlobal && app.instructors.contains(u.uid) && !app.admins.contains(u.uid)).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Muted('${active.length} active instructor${active.length == 1 ? '' : 's'}', size: 12, color: Palette.gray400),
+        const SizedBox(height: 12),
+        if (active.isEmpty) const EmptyState('No instructors yet. Make someone an Instructor from the Users tab.'),
+        for (final u in active)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Pressable(
+              scale: .98,
+              onPressed: () => showInstructorCard(context, u.uid),
+              child: AppCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                radius: 12,
+                shadow: false,
+                child: Row(
+                  children: [
+                    Avatar(u.photoURL, name: u.name, size: Avatar.xxs),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            u.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.w500, color: Palette.label(context)),
+                          ),
+                          Builder(
+                            builder: (context) {
+                              final running = app.roles.where((r) => r.instructors.contains(u.uid)).map((r) => r.name).toList();
+                              return Muted(
+                                '${running.isEmpty ? 'Not running any roles' : 'Runs ${running.join(', ')}'}'
+                                ' · ${u.tasksGiven} task${u.tasksGiven == 1 ? '' : 's'} given',
+                                size: 12,
+                                maxLines: 1,
+                                color: Palette.gray400,
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(FontAwesomeIcons.chevronRight.data, size: 14, color: Palette.resolve(context, Palette.gray300)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 
   Widget _usersTab(BuildContext context, AppState app) {
     // Active users are everyone still on the global leaderboard; the rest are under Inactive Users

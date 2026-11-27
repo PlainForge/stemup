@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronRight, faCircleCheck, faEnvelope, faTrophy } from "@fortawesome/free-solid-svg-icons";
 import { db } from "../lib/firebase";
@@ -17,12 +17,14 @@ import { AccessBadge } from "./AdminPage";
 import BackButton from "../components/BackButton";
 
 /**
- * /roles/:id/members/:uid — one member of a role, for the people who run it:
+ * /admin/roles/:id/members/:uid and /instructor/roles/:id/members/:uid (and the older
+ * /roles/:id/members/:uid) — one member of a role, for the people who run it:
  * their stats and tasks in this role, with editing and kicking.
  */
 export default function RoleMemberPage() {
     const context = useContext(MainContext);
     const navigate = useNavigate();
+    const { pathname } = useLocation();
     const { id: roleId, uid } = useParams<{ id: string; uid: string }>();
 
     const user = context?.user ?? null;
@@ -65,7 +67,8 @@ export default function RoleMemberPage() {
 
     if (loading || !user || role === undefined || member === undefined || !roleId || !uid) return <Loading />;
 
-    const fallbackBack = isAdmin ? `/admin/roles/${roleId}?tab=members` : `/instructor/roles/${roleId}?tab=members`;
+    // The role page this member page sits under (Admin, Instructor or Roles tab), on its Members tab
+    const fallbackBack = `${pathname.split("/members/")[0]}?tab=members`;
     const goBack = () => {
         // Back to wherever they came from (keeps the Members tab open), or the role's Members tab
         if ((window.history.state?.idx ?? 0) > 0) navigate(-1);

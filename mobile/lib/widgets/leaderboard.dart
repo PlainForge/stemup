@@ -90,7 +90,7 @@ class Podium extends StatelessWidget {
     final fill = ghost ? Palette.fill(context) : (isMe ? cfg.meFill : cfg.fill);
     final border = ghost ? Palette.separator(context) : (isMe ? cfg.meBorder : cfg.border);
 
-    return Column(
+    final column = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(height: cfg.top),
@@ -106,23 +106,17 @@ class Podium extends StatelessWidget {
               border: Border.all(color: Palette.resolve(context, Palette.gray300), width: 2),
             ),
           )
-        else
-          Pressable(
-            onPressed: () => showProfileSheet(context, u, roleId: roleId),
-            child: Column(
-              children: [
-                Avatar(u.photoURL, name: u.name, size: avatar),
-                const SizedBox(height: 4),
-                Text(
-                  u.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: cfg.text, fontWeight: FontWeight.w600, color: Palette.label(context)),
-                ),
-              ],
-            ),
+        else ...[
+          Avatar(u.photoURL, name: u.name, size: avatar),
+          const SizedBox(height: 4),
+          Text(
+            u.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: cfg.text, fontWeight: FontWeight.w600, color: Palette.label(context)),
           ),
+        ],
         if (ghost) ...[
           const SizedBox(height: 4),
           Text(
@@ -158,6 +152,14 @@ class Podium extends StatelessWidget {
         ),
       ],
     );
+    // Tapping anywhere on a filled spot opens their profile, same as tapping the name
+    return ghost
+        ? column
+        : Pressable(
+            scale: .97,
+            onPressed: () => showProfileSheet(context, u, roleId: roleId),
+            child: column,
+          );
   }
 }
 
@@ -171,7 +173,14 @@ class RankRow extends StatelessWidget {
   final String? roleId;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => Pressable(
+    scale: .98,
+    // The whole row opens their profile, same as tapping the name
+    onPressed: () => showProfileSheet(context, user, roleId: roleId),
+    child: _row(context),
+  );
+
+  Widget _row(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     decoration: BoxDecoration(
       color: isMe ? Palette.resolve(context, Palette.blue50) : Palette.card(context),
@@ -189,12 +198,10 @@ class RankRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        // ProfileButton.tsx: avatar + name, opens the profile card
+        // ProfileButton.tsx: avatar + name
         Expanded(
-          child: Pressable(
-            scale: .97,
-            onPressed: () => showProfileSheet(context, user, roleId: roleId),
-            child: Row(
+          child: Builder(
+            builder: (context) => Row(
               children: [
                 Avatar(user.photoURL, name: user.name, size: Avatar.xxs),
                 const SizedBox(width: 16),

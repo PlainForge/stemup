@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -29,6 +30,9 @@ class _RolesScreenState extends State<RolesScreen> {
   bool _creating = false;
   StreamSubscription<List<StemRequest>>? _requestsSub;
   List<StemRequest> _myRoleRequests = const [];
+  StreamSubscription<List<RoleInvite>>? _invitesSub;
+  List<RoleInvite> _invites = const [];
+  String? _answering;
 
   @override
   void initState() {
@@ -37,13 +41,125 @@ class _RolesScreenState extends State<RolesScreen> {
     _requestsSub = Db.myRequestsStream(context.read<AppState>().user!.uid).listen((r) {
       if (mounted) setState(() => _myRoleRequests = r.where((x) => x.type == RequestType.createRole).toList());
     }, onError: (_) {});
+    // Invitations to join a role, from its instructors or an admin
+    _invitesSub = Db.myInvitesStream(context.read<AppState>().user!.uid).listen((i) {
+      if (mounted) setState(() => _invites = i);
+    }, onError: (_) {});
   }
+
+  Future<void> _answer(RoleInvite inv, bool accept) async {
+    setState(() => _answering = inv.id);
+    try {
+      await Db.respondToInvite(inv.roleId, accept: accept);
+      if (!mounted) return;
+      if (accept) {
+        showToast(context, 'You joined ${inv.roleName}');
+        context.push('/roles/${inv.roleId}');
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      final message = e.code == 'internal' ? "Couldn't answer the invitation. Please try again." : (e.message ?? 'Something went wrong.');
+      showToast(context, message, error: true);
+    } catch (_) {
+      if (mounted) showToast(context, "Couldn't answer the invitation. Please try again.", error: true);
+    } finally {
+      if (mounted) setState(() => _answering = null);
+    }
+  }
+
+  Widget _invitesSection(BuildContext context) => Container(
+    margin: const EdgeInsets.only(top: 12),
+    padding: const EdgeInsets.only(top: 24),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: Palette.resolve(context, Palette.gray100))),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Heading('Invitations', size: 16),
+        const SizedBox(height: 2),
+        Muted("You've been invited to join ${_invites.length == 1 ? 'this role' : 'these roles'}."),
+        for (final inv in _invites) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Palette.resolve(context, Palette.blue50),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Palette.resolve(context, Palette.navActive).withValues(alpha: .35)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(color: Palette.resolve(context, Palette.blue600), borderRadius: BorderRadius.circular(12)),
+                      child: Icon(
+                        inv.asInstructor ? FontAwesomeIcons.chalkboardUser.data : FontAwesomeIcons.envelopeOpenText.data,
+                        size: 16,
+                        color: const Color(0xFFFFFFFF),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            inv.roleName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                          ),
+                          Muted(
+                            '${inv.invitedByName.isEmpty ? 'An instructor' : inv.invitedByName} invited you as ${inv.asInstructor ? 'an instructor' : 'a member'}',
+                            size: 13,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        label: 'Accept',
+                        style: AppButtonStyle.green,
+                        size: AppButtonSize.full,
+                        loading: _answering == inv.id,
+                        onPressed: () => _answer(inv, true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AppButton(
+                        label: 'Decline',
+                        style: AppButtonStyle.gray,
+                        size: AppButtonSize.full,
+                        onPressed: _answering == inv.id ? null : () => _answer(inv, false),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
 
   @override
   void dispose() {
     _newRole.dispose();
     _purpose.dispose();
     _requestsSub?.cancel();
+    _invitesSub?.cancel();
     super.dispose();
   }
 
@@ -106,6 +222,8 @@ class _RolesScreenState extends State<RolesScreen> {
                 needsAttention: (attention[roles[i].id] ?? 0) > 0,
               ),
             ),
+        // Invitations, under the list and above creating a role
+        if (_invites.isNotEmpty) _invitesSection(context),
         if (app.access != AccessLevel.user)
           Container(
             margin: const EdgeInsets.only(top: 12),
@@ -268,9 +386,7 @@ class _RoleRow extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        role.purpose.trim().isNotEmpty
-                            ? role.purpose.trim()
-                            : '$memberCount member${memberCount == 1 ? '' : 's'}',
+                        role.purpose.trim().isNotEmpty ? role.purpose.trim() : '$memberCount member${memberCount == 1 ? '' : 's'}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 13, color: Palette.secondary(context)),

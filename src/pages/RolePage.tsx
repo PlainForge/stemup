@@ -15,9 +15,12 @@ import ProfileImg from "../components/ProfileImg";
 import MedalIcon from "../components/MedalIcon";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBell, faBellSlash, faCheck, faCopy } from "@fortawesome/free-solid-svg-icons";
+import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowUpWideShort, faBell, faBellSlash, faCalendar, faCalendarDays, faCheck, faChevronRight, faCircleDot, faClock, faCopy, faFlagCheckered, faHomeAlt, faMagnifyingGlass, faPersonRunning, faRotateLeft, faTriangleExclamation, faXmark } from "@fortawesome/free-solid-svg-icons";
 import BackButton from "../components/BackButton";
 import { splitLeaderboard } from "../lib/leaderboard";
+import Dropdown from "../components/Dropdown";
+import { Chip, ChipRow, TaskCard, TaskDescription, TaskHeader, type TaskTone } from "../components/TaskCardParts";
+import { dueInfo } from "../lib/taskDates";
 
 
 /** Stable fallback so hooks that depend on these lists don't re-run every render */
@@ -205,11 +208,17 @@ export default function RolePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Notifications about this role are on unless turned off on its Notifications tab
+    // Notifications about this role are on unless turned off in its Settings tab
     const roleNotificationsOn = !!roleId && userData?.notifications?.roles?.[roleId] !== false;
     const toggleRoleNotifications = async () => {
         if (!user || !roleId) return;
         await roleService.setRoleNotifications(user.uid, roleId, !roleNotificationsOn);
+    };
+    // This role's rewards and top 3 show on Home unless hidden in its Settings tab
+    const showOnHome = !!roleId && !(userData?.hideOnHome ?? []).includes(roleId);
+    const toggleShowOnHome = async () => {
+        if (!user || !roleId) return;
+        await roleService.setShowOnHome(user.uid, roleId, !showOnHome);
     };
 
     const setCurrentRole = async (id : string) => {
@@ -358,13 +367,16 @@ export default function RolePage() {
                     { key: "rewards", label: "Rewards" },
                     { key: "saved", label: "Saved Data" },
                     ...(!isStaff ? [{ key: "tasks", label: "Tasks" }] : []),
-                    { key: "notifications", label: "Notifications" },
-                ].map((tab) => (
-                    <div key={tab.key} data-active={pageState === tab.key ? "true" : "false"} className="relative shrink-0">
+                    { key: "settings", label: "Settings" },
+                ].map((tab) => {
+                    // The Notifications page sits inside Settings
+                    const active = pageState === tab.key || (tab.key === "settings" && pageState === "notifications");
+                    return (
+                    <div key={tab.key} data-active={active ? "true" : "false"} className="relative shrink-0">
                         <button
                             onClick={() => setPageState(tab.key)}
                             className={`px-2.5 sm:px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap transition-colors hover:cursor-pointer ${
-                                pageState === tab.key
+                                active
                                     ? "text-blue-600"
                                     : "text-gray-500 hover:text-gray-800"
                             }`}
@@ -377,12 +389,13 @@ export default function RolePage() {
                                     ? <span className="ml-1.5 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">{taskCount}</span>
                                     : null
                             )}
-                            {tab.key === "notifications" && !roleNotificationsOn && (
-                                <FontAwesomeIcon icon={faBellSlash} className="ml-1.5 text-gray-400" aria-label="Off" />
+                            {tab.key === "settings" && !roleNotificationsOn && (
+                                <FontAwesomeIcon icon={faBellSlash} className="ml-1.5 text-gray-400" aria-label="Notifications off" />
                             )}
                         </button>
                     </div>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Leaderboard */}
@@ -431,22 +444,22 @@ export default function RolePage() {
                                     return (
                                         <motion.div
                                             key={u.id}
-                                            className={`flex-1 flex flex-col items-center gap-1 ${cfg.mt}`}
+                                            className={`group flex-1 flex flex-col items-center gap-1 cursor-pointer select-none ${cfg.mt}`}
                                             initial={{ opacity: 0, y: 20 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: idx * 0.05 }}
+                                            onClick={() => context?.setShowAccount(u)}
                                         >
                                             <span className="text-lg"><MedalIcon rank={cfg.rank - 1} /></span>
                                             <motion.div
-                                                className="flex flex-col items-center gap-1 cursor-pointer"
+                                                className="flex flex-col items-center gap-1"
                                                 whileHover={{ scale: 1.05 }}
-                                                onClick={() => context?.setShowAccount(u)}
                                             >
                                             <ProfileImg src={u.photoURL} alt={u.name} size={cfg.avatarSize} />
                                             <p className={`font-semibold text-center truncate w-full ${cfg.textSize}`}>{u.name}</p>
                                             </motion.div>
                                             <p className={`text-gray-500 ${cfg.textSize} pointer-events-none`}><strong className="text-black">{u.points}</strong> pts</p>
-                                            <div className={`w-full ${cfg.barH} rounded-t-xl flex items-center justify-center ${
+                                            <div className={`w-full ${cfg.barH} rounded-t-xl flex items-center justify-center transition-transform duration-200 group-hover:-translate-y-0.5 ${
                                                 cfg.rank === 1
                                                     ? isMe ? "bg-yellow-200 border-2 border-yellow-400" : "bg-yellow-100 border-2 border-yellow-300"
                                                     : cfg.rank === 2
@@ -468,9 +481,11 @@ export default function RolePage() {
                         return (
                             <div
                                 key={u.id}
-                                className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
+                                // The whole row opens their profile, same as clicking the name
+                                onClick={() => context?.setShowAccount(u)}
+                                className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all hover:cursor-pointer hover:shadow-sm ${
                                     u.id === user.uid
-                                        ? "bg-blue-50 border-blue-200"
+                                        ? "bg-blue-50 border-blue-200 hover:border-blue-300"
                                         : "bg-white border-gray-100 hover:border-gray-300"
                                 }`}
                             >
@@ -560,44 +575,58 @@ export default function RolePage() {
                     className="flex flex-col gap-3"
                 >
                     <h2 className="text-lg font-semibold">Your Tasks</h2>
-                    {/* Search + Month filter */}
+                    {/* Search, month and sort (the same controls as the instructor's Tasks tab) */}
                     <div className="flex flex-col gap-2">
-                        <input
-                            type="text"
-                            value={taskSearch}
-                            onChange={e => setTaskSearch(e.target.value)}
-                            placeholder="Search tasks..."
-                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
-                        />
-                        <select
-                            value={taskMonthFilter}
-                            onChange={e => setTaskMonthFilter(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
-                        >
-                            <option value="all">All months</option>
-                            {MONTH_OPTIONS.map(opt => (
-                                <option key={opt.key} value={opt.key}>{opt.label}</option>
-                            ))}
-                        </select>
-                        <div className="flex gap-2 flex-wrap">
-                            {([
-                                { key: "date-desc", label: "Newest" },
-                                { key: "date-asc",  label: "Oldest" },
-                                { key: "title-asc", label: "A-Z" },
-                                { key: "title-desc", label: "Z-A" },
-                            ]).map(s => (
+                        <label className="flex items-center gap-2.5 rounded-xl border border-gray-200 px-3 py-2 transition-colors hover:border-gray-400 focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-500/10">
+                            <FontAwesomeIcon icon={faMagnifyingGlass} className="text-xs text-gray-400" />
+                            <input
+                                type="text"
+                                value={taskSearch}
+                                onChange={e => setTaskSearch(e.target.value)}
+                                placeholder="Search tasks..."
+                                aria-label="Search tasks"
+                                className="w-full min-w-0 bg-transparent text-sm focus:outline-none"
+                            />
+                            {taskSearch && (
                                 <button
-                                    key={s.key}
-                                    onClick={() => setTaskSort(s.key)}
-                                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors hover:cursor-pointer ${
-                                        taskSort === s.key
-                                            ? "bg-gray-700 text-white"
-                                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                    }`}
+                                    type="button"
+                                    onClick={() => setTaskSearch("")}
+                                    aria-label="Clear search"
+                                    className="flex size-5 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 hover:cursor-pointer"
                                 >
-                                    {s.label}
+                                    <FontAwesomeIcon icon={faXmark} className="text-[10px]" />
                                 </button>
-                            ))}
+                            )}
+                        </label>
+                        <div className="flex flex-col min-[420px]:flex-row gap-2">
+                            <div className="flex-1 min-w-0">
+                                <Dropdown
+                                    label="Month"
+                                    fullWidth
+                                    tone="gray"
+                                    value={taskMonthFilter}
+                                    onChange={setTaskMonthFilter}
+                                    options={[
+                                        { value: "all", label: "All months", icon: faCalendarDays },
+                                        ...MONTH_OPTIONS.map(opt => ({ value: opt.key, label: opt.label, icon: faCalendar })),
+                                    ]}
+                                />
+                            </div>
+                            <div className="min-[420px]:w-44 shrink-0">
+                                <Dropdown
+                                    label="Sort"
+                                    fullWidth
+                                    tone="gray"
+                                    value={taskSort}
+                                    onChange={setTaskSort}
+                                    options={[
+                                        { value: "date-desc", label: "Newest first", icon: faArrowDownWideShort },
+                                        { value: "date-asc", label: "Oldest first", icon: faArrowUpWideShort },
+                                        { value: "title-asc", label: "Title A–Z", icon: faArrowDownAZ },
+                                        { value: "title-desc", label: "Title Z–A", icon: faArrowDownZA },
+                                    ]}
+                                />
+                            </div>
                         </div>
                         <div className="flex gap-2 flex-wrap">
                             {([
@@ -647,75 +676,65 @@ export default function RolePage() {
                             <p className="text-gray-400 text-sm py-8 text-center">No tasks assigned to you yet.</p>
                         );
                         return (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {sorted.map((task) => {
                                     const overdue = isTaskOverdue(task);
                                     const daysLeft = daysUntilDeletion(task);
                                     const isSubmitted = submittedTasks.some(s => s.id === task.id);
+                                    const isNew = !task.complete && !isSubmitted && !seenTaskIds.has(task.id);
+                                    const tone: TaskTone = task.complete ? "green" : isSubmitted ? "amber" : overdue ? "red" : task.status === "Almost Done" ? "orange" : "blue";
+                                    const due = task.dueDate && !task.complete && !isSubmitted ? dueInfo(task.dueDate) : null;
+                                    const declines = task.declineCount ?? 0;
                                     return (
-                                        <motion.div
-                                            key={task.id}
-                                            onMouseEnter={() => markTaskSeen(task.id)}
-                                            className={`flex flex-col gap-3 p-4 rounded-2xl border-2 bg-white ${
-                                                task.complete ? "border-green-400" : overdue ? "border-red-300" : "border-gray-200"
-                                            }`}
-                                        >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="flex items-center gap-1.5 min-w-0">
-                                                    <h3 className="font-semibold leading-tight truncate">{task.title}</h3>
-                                                    {!task.complete && !isSubmitted && !seenTaskIds.has(task.id) && (
-                                                        <span className="text-xs font-bold text-red-500 shrink-0">NEW</span>
+                                        <motion.div key={task.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                                            <TaskCard tone={tone} onMouseEnter={() => markTaskSeen(task.id)} faded={task.complete}>
+                                                <TaskHeader title={task.title} points={task.points} isNew={isNew} done={task.complete} />
+                                                <TaskDescription text={task.description} />
+                                                {(due || overdue || task.extensionRequested || task.extensionDeclined || declines > 0) && (
+                                                    <ChipRow>
+                                                        {due && <Chip tone={due.tone} icon={faCalendarDays}>{due.label}</Chip>}
+                                                        {overdue && (
+                                                            <Chip tone="red" icon={faTriangleExclamation}>
+                                                                {daysLeft === null ? "Overdue" : daysLeft > 0 ? `Expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}` : "Expiring soon"}
+                                                            </Chip>
+                                                        )}
+                                                        {task.extensionRequested && <Chip tone="amber" icon={faClock}>Extension requested</Chip>}
+                                                        {task.extensionDeclined && <Chip tone="gray">Extension declined</Chip>}
+                                                        {declines > 0 && (
+                                                            <Chip tone="red" icon={faRotateLeft}>
+                                                                Sent back {declines}×{declines === 3 ? " · Closed" : ""}
+                                                            </Chip>
+                                                        )}
+                                                    </ChipRow>
+                                                )}
+                                                {overdue && !task.extensionRequested && !task.extensionDeclined && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => requestExtension(task.id)}
+                                                        className="self-start flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700 hover:cursor-pointer"
+                                                    >
+                                                        <FontAwesomeIcon icon={faClock} className="text-xs" />
+                                                        Request an extension
+                                                    </button>
+                                                )}
+                                                <div className="mt-auto flex flex-col gap-2">
+                                                    {!task.complete && !overdue && !isSubmitted && (
+                                                        <Dropdown
+                                                            label="Status"
+                                                            fullWidth
+                                                            tone="gray"
+                                                            value={task.status ?? ""}
+                                                            onChange={v => setTaskStatus(task.id, v)}
+                                                            options={[
+                                                                { value: "", label: "Not started", icon: faCircleDot },
+                                                                { value: "In Progress", label: "In Progress", icon: faPersonRunning },
+                                                                { value: "Almost Done", label: "Almost Done", icon: faFlagCheckered },
+                                                            ]}
+                                                        />
                                                     )}
+                                                    {!overdue && <DoneButton task={task} />}
                                                 </div>
-                                                <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
-                                                    {task.points} pts
-                                                </span>
-                                            </div>
-                                            <p className="text-sm text-gray-500 flex-1">{task.description || "No description"}</p>
-                                            {overdue && (
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="text-xs font-semibold text-red-500">
-                                                        Overdue{daysLeft !== null && ` · ${daysLeft > 0 ? `Expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}` : "Expiring soon"}`}
-                                                    </span>
-                                                    {!task.extensionRequested && !task.extensionDeclined && (
-                                                        <button
-                                                            onClick={() => requestExtension(task.id)}
-                                                            className="text-xs text-blue-500 hover:text-blue-700 font-medium text-left hover:cursor-pointer"
-                                                        >
-                                                            Request Extension
-                                                        </button>
-                                                    )}
-                                                    {task.extensionRequested && (
-                                                        <span className="text-xs text-yellow-600 font-medium">Requested Extension</span>
-                                                    )}
-                                                    {task.extensionDeclined && (
-                                                        <span className="text-xs text-gray-400 font-medium">Extension Declined</span>
-                                                    )}
-                                                    {(task.declineCount ?? 0) > 0 && (
-                                                        <span className="text-xs text-red-400 font-medium">
-                                                            Declined {task.declineCount} time{task.declineCount === 1 ? "" : "s"}
-                                                            {task.declineCount === 3 ? " · Task closed" : ""}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                            {task.dueDate && !task.complete && !overdue && (
-                                                <p className="text-xs text-gray-400">
-                                                    Due: {task.dueDate.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                                                </p>
-                                            )}
-                                            {!task.complete && !overdue && !isSubmitted && (
-                                                <select
-                                                    value={task.status ?? ""}
-                                                    onChange={e => setTaskStatus(task.id, e.target.value)}
-                                                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
-                                                >
-                                                    <option value="">Set status...</option>
-                                                    <option value="In Progress">In Progress</option>
-                                                    <option value="Almost Done">Almost Done</option>
-                                                </select>
-                                            )}
-                                            {!overdue && <DoneButton task={task} />}
+                                            </TaskCard>
                                         </motion.div>
                                     );
                                 })}
@@ -725,9 +744,52 @@ export default function RolePage() {
                 </motion.div>
             )}
 
-            {/* Notifications for this role */}
+            {/* Settings for this role: its Notifications page, and whether it shows on Home */}
+            {pageState === "settings" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setPageState("notifications")}
+                        className="group bg-white border border-gray-100 hover:border-gray-300 rounded-2xl p-4 flex items-center gap-3 text-left transition-colors hover:cursor-pointer"
+                    >
+                        <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${roleNotificationsOn ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-400"}`}>
+                            <FontAwesomeIcon icon={roleNotificationsOn ? faBell : faBellSlash} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block font-semibold">Notifications</span>
+                            <span className="block text-sm text-gray-500">{roleNotificationsOn ? "On" : "Off"}</span>
+                        </span>
+                        <FontAwesomeIcon icon={faChevronRight} className="text-gray-300 transition-transform group-hover:translate-x-0.5" />
+                    </button>
+
+                    <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${showOnHome ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-400"}`}>
+                                <FontAwesomeIcon icon={faHomeAlt} />
+                            </span>
+                            <div className="min-w-0">
+                                <p className="font-semibold">Show on Home</p>
+                                <p className="text-sm text-gray-500">{role.name}'s rewards and top 3 on your Home page</p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={showOnHome}
+                            aria-label={`Show ${role.name} on Home`}
+                            onClick={toggleShowOnHome}
+                            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 hover:cursor-pointer ${showOnHome ? "bg-green-500" : "bg-gray-300"}`}
+                        >
+                            <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 ${showOnHome ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                    </div>
+                </motion.div>
+            )}
+
+            {/* Notifications for this role (opened from Settings) */}
             {pageState === "notifications" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
+                    <BackButton label="Settings" onClick={() => setPageState("settings")} />
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
                         <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3 min-w-0">

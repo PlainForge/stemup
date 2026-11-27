@@ -5,6 +5,8 @@ import { collection, deleteField, doc, onSnapshot, query, setDoc, Timestamp, upd
 import "./styles/doneButton.css"
 import { MainContext } from "../context/MainContext";
 import Button from "./Button";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck, faCircleCheck, faHourglassHalf } from "@fortawesome/free-solid-svg-icons";
 
 interface DoneButtonProps {
     task: Task
@@ -58,17 +60,30 @@ export default function DoneButton({ task } : DoneButtonProps) {
     }
 
     if (task.complete) {
-        return <h3 className="w-full border-2 p-2 rounded-xl text-center cursor-default bg-green-500">Completed</h3>
+        return (
+            <div className="w-full flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-semibold bg-green-50 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30">
+                <FontAwesomeIcon icon={faCircleCheck} />
+                Completed
+            </div>
+        );
     } else if (tasks.includes(task.id)) {
-        return <h3 className="w-full border-2 p-2 rounded-xl text-center cursor-default">Waiting for approval...</h3>
+        return (
+            <div className="w-full flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-semibold bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30">
+                <FontAwesomeIcon icon={faHourglassHalf} />
+                Waiting for approval
+            </div>
+        );
     } else {
         return (
             <Button
-                onClick={submitTask} 
+                onClick={submitTask}
                 disabled={submitting}
                 size="full"
             >
-                {submitting ? "Submitting..." : "Done"}
+                <span className="flex items-center justify-center gap-2">
+                    <FontAwesomeIcon icon={faCheck} />
+                    {submitting ? "Submitting..." : "Mark as Done"}
+                </span>
             </Button>
         );
     }

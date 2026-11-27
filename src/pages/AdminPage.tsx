@@ -15,11 +15,12 @@ import Loading from "./Loading";
 import Button from "../components/Button";
 import ProfileImg from "../components/ProfileImg";
 import InactiveUsers from "../components/InactiveUsers";
+import InstructorCard from "../components/InstructorCard";
 
-type AdminTab = "requests" | "users" | "roles" | "inactive";
-const TABS: AdminTab[] = ["requests", "users", "roles", "inactive"];
+type AdminTab = "requests" | "users" | "instructors" | "roles" | "inactive";
+const TABS: AdminTab[] = ["requests", "users", "instructors", "roles", "inactive"];
 
-type UserRow = { uid: string; name: string; email: string; photoURL: string; points: number; taskCompleted: number; roleCount: number };
+type UserRow = { uid: string; name: string; email: string; photoURL: string; points: number; taskCompleted: number; roleCount: number; tasksGiven: number };
 
 const REQUEST_LABELS: Record<StemRequest["type"], string> = {
     instructor: "Instructor access",
@@ -60,6 +61,7 @@ export default function AdminPage() {
     const [submittedPerRole, setSubmittedPerRole] = useState<Record<string, number>>({});
     const [busy, setBusy] = useState<string | null>(null);
     const [search, setSearch] = useState("");
+    const [cardUid, setCardUid] = useState<string | null>(null);
 
     useEffect(() => {
         if (!loading && (!user || !isAdmin)) navigate("/", { replace: true });
@@ -88,6 +90,7 @@ export default function AdminPage() {
                             points: data.points ?? 0,
                             taskCompleted: data.taskCompleted ?? 0,
                             roleCount: roles.filter(r => r.id !== GLOBAL_ROLE_ID).length,
+                            tasksGiven: data.tasksGiven ?? 0,
                         };
                     })
                     .sort((a, b) => a.name.localeCompare(b.name)));
@@ -154,6 +157,7 @@ export default function AdminPage() {
     const tabs: { key: AdminTab; label: string; badge: number }[] = [
         { key: "requests", label: "Requests", badge: shownRequests.length },
         { key: "users", label: "Users", badge: 0 },
+        { key: "instructors", label: "Instructors", badge: 0 },
         { key: "roles", label: "Roles", badge: 0 },
         { key: "inactive", label: "Inactive Users", badge: 0 },
     ];
@@ -281,6 +285,42 @@ export default function AdminPage() {
                     })}
                 </div>
             )}
+
+            {/* Active instructors: each opens their instructor card */}
+            {tab === "instructors" && (() => {
+                const active = users.filter(u => instructors.includes(u.uid) && !admins.includes(u.uid));
+                return (
+                    <div className="flex flex-col gap-3">
+                        <p className="text-xs text-gray-400">{active.length} active instructor{active.length === 1 ? "" : "s"}</p>
+                        {active.length === 0 ? (
+                            <p className="text-gray-400 text-sm text-center py-8">No instructors yet. Make someone an Instructor from the Users tab.</p>
+                        ) : active.map(row => {
+                            const running = roles.filter(r => (r.instructors ?? []).includes(row.uid));
+                            return (
+                                <button
+                                    key={row.uid}
+                                    type="button"
+                                    onClick={() => setCardUid(row.uid)}
+                                    className="group flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border border-gray-200 bg-white text-left transition-all duration-200 hover:border-gray-400 hover:shadow-sm hover:cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        <ProfileImg src={row.photoURL} alt={row.name} size="xxs" />
+                                        <div className="min-w-0">
+                                            <p className="font-medium truncate">{row.name}</p>
+                                            <p className="text-xs text-gray-400 truncate">
+                                                {running.length > 0 ? `Runs ${running.map(r => r.name).join(", ")}` : "Not running any roles"}
+                                                {` · ${row.tasksGiven} task${row.tasksGiven === 1 ? "" : "s"} given`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <FontAwesomeIcon icon={faChevronRight} className="shrink-0 text-gray-300 transition-all duration-200 group-hover:text-gray-600 group-hover:translate-x-1" />
+                                </button>
+                            );
+                        })}
+                        <InstructorCard uid={cardUid} onClose={() => setCardUid(null)} />
+                    </div>
+                );
+            })()}
 
             {/* Roles */}
             {tab === "roles" && (

@@ -2,6 +2,7 @@
 // filter bar shared with the admin task list.
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -11,7 +12,7 @@ import '../state/app_state.dart';
 import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
-import '../widgets/dialogs.dart';
+import '../widgets/select_field.dart';
 
 enum TaskSort { newest, oldest, az, za }
 
@@ -73,36 +74,47 @@ class TaskFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final months = monthOptions();
-    final current = months.indexWhere((m) => m.$1 == filters.month);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AppTextField(controller: filters.search, placeholder: searchHint, onChanged: (_) => onChanged()),
         const SizedBox(height: 8),
-        PickerRow(
-          value: months[current < 0 ? 0 : current].$2,
-          onTap: () async {
-            // Pick by index: null from pickOption means "cancelled", distinct from the "All months" entry
-            final i = await pickOption<int>(
-              context,
-              options: [for (var i = 0; i < months.length; i++) (i, months[i].$2)],
-              selected: current,
-            );
-            if (i != null) {
-              filters.month = months[i].$1;
-              onChanged();
-            }
-          },
-        ),
-        const SizedBox(height: 8),
-        ChipGroup<TaskSort>(
-          options: const [(TaskSort.newest, 'Newest'), (TaskSort.oldest, 'Oldest'), (TaskSort.az, 'A-Z'), (TaskSort.za, 'Z-A')],
-          selected: filters.sort,
-          activeColor: const Color(0xFF374151),
-          onChanged: (s) {
-            filters.sort = s;
-            onChanged();
-          },
+        // Month and sort side by side, like the web filter bar
+        Row(
+          children: [
+            Expanded(
+              child: SelectField<(int, int)?>(
+                title: 'Month',
+                value: filters.month,
+                options: [
+                  for (final (i, m) in months.indexed)
+                    (value: m.$1, label: m.$2, icon: i == 0 ? FontAwesomeIcons.calendarDays.data : FontAwesomeIcons.calendar.data),
+                ],
+                onChanged: (m) {
+                  filters.month = m;
+                  onChanged();
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 150,
+              child: SelectField<TaskSort>(
+                title: 'Sort',
+                value: filters.sort,
+                options: [
+                  (value: TaskSort.newest, label: 'Newest first', icon: FontAwesomeIcons.arrowDownWideShort.data),
+                  (value: TaskSort.oldest, label: 'Oldest first', icon: FontAwesomeIcons.arrowUpWideShort.data),
+                  (value: TaskSort.az, label: 'Title A–Z', icon: FontAwesomeIcons.arrowDownAZ.data),
+                  (value: TaskSort.za, label: 'Title Z–A', icon: FontAwesomeIcons.arrowDownZA.data),
+                ],
+                onChanged: (s) {
+                  filters.sort = s;
+                  onChanged();
+                },
+              ),
+            ),
+          ],
         ),
         if (extra != null) ...[const SizedBox(height: 8), extra!],
       ],
@@ -315,17 +327,15 @@ class _MemberTaskCardState extends State<MemberTaskCard> {
             ),
           if (t.dueDate != null && !t.complete && !overdue) Muted('Due: ${dayLabel.format(t.dueDate!)}', size: 12, color: Palette.gray400),
           if (!t.complete && !overdue && !widget.submitted)
-            PickerRow(
-              value: t.status?.label ?? 'Set status...',
-              placeholder: t.status == null,
-              onTap: () async {
-                final i = await pickOption<int>(
-                  context,
-                  options: const [(0, 'Set status...'), (1, 'In Progress'), (2, 'Almost Done')],
-                  selected: statuses.indexOf(t.status),
-                );
-                if (i != null && statuses[i] != t.status) await Db.setTaskStatus(t.id, statuses[i]);
-              },
+            SelectField<int>(
+              title: 'Status',
+              value: statuses.indexOf(t.status),
+              options: [
+                (value: 0, label: 'Not started', icon: FontAwesomeIcons.circle.data),
+                (value: 1, label: 'In Progress', icon: FontAwesomeIcons.personRunning.data),
+                (value: 2, label: 'Almost Done', icon: FontAwesomeIcons.flagCheckered.data),
+              ],
+              onChanged: (i) => Db.setTaskStatus(t.id, statuses[i]),
             ),
           if (!overdue) _doneButton(context, t),
         ],

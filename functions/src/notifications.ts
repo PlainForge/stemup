@@ -21,7 +21,7 @@ import * as nodemailer from "nodemailer";
 import { gmailAppPassword, gmailCredentials, gmailUser } from "./secrets";
 
 /** Kept in sync with NOTIFICATION_TYPES in src/myDataTypes.ts and NotifyType in mobile/lib/models/models.dart. */
-export type NotifyType = "newTask" | "taskEdited" | "taskReviewed" | "extension" | "joinRole" | "accessRequest";
+export type NotifyType = "newTask" | "taskEdited" | "taskReviewed" | "extension" | "joinRole" | "accessRequest" | "invite";
 
 type Message = { title: string; body: string; /** App path to open, e.g. /roles/abc */ path: string };
 
@@ -262,6 +262,18 @@ export const notifyOnRoleRequest = onDocumentCreated({ document: "requests/{requ
     body: `${req.userName || "An instructor"} wants to ${action}.`,
     path: `/instructor/roles/${req.roleId}?tab=requests`,
   }, req.roleId);
+});
+
+/** An invitation to join a role (sent by its instructors or an admin). */
+export const notifyOnInvite = onDocumentCreated({ document: "invites/{inviteId}", secrets }, async (event) => {
+  const inv = event.data?.data();
+  if (!inv || typeof inv.uid !== "string") return;
+  const role = inv.roleName || "a role";
+  await notify(inv.uid, "invite", {
+    title: `Invitation to ${role}`,
+    body: `${inv.invitedByName || "An instructor"} invited you to join ${role} as ${inv.as === "instructor" ? "an instructor" : "a member"}. Accept or decline it on the Roles page.`,
+    path: "/roles",
+  });
 });
 
 /** A deleted (or archived) profile takes its push tokens with it. */

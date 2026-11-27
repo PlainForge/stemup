@@ -185,56 +185,6 @@ Future<T?> pickOption<T>(BuildContext context, {String? title, required List<(T,
       ),
     );
 
-/// Wheel date picker for an `<input type="date">`. Returns null when cancelled;
-/// the "Clear" button returns [clearSentinel].
-final clearSentinel = DateTime(0);
-
-Future<DateTime?> pickDate(BuildContext context, {DateTime? initial, bool allowClear = false}) {
-  final today = DateTime.now();
-  final min = DateTime(today.year, today.month, today.day);
-  var value = initial != null && initial.isAfter(min) ? initial : min;
-  return showCupertinoModalPopup<DateTime>(
-    context: context,
-    builder: (ctx) => Container(
-      height: 320,
-      padding: const EdgeInsets.only(top: 6),
-      color: Palette.card(ctx),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            Row(
-              children: [
-                if (allowClear)
-                  CupertinoButton(
-                    onPressed: () => Navigator.pop(ctx, clearSentinel),
-                    child: const Text('Clear', style: TextStyle(color: Palette.red500)),
-                  ),
-                const Spacer(),
-                CupertinoButton(
-                  onPressed: () => Navigator.pop(ctx, value),
-                  child: const Text(
-                    'Done',
-                    style: TextStyle(fontWeight: FontWeight.w600, color: Palette.blue600),
-                  ),
-                ),
-              ],
-            ),
-            Expanded(
-              child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.date,
-                initialDateTime: value,
-                minimumDate: min,
-                onDateTimeChanged: (d) => value = d,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
 /// Brief confirmation near the top of the screen (the web's PhraseAlert, which
 /// shows a message for 3 seconds).
 void showToast(BuildContext context, String message, {bool error = false}) {

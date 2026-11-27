@@ -16,7 +16,9 @@ import '../state/app_state.dart';
 import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
+import '../widgets/date_field.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/instructor_card.dart';
 import '../widgets/sliding_tabs.dart';
 import 'task_widgets.dart';
 
@@ -60,10 +62,9 @@ class _RoleAdminViewState extends State<RoleAdminView> {
     _subs.addAll([
       Db.roleTasksStream(role.id).listen((t) => setState(() => _tasks = t)),
       Db.roleSubmittedStream(role.id).listen((s) => setState(() => _submitted = s)),
-      Db.roleRequestsStream(role.id).listen(
-        (r) => setState(() => _roleRequests = r.where((x) => x.type?.isRoleChange == true).toList()),
-        onError: (_) {},
-      ),
+      Db.roleRequestsStream(
+        role.id,
+      ).listen((r) => setState(() => _roleRequests = r.where((x) => x.type?.isRoleChange == true).toList()), onError: (_) {}),
     ]);
     _syncRequesters();
   }
@@ -278,7 +279,10 @@ class _RoleAdminViewState extends State<RoleAdminView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(r.describe(mine: mine), style: TextStyle(fontWeight: FontWeight.w500, color: Palette.label(context))),
+            Text(
+              r.describe(mine: mine),
+              style: TextStyle(fontWeight: FontWeight.w500, color: Palette.label(context)),
+            ),
             if (r.createdAt != null) Muted(DateFormat('MMM d', 'en_US').format(r.createdAt!), size: 12, color: Palette.gray400),
             const SizedBox(height: 10),
             if (mine)
@@ -287,7 +291,12 @@ class _RoleAdminViewState extends State<RoleAdminView> {
                   Expanded(
                     child: Text('Waiting for $_approver', style: const TextStyle(fontSize: 12, color: Palette.amber700)),
                   ),
-                  AppButton(label: 'Withdraw', size: AppButtonSize.xsm, style: AppButtonStyle.cancel, onPressed: () => Db.deleteRequest(r.id)),
+                  AppButton(
+                    label: 'Withdraw',
+                    size: AppButtonSize.xsm,
+                    style: AppButtonStyle.cancel,
+                    onPressed: () => Db.deleteRequest(r.id),
+                  ),
                 ],
               )
             else
@@ -391,9 +400,12 @@ class _RoleAdminViewState extends State<RoleAdminView> {
 
   Widget _membersTab(BuildContext context, AppState app) {
     final list = _nonAdmins(app);
-    if (list.isEmpty) return const EmptyState('No members in this role.');
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _InviteSection(role: widget.role, asInstructor: false),
+        const SizedBox(height: 16),
+        if (list.isEmpty) const EmptyState('No members in this role.'),
         for (var i = 0; i < list.length; i++)
           _personRow(
             i,
@@ -508,6 +520,7 @@ class _AssignTaskFormState extends State<_AssignTaskForm> {
         description: _desc.text.trim(),
         points: pts,
         dueDay: _due,
+        assignedBy: context.read<AppState>().user?.uid,
       );
       _title.clear();
       _desc.clear();
@@ -590,14 +603,7 @@ class _AssignTaskFormState extends State<_AssignTaskForm> {
               children: [
                 const Muted('Due Date (optional)', size: 12, color: Palette.gray400),
                 const SizedBox(height: 4),
-                PickerRow(
-                  value: _due == null ? 'mm/dd/yyyy' : dayLabel.format(_due!),
-                  placeholder: _due == null,
-                  onTap: () async {
-                    final d = await pickDate(context, initial: _due, allowClear: true);
-                    if (d != null) setState(() => _due = d == clearSentinel ? null : d);
-                  },
-                ),
+                DateField(value: _due, onChanged: (d) => setState(() => _due = d)),
               ],
             ),
             Align(
@@ -852,14 +858,7 @@ class _AdminTaskCardState extends State<_AdminTaskCard> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: PickerRow(
-                        value: _due == null ? 'mm/dd/yyyy' : dayLabel.format(_due!),
-                        placeholder: _due == null,
-                        onTap: () async {
-                          final d = await pickDate(context, initial: _due, allowClear: true);
-                          if (d != null) setState(() => _due = d == clearSentinel ? null : d);
-                        },
-                      ),
+                      child: DateField(value: _due, onChanged: (d) => setState(() => _due = d)),
                     ),
                   ],
                 ),
@@ -1137,7 +1136,9 @@ class _RewardsFormState extends State<_RewardsForm> {
       return;
     }
     try {
-      await Db.requestRoleChange(RequestType.rewardsTitle, app.user!.uid, app.userData?.name ?? '', widget.role, {'title': _title.text.trim()});
+      await Db.requestRoleChange(RequestType.rewardsTitle, app.user!.uid, app.userData?.name ?? '', widget.role, {
+        'title': _title.text.trim(),
+      });
       _title.text = widget.role.rewardsTitle;
       if (mounted) showToast(context, 'Title change requested. ${_cap(widget.approver)} will review it.');
     } catch (_) {
@@ -1149,57 +1150,61 @@ class _RewardsFormState extends State<_RewardsForm> {
   Widget build(BuildContext context) {
     final canChange = context.watch<AppState>().canChangeRole(widget.role);
     return Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _Section(
-        title: 'Rewards title',
-        children: [
-          Muted(
-            'The heading on the Rewards tab. Leave it empty to show the current month.'
-            '${canChange ? '' : ' ${_cap(widget.approver)} has to approve a new title.'}',
-          ),
-          AppTextField(
-            controller: _title,
-            placeholder: '${DateFormat('MMMM', 'en_US').format(DateTime.now())} Rewards',
-            maxLength: 48,
-            onSubmitted: (_) => _saveTitle(),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: AppButton(label: canChange ? 'Save Title' : 'Request Title Change', size: AppButtonSize.sm, onPressed: _saveTitle),
-          ),
-        ],
-      ),
-      const SizedBox(height: 16),
-      _Section(
-        title: 'Set rewards',
-        children: [
-          for (var i = 0; i < 3; i++)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    MedalIcon(i, size: 14),
-                    const SizedBox(width: 6),
-                    Text(
-                      ['1st Place', '2nd Place', '3rd Place'][i],
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.resolve(context, const Color(0xFF4B5563))),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                AppTextField(controller: _fields[i], placeholder: 'Reward description'),
-              ],
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Section(
+          title: 'Rewards title',
+          children: [
+            Muted(
+              'The heading on the Rewards tab. Leave it empty to show the current month.'
+              '${canChange ? '' : ' ${_cap(widget.approver)} has to approve a new title.'}',
             ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: AppButton(label: 'Save Rewards', size: AppButtonSize.sm, onPressed: _save),
-          ),
-        ],
-      ),
-    ],
-  );
+            AppTextField(
+              controller: _title,
+              placeholder: '${DateFormat('MMMM', 'en_US').format(DateTime.now())} Rewards',
+              maxLength: 48,
+              onSubmitted: (_) => _saveTitle(),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppButton(label: canChange ? 'Save Title' : 'Request Title Change', size: AppButtonSize.sm, onPressed: _saveTitle),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _Section(
+          title: 'Set rewards',
+          children: [
+            for (var i = 0; i < 3; i++)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      MedalIcon(i, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        ['1st Place', '2nd Place', '3rd Place'][i],
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Palette.resolve(context, const Color(0xFF4B5563)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  AppTextField(controller: _fields[i], placeholder: 'Reward description'),
+                ],
+              ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppButton(label: 'Save Rewards', size: AppButtonSize.sm, onPressed: _save),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
@@ -1269,73 +1274,17 @@ class _InstructorsTabState extends State<_InstructorsTab> {
     });
   }
 
-  Future<void> _remove(AppState app, String uid, String name) async {
-    final ok = await confirmDialog(
-      context,
-      title: 'Remove Instructor?',
-      message: "$name will stay a member of this role but won't be able to run it any more.",
-      confirmLabel: 'Remove',
-      destructive: true,
-    );
-    if (ok) await Db.removeRoleInstructor(widget.role, uid);
-  }
-
-  // Admins choose which of the role's instructors owns it
-  Future<void> _makeOwner(String uid, String name) async {
-    final role = widget.role;
-    final ok = await confirmDialog(
-      context,
-      title: 'Make Owner?',
-      message:
-          "$name will own ${role.name}. The role's other instructors will need $name's approval to rename or reset it, edit members' stats, kick members or change the rewards title.",
-      confirmLabel: 'Make Owner',
-    );
-    if (ok) await Db.setRoleOwner(role.id, uid);
-  }
-
-  Future<void> _clearOwner() async {
-    final role = widget.role;
-    final ok = await confirmDialog(
-      context,
-      title: 'Remove Owner?',
-      message: "${role.name} will have no owner, so its instructors' change requests will come to admins instead.",
-      confirmLabel: 'Remove Owner',
-      destructive: true,
-    );
-    if (ok) await Db.setRoleOwner(role.id, '');
-  }
-
-  Future<void> _add(List<UserData> addable) async {
-    final uid = await pickPerson(
-      context,
-      title: 'Give access to',
-      people: [
-        for (final p in addable)
-          (uid: p.uid, name: p.name, photoURL: p.photoURL, hint: null),
-      ],
-    );
-    if (uid == null) return;
-    await Db.addRoleInstructor(widget.role, uid);
-    if (mounted) showToast(context, 'Instructor added');
-  }
-
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     _sync(app);
     final role = widget.role;
     final byId = {for (final p in _people) p.uid: p};
-    final addable =
-        _people
-            .where(
-              (p) =>
-                  app.instructors.contains(p.uid) &&
-                  role.members.contains(p.uid) &&
-                  !role.instructors.contains(p.uid) &&
-                  !app.admins.contains(p.uid),
-            )
-            .toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
+    // Any Instructor who doesn't run this role yet, whether or not they're in it
+    final invitable = _people
+        .where((p) => app.instructors.contains(p.uid) && !role.instructors.contains(p.uid) && !app.admins.contains(p.uid))
+        .toList();
+    final me = app.user!.uid;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1349,85 +1298,209 @@ class _InstructorsTabState extends State<_InstructorsTab> {
               'Admins can always run every role.',
             ),
             Muted(
-              !app.isAdmin
-                  ? "Only the role's owner, or an admin, can remove other instructors. To step down yourself, ask an admin."
-                  : role.owner.isNotEmpty
-                  ? 'Only the owner, or an admin, can remove other instructors.'
-                  : "This role has no owner, so its instructors' change requests come to admins. Make one of them the owner below.",
+              app.isAdmin
+                  ? (role.owner.isNotEmpty
+                        ? 'Open an instructor to make them the owner or take them off this role.'
+                        : "This role has no owner, so its instructors' change requests come to admins. Open an instructor to make them the owner.")
+                  : role.owner == me
+                  ? 'Open an instructor to hand the role on to them or take them off it.'
+                  : "Only the role's owner, or an admin, can remove other instructors. To step down yourself, ask an admin. Open anyone to see their stats.",
               size: 12,
               color: Palette.gray400,
             ),
             if (role.instructors.isEmpty) const Muted('No instructors yet.', color: Palette.gray400),
             for (final uid in role.instructors)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Palette.fill(context),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Palette.separator(context)),
-                ),
-                child: Row(
-                  children: [
-                    Avatar(byId[uid]?.photoURL ?? '', name: byId[uid]?.name ?? '', size: Avatar.xxs),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${byId[uid]?.name ?? 'Loading...'}${uid == app.user!.uid ? ' (you)' : ''}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.label(context)),
-                          ),
-                          Muted(
-                            '${role.owner == uid ? 'Owner' : 'Instructor'}'
-                            '${app.instructors.contains(uid) ? '' : ' · No longer an Instructor'}',
-                            size: 12,
-                            color: role.owner == uid ? const Color(0xFF9333EA) : Palette.gray400,
-                          ),
-                        ],
+              Pressable(
+                scale: .98,
+                onPressed: () => showInstructorCard(context, uid, role: role),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Palette.fill(context),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Palette.separator(context)),
+                  ),
+                  child: Row(
+                    children: [
+                      Avatar(byId[uid]?.photoURL ?? '', name: byId[uid]?.name ?? '', size: Avatar.xxs),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${byId[uid]?.name ?? 'Loading...'}${uid == me ? ' (you)' : ''}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.label(context)),
+                            ),
+                            Muted(
+                              '${role.owner == uid ? 'Owner' : 'Instructor'}'
+                              '${app.instructors.contains(uid) ? '' : ' · No longer an Instructor'}',
+                              size: 12,
+                              color: role.owner == uid ? const Color(0xFF9333EA) : Palette.gray400,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    if (app.isAdmin && role.owner != uid && app.instructors.contains(uid)) ...[
-                      AppButton(
-                        label: 'Make Owner',
-                        size: AppButtonSize.xsm,
-                        style: AppButtonStyle.blue,
-                        onPressed: () => _makeOwner(uid, byId[uid]?.name ?? 'This instructor'),
-                      ),
-                      const SizedBox(width: 6),
+                      Icon(FontAwesomeIcons.chevronRight.data, size: 14, color: Palette.resolve(context, Palette.gray300)),
                     ],
-                    if (app.isAdmin && role.owner == uid) ...[
-                      AppButton(label: 'Remove Owner', size: AppButtonSize.xsm, style: AppButtonStyle.gray, onPressed: _clearOwner),
-                      const SizedBox(width: 6),
-                    ],
-                    if (app.isAdmin || (uid != app.user!.uid && role.owner == app.user!.uid))
-                      AppButton(
-                        label: 'Remove',
-                        size: AppButtonSize.xsm,
-                        style: AppButtonStyle.red,
-                        onPressed: () => _remove(app, uid, byId[uid]?.name ?? 'This instructor'),
-                      ),
-                  ],
+                  ),
                 ),
               ),
           ],
         ),
         const SizedBox(height: 16),
-        _Section(
-          title: 'Add an instructor',
-          children: [
-            if (addable.isEmpty)
-              const Muted(
-                'No other Instructors are members of this role. Only Instructors who have joined this role can be given access to run it.',
-                color: Palette.gray400,
-              )
-            else
-              PickerRow(value: 'Select an instructor', placeholder: true, onTap: () => _add(addable)),
-          ],
-        ),
+        _InviteSection(role: role, asInstructor: true, people: invitable),
       ],
+    );
+  }
+}
+
+/// Invites people to the role (as members, or Instructors as its instructors)
+/// and lists the invitations still waiting for a reply.
+class _InviteSection extends StatefulWidget {
+  const _InviteSection({required this.role, required this.asInstructor, this.people});
+
+  final Role role;
+  final bool asInstructor;
+
+  /// Who can be invited; when null, every active user who isn't in the role yet.
+  final List<UserData>? people;
+
+  @override
+  State<_InviteSection> createState() => _InviteSectionState();
+}
+
+class _InviteSectionState extends State<_InviteSection> {
+  late final Stream<List<RoleInvite>> _invites = Db.roleInvitesStream(widget.role.id);
+  StreamSubscription<List<UserData>>? _usersSub;
+  List<UserData> _allUsers = const [];
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.people == null) {
+      _usersSub = Db.allUsersStream().listen((u) {
+        if (mounted) setState(() => _allUsers = u.where((x) => x.isInGlobal).toList());
+      }, onError: (_) {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _usersSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _invite(AppState app, List<UserData> candidates) async {
+    final uid = await pickPerson(
+      context,
+      title: widget.asInstructor ? 'Invite an instructor' : 'Invite to ${widget.role.name}',
+      emptyText: widget.asInstructor
+          ? 'Every Instructor already runs this role or has been invited.'
+          : 'Everyone is already in this role or invited.',
+      people: [for (final p in candidates) (uid: p.uid, name: p.name, photoURL: p.photoURL, hint: null)],
+    );
+    if (uid == null || !mounted) return;
+    final person = candidates.firstWhere((p) => p.uid == uid);
+    setState(() => _sending = true);
+    try {
+      await Db.sendInvite(widget.role, person, asInstructor: widget.asInstructor, from: app.userData!);
+      if (mounted) showToast(context, 'Invitation sent to ${person.name}');
+    } catch (_) {
+      if (mounted) showToast(context, "Couldn't send the invitation. Please try again.", error: true);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _withdraw(RoleInvite inv) async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Cancel Invitation?',
+      message: 'Withdraw ${inv.userName.isEmpty ? 'their' : "${inv.userName}'s"} invitation to ${widget.role.name}?',
+      confirmLabel: 'Withdraw',
+      destructive: true,
+    );
+    if (ok) await Db.cancelInvite(widget.role.id, inv.uid).catchError((_) {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final role = widget.role;
+    return StreamBuilder<List<RoleInvite>>(
+      stream: _invites,
+      builder: (context, snap) {
+        final all = snap.data ?? const <RoleInvite>[];
+        final invited = {for (final i in all) i.uid};
+        final mine = all.where((i) => i.asInstructor == widget.asInstructor).toList();
+        final candidates =
+            (widget.people ?? _allUsers.where((u) => !role.members.contains(u.uid) && !app.admins.contains(u.uid)).toList())
+                .where((p) => !invited.contains(p.uid))
+                .toList()
+              ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        final photos = {
+          for (final p in [...?widget.people, ..._allUsers]) p.uid: p.photoURL,
+        };
+
+        return _Section(
+          title: widget.asInstructor ? 'Invite an instructor' : 'Invite someone',
+          children: [
+            Muted(
+              widget.asInstructor
+                  ? "Any Instructor can be invited to help run this role, whether or not they're in it. They join once they accept."
+                  : "They'll find the invitation on their Roles screen and can accept or decline it.",
+            ),
+            PickerRow(
+              value: _sending ? 'Sending...' : (widget.asInstructor ? 'Select an instructor' : 'Select someone to invite'),
+              placeholder: true,
+              onTap: () {
+                if (!_sending) _invite(app, candidates);
+              },
+            ),
+            if (mine.isNotEmpty) ...[
+              const SectionLabel('Waiting for a reply', padding: EdgeInsets.zero),
+              for (final inv in mine)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Palette.fill(context),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Palette.separator(context)),
+                  ),
+                  child: Row(
+                    children: [
+                      Avatar(photos[inv.uid] ?? '', name: inv.userName, size: Avatar.xxs),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              inv.userName.isEmpty ? 'Someone' : inv.userName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.label(context)),
+                            ),
+                            Muted(
+                              'Invited by ${inv.invitedBy == app.user!.uid ? 'you' : (inv.invitedByName.isEmpty ? 'an instructor' : inv.invitedByName)}',
+                              size: 12,
+                              color: Palette.gray400,
+                            ),
+                          ],
+                        ),
+                      ),
+                      LinkText('Withdraw', size: 13, color: Palette.red500, onPressed: () => _withdraw(inv)),
+                    ],
+                  ),
+                ),
+            ],
+          ],
+        );
+      },
     );
   }
 }

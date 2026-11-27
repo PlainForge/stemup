@@ -101,6 +101,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return app.userData == null ? Future.value() : _loadBoards(app);
   }
 
+  /// Roles hidden from Home in their Settings tab are left out.
+  List<_RoleBoard> get _homeBoards {
+    final hidden = context.read<AppState>().userData?.hideOnHome ?? const <String>[];
+    return _boards.where((b) => !hidden.contains(b.roleId)).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
@@ -117,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final month = DateFormat('MMMM', 'en_US').format(DateTime.now());
     final globalRanked = _global.where((u) => !app.admins.contains(u.uid)).toList()..sort((a, b) => byPointsThenName(a, b));
-    final placings = _boards.where((b) => b.myRank != null && b.myRank! <= 3).toList()..sort((a, b) => a.myRank!.compareTo(b.myRank!));
+    final placings = _homeBoards.where((b) => b.myRank != null && b.myRank! <= 3).toList()..sort((a, b) => a.myRank!.compareTo(b.myRank!));
     final rewardsCard = app.isAdmin ? _adminOverview(context, month) : _myRewards(context, month, placings);
 
     return PageScaffold(
@@ -150,6 +156,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: _StatCard(label: 'Tasks Done', value: me.taskCompleted),
                 ),
+                // Only instructors see how many tasks they've given out
+                if (app.isInstructor) ...[
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _StatCard(label: 'Tasks Given', value: me.tasksGiven),
+                  ),
+                ],
               ],
             ),
           ),
@@ -166,11 +179,11 @@ class _HomeScreenState extends State<HomeScreen> {
           )
         else if (_boardsLoading)
           const Muted('Loading leaderboards...', center: true, color: Palette.gray400)
-        else if (_boards.isNotEmpty)
+        else if (_homeBoards.isNotEmpty)
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final b in _boards) ...[
+              for (final b in _homeBoards) ...[
                 Heading('${b.roleName} Leaderboard'),
                 const SizedBox(height: 8),
                 if (b.top3.isEmpty)
@@ -237,12 +250,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget? _adminOverview(BuildContext context, String month) {
-    if (_boards.isEmpty) return null;
+    if (_homeBoards.isEmpty) return null;
     return _RewardsCard(
       title: '$month Rewards Overview',
       gap: 16,
       children: [
-        for (final b in _boards)
+        for (final b in _homeBoards)
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -259,25 +272,29 @@ class _HomeScreenState extends State<HomeScreen> {
                 for (var i = 0; i < b.top3.length; i++)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: [
-                        SizedBox(width: 28, child: Center(child: MedalIcon(i, size: 20))),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                b.top3[i].name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.label(context)),
-                              ),
-                              _prize(b.rewards.places[i]),
-                            ],
+                    child: Pressable(
+                      scale: .98,
+                      onPressed: () => showProfileSheet(context, b.top3[i], roleId: b.roleId),
+                      child: Row(
+                        children: [
+                          SizedBox(width: 28, child: Center(child: MedalIcon(i, size: 20))),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  b.top3[i].name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Palette.label(context)),
+                                ),
+                                _prize(b.rewards.places[i]),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
             ],
@@ -352,48 +369,53 @@ class _TopRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
-    child: AppCard(
-      padding: const EdgeInsets.all(12),
-      shadow: false,
-      borderColor: isMe ? const Color(0xFF93C5FD) : [Palette.yellow300, const Color(0xFFD1D5DB), const Color(0xFFFDBA74)][rank],
-      color: isMe ? Palette.blue50 : null,
-      child: Row(
-        children: [
-          SizedBox(width: 32, child: Center(child: MedalIcon(rank, size: 24))),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Pressable(
-              scale: .98,
-              onPressed: () => showProfileSheet(context, user, roleId: roleId),
-              child: Row(
-                children: [
-                  Avatar(user.photoURL, name: user.name, size: Avatar.xxs),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Palette.label(context)),
-                        ),
-                        Muted(
-                          Rewards.isRealPrize(reward) ? 'Prize: $reward' : 'No prize set',
-                          size: 12,
-                          maxLines: 1,
-                          color: Rewards.isRealPrize(reward) ? Palette.gray500 : Palette.gray400,
-                        ),
-                      ],
-                    ),
+    // The whole card opens their profile, same as tapping the name
+    child: Pressable(
+      scale: .98,
+      onPressed: () => showProfileSheet(context, user, roleId: roleId),
+      child: _card(context),
+    ),
+  );
+
+  Widget _card(BuildContext context) => AppCard(
+    padding: const EdgeInsets.all(12),
+    shadow: false,
+    borderColor: isMe ? const Color(0xFF93C5FD) : [Palette.yellow300, const Color(0xFFD1D5DB), const Color(0xFFFDBA74)][rank],
+    color: isMe ? Palette.blue50 : null,
+    child: Row(
+      children: [
+        SizedBox(width: 32, child: Center(child: MedalIcon(rank, size: 24))),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Builder(
+            builder: (context) => Row(
+              children: [
+                Avatar(user.photoURL, name: user.name, size: Avatar.xxs),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Palette.label(context)),
+                      ),
+                      Muted(
+                        Rewards.isRealPrize(reward) ? 'Prize: $reward' : 'No prize set',
+                        size: 12,
+                        maxLines: 1,
+                        color: Rewards.isRealPrize(reward) ? Palette.gray500 : Palette.gray400,
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     ),
   );
 }

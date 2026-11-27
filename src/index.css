@@ -14,6 +14,48 @@ input, textarea, [contenteditable] {
   user-select: text;
 }
 
+/* ── Scrollbars: slim, rounded and in the app's grays, light and dark ──
+   Chrome, Edge and Safari use the ::-webkit-scrollbar rules (a pill thumb that
+   floats in a transparent track and darkens on hover). Firefox only understands
+   scrollbar-width/scrollbar-color, so those are kept to browsers without the
+   WebKit rules: Chrome would otherwise let them replace the custom look. */
+:root {
+  --scrollbar-thumb: 0 0 0 / 0.2;
+  --scrollbar-thumb-hover: 0 0 0 / 0.38;
+}
+[data-theme="dark"] {
+  --scrollbar-thumb: 255 255 255 / 0.18;
+  --scrollbar-thumb-hover: 255 255 255 / 0.34;
+}
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--scrollbar-thumb));
+  border-radius: 9999px;
+  /* The transparent border keeps the thumb clear of the window edge */
+  border: 3px solid transparent;
+  background-clip: content-box;
+  min-height: 40px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--scrollbar-thumb-hover));
+}
+::-webkit-scrollbar-thumb:active {
+  border-width: 2px;
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--scrollbar-thumb)) transparent;
+  }
+}
+
 /* Hides the scrollbar on horizontally-scrollable strips (e.g. the role page tab bar) while keeping them scrollable */
 .scrollbar-hide {
   -ms-overflow-style: none;
@@ -108,6 +150,11 @@ body {
   border-color: rgb(75 85 99);
   color: rgb(229 231 235);
   color-scheme: dark;
+}
+/* Fields that sit inside their own box (picker and filter search fields) stay see-through */
+[data-theme="dark"] input.bg-transparent,
+[data-theme="dark"] textarea.bg-transparent {
+  background-color: transparent;
 }
 
 [data-theme="dark"] input:hover,

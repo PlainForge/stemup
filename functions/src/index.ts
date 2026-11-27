@@ -79,4 +79,5 @@ export const notifyAdminsOnTaskSubmission = onDocumentCreated(
 export { sendVerificationEmail, sendPasswordResetEmail, requestEmailChange } from "./authEmails";
 export { checkName, cleanProfileName } from "./nameFilter";
 export { cleanUpDeletedAccount, purgeDeletedAccount } from "./accountCleanup";
-export { notifyOnTaskChange, notifyOnJoinDecision, notifyOnRequestDecision, notifyOnRoleRequest, removeDevicesOnUserDelete } from "./notifications";
+export { notifyOnTaskChange, notifyOnJoinDecision, notifyOnRequestDecision, notifyOnRoleRequest, notifyOnInvite, removeDevicesOnUserDelete } from "./notifications";
+export { respondToInvite, countTaskGiven } from "./invites";

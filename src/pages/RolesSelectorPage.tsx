@@ -2,7 +2,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useContext, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { type Role, type StemRequest } from '../myDataTypes';
+import { type Role, type RoleInvite, type StemRequest } from '../myDataTypes';
 import { canManageRole, isRoleStaff, roleService } from '../lib/roleService';
 import { alertDialog } from '../lib/confirm';
 import JoinButton from '../components/RoleJoinButton';
@@ -11,7 +11,7 @@ import { MainContext } from '../context/MainContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faStar, faUsers } from '@fortawesome/free-solid-svg-icons';
+import { faChalkboardUser, faEnvelopeOpenText, faStar, faUsers } from '@fortawesome/free-solid-svg-icons';
 import { useNavigate } from 'react-router-dom';
 
 
@@ -31,6 +31,8 @@ export default function RolesSelectorPage() {
     const [submittedPerRole, setSubmittedPerRole] = useState<Record<string, number>>({});
     const [incompleteTasks, setIncompleteTasks] = useState<{ id: string; roleId: string }[]>([]);
     const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
+    const [invites, setInvites] = useState<RoleInvite[]>([]);
+    const [answering, setAnswering] = useState<string | null>(null);
 
     // Tasks the user has already submitted (awaiting review) no longer count as to-do
     const incompletePerRole: Record<string, number> = {};
@@ -69,6 +71,16 @@ export default function RolesSelectorPage() {
         return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- admins/instructors arrays are compared by content via join
     }, [user, admins.join(","), instructors.join(",")]);
+
+    // Invitations to join a role, from its instructors or an admin
+    useEffect(() => {
+        if (!user) return;
+        return onSnapshot(query(collection(db, "invites"), where("uid", "==", user.uid)), snap => {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as RoleInvite));
+            list.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
+            setInvites(list);
+        }, err => console.error("Error loading invitations:", err));
+    }, [user]);
 
     // The instructor's own role requests still waiting for an admin
     useEffect(() => {
@@ -151,6 +163,20 @@ export default function RolesSelectorPage() {
         }
     };
 
+    const answer = async (invite: RoleInvite, accept: boolean) => {
+        setAnswering(invite.id);
+        try {
+            await roleService.respondToInvite(invite.roleId, accept);
+            if (accept) navigate(`/roles/${invite.roleId}`);
+        } catch (err) {
+            console.error(err);
+            const message = (err as { message?: string })?.message;
+            await alertDialog(message && !message.includes("internal") ? message : "Couldn't answer the invitation. Please try again.", "Something went wrong");
+        } finally {
+            setAnswering(null);
+        }
+    };
+
     return (
         <motion.div
             className="w-full max-w-2xl mx-auto flex flex-col gap-6 px-4 py-6"
@@ -218,6 +244,42 @@ export default function RolesSelectorPage() {
                     <p className="text-gray-400 text-sm text-center py-8">No roles available at the moment.</p>
                 )}
             </div>
+
+            {/* Invitations, under the list and above creating a role */}
+            {invites.length > 0 && (
+                <div className="border-t border-gray-100 pt-6 flex flex-col gap-3">
+                    <div>
+                        <h2 className="text-base font-semibold">Invitations</h2>
+                        <p className="text-sm text-gray-500 mt-0.5">You've been invited to join {invites.length === 1 ? "this role" : "these roles"}.</p>
+                    </div>
+                    {invites.map(inv => (
+                        <motion.div
+                            key={inv.id}
+                            className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 rounded-2xl border border-blue-200 bg-blue-50"
+                            initial={{ x: -30, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                        >
+                            <div className="flex items-center gap-4 min-w-0 flex-1">
+                                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+                                    <FontAwesomeIcon icon={inv.as === "instructor" ? faChalkboardUser : faEnvelopeOpenText} />
+                                </span>
+                                <div className="min-w-0">
+                                    <p className="font-semibold truncate">{inv.roleName}</p>
+                                    <p className="text-sm text-gray-500">
+                                        {inv.invitedByName || "An instructor"} invited you as {inv.as === "instructor" ? "an instructor" : "a member"}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                                <Button onClick={() => answer(inv, true)} size="xsm" color="green" disabled={answering === inv.id}>
+                                    {answering === inv.id ? "Working..." : "Accept"}
+                                </Button>
+                                <Button onClick={() => answer(inv, false)} size="xsm" color="gray" disabled={answering === inv.id}>Decline</Button>
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+            )}
 
             {access !== "user" && (
                 <div className="border-t border-gray-100 pt-6 flex flex-col gap-3">

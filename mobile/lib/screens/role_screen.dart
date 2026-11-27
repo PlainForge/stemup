@@ -1,6 +1,6 @@
 // pages/RolePage.tsx. Admins and the role's instructors get a Manage button
 // that opens role_admin.dart on the Admin or Instructor tab. Everyone gets a
-// Notifications tab to turn this role's notifications on or off.
+// Settings tab: this role's Notifications page, and whether it shows on Home.
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -21,7 +21,7 @@ import '../widgets/glass_tab_bar.dart' show PingDot;
 import '../widgets/sliding_tabs.dart';
 import 'task_widgets.dart';
 
-enum _Tab { leaderboard, rewards, saved, tasks, notifications }
+enum _Tab { leaderboard, rewards, saved, tasks, settings }
 
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key, required this.roleId});
@@ -47,6 +47,9 @@ class _RoleScreenState extends State<RoleScreen> {
   List<SubmittedTask> _pendingSubmitted = const [];
   List<LeaderboardSnapshot> _snapshots = const [];
   _Tab _tab = _Tab.leaderboard;
+
+  /// The Notifications page inside the Settings tab is open.
+  bool _notificationsOpen = false;
   final _filters = TaskFilters();
 
   String get _id => widget.roleId;
@@ -131,7 +134,7 @@ class _RoleScreenState extends State<RoleScreen> {
       const SlidingTab(_Tab.rewards, 'Rewards'),
       const SlidingTab(_Tab.saved, 'Saved Data'),
       if (!isStaff) SlidingTab(_Tab.tasks, 'Tasks', newBadge: hasNew, count: openTasks.length, countColor: Palette.green500),
-      SlidingTab(_Tab.notifications, notificationsOn ? 'Notifications' : 'Notifications (off)'),
+      SlidingTab(_Tab.settings, notificationsOn ? 'Settings' : 'Settings (muted)'),
     ];
 
     return PageScaffold(
@@ -197,7 +200,14 @@ class _RoleScreenState extends State<RoleScreen> {
           ],
         ),
         if (roleInstructors.isNotEmpty) _InstructorChips(people: roleInstructors, meUid: me.uid),
-        SlidingTabs<_Tab>(tabs: tabs, selected: tab, onChanged: (t) => setState(() => _tab = t)),
+        SlidingTabs<_Tab>(
+          tabs: tabs,
+          selected: tab,
+          onChanged: (t) => setState(() {
+            _tab = t;
+            _notificationsOpen = false;
+          }),
+        ),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
           switchInCurve: Curves.easeOutCubic,
@@ -226,37 +236,119 @@ class _RoleScreenState extends State<RoleScreen> {
       filters: _filters,
       onFiltersChanged: () => setState(() {}),
     ),
-    _Tab.notifications => _notificationsTab(context, app, role),
+    _Tab.settings => _notificationsOpen ? _notificationsTab(context, app, role) : _settingsTab(context, app, role),
   };
 
-  /// Turns this role's notifications on or off for the signed-in person.
+  /// This role's settings for the signed-in person: its Notifications page, and
+  /// whether its rewards and top 3 show on Home.
+  Widget _settingsTab(BuildContext context, AppState app, Role role) {
+    final me = app.userData!;
+    final notificationsOn = me.notifications.roleIsOn(_id);
+    final showOnHome = !me.hideOnHome.contains(_id);
+    final blue = Palette.resolve(context, Palette.navActive);
+
+    Widget badge(IconData icon, bool on) => Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: on ? Palette.resolve(context, Palette.blue50) : Palette.fill(context),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, size: 20, color: on ? blue : Palette.tertiary(context)),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Pressable(
+          scale: .98,
+          onPressed: () => setState(() => _notificationsOpen = true),
+          child: AppCard(
+            shadow: false,
+            child: Row(
+              children: [
+                badge(notificationsOn ? CupertinoIcons.bell_fill : CupertinoIcons.bell_slash_fill, notificationsOn),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Notifications',
+                        style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                      ),
+                      Muted(notificationsOn ? 'On' : 'Off', size: 13),
+                    ],
+                  ),
+                ),
+                Icon(CupertinoIcons.chevron_right, size: 16, color: Palette.tertiary(context)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          shadow: false,
+          child: Row(
+            children: [
+              badge(CupertinoIcons.house_fill, showOnHome),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Show on Home',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                    ),
+                    Muted("${role.name}'s rewards and top 3 on your Home screen", size: 13),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              CupertinoSwitch(value: showOnHome, activeTrackColor: Palette.green500, onChanged: (v) => Db.setShowOnHome(me.uid, _id, v)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Turns this role's notifications on or off for the signed-in person (opened from Settings).
   Widget _notificationsTab(BuildContext context, AppState app, Role role) {
     final me = app.userData!;
     final on = me.notifications.roleIsOn(_id);
-    return AppCard(
-      shadow: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SwitchRow(
-            label: 'Notifications from ${role.name}',
-            hint: on ? 'On' : 'Off',
-            value: on,
-            onChanged: (v) => Db.setRoleNotifications(me.uid, _id, v),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        BackPill(label: 'Settings', onPressed: () => setState(() => _notificationsOpen = false)),
+        const SizedBox(height: 12),
+        AppCard(
+          shadow: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SwitchRow(
+                label: 'Notifications from ${role.name}',
+                hint: on ? 'On' : 'Off',
+                value: on,
+                onChanged: (v) => Db.setRoleNotifications(me.uid, _id, v),
+              ),
+              const SizedBox(height: 8),
+              Muted(
+                'Covers everything about this role: tasks, reviews, extensions and requests'
+                '${app.canManage(role) ? ', including submissions waiting for you to review' : ''}. '
+                'Turning it off stops push notifications and emails about this role only.',
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: LinkText("Choose how you're notified in Settings", size: 14, onPressed: () => context.go('/settings/notifications')),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Muted(
-            'Covers everything about this role: tasks, reviews, extensions and requests'
-            '${app.canManage(role) ? ', including submissions waiting for you to review' : ''}. '
-            'Turning it off stops push notifications and emails about this role only.',
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: LinkText("Choose how you're notified in Settings", size: 14, onPressed: () => context.go('/settings/notifications')),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
