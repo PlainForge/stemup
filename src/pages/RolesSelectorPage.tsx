@@ -3,7 +3,7 @@ import { db } from '../lib/firebase';
 import { useContext, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { type Role, type RoleInvite, type StemRequest } from '../myDataTypes';
-import { canManageRole, isRoleStaff, roleService } from '../lib/roleService';
+import { canManageRole, isRoleStaff, roleOwner, roleService } from '../lib/roleService';
 import { alertDialog } from '../lib/confirm';
 import JoinButton from '../components/RoleJoinButton';
 import Loading from './Loading';
@@ -37,7 +37,7 @@ export default function RolesSelectorPage() {
     const [roles, setRoles] = useState<Role[]>([]);
     // Search by name or purpose, and show every role, only yours, or only ones you're not in
     const [search, setSearch] = useState("");
-    const [accessFilter, setAccessFilter] = useState<"all" | "joined" | "notJoined">("all");
+    const [accessFilter, setAccessFilter] = useState<"all" | "joined" | "notJoined" | "instructing" | "owned">("all");
     const [requestsPerRole, setRequestsPerRole] = useState<Record<string, number>>({});
     const [submittedPerRole, setSubmittedPerRole] = useState<Record<string, number>>({});
     const [incompleteTasks, setIncompleteTasks] = useState<{ id: string; roleId: string }[]>([]);
@@ -152,12 +152,30 @@ export default function RolesSelectorPage() {
         && (!role.inviteOnly || (role.members ?? []).includes(user.uid) || canManageRole(role, user.uid, admins, instructors)
             || invites.some(inv => inv.roleId === role.id) || (role.pendingRequests ?? []).includes(user.uid)));
     const joinedCount = listed.filter(r => (r.members ?? []).includes(user.uid)).length;
-    const accessCounts = { all: listed.length, joined: joinedCount, notJoined: listed.length - joinedCount };
+    // Instructors can also narrow it to the roles they run, or the ones they own
+    const runs = (r: Role) => (r.instructors ?? []).includes(user.uid);
+    const owns = (r: Role) => runs(r) && roleOwner(r) === user.uid;
+    const accessCounts = {
+        all: listed.length,
+        joined: joinedCount,
+        notJoined: listed.length - joinedCount,
+        instructing: listed.filter(r => runs(r) && !owns(r)).length,
+        owned: listed.filter(owns).length,
+    };
+    const filterOptions = [
+        ["all", "All"], ["joined", "Joined"], ["notJoined", "Not Joined"],
+        ...(access === "instructor" ? [["instructing", "Instructing"], ["owned", "Owned"]] : []),
+    ] as [keyof typeof accessCounts, string][];
     const term = search.trim().toLowerCase();
+    // Back to All if a staff-only filter is on but they're no longer an instructor
+    const filter = access !== "instructor" && (accessFilter === "instructing" || accessFilter === "owned") ? "all" : accessFilter;
     const shown = listed.filter(role => {
         const isMember = (role.members ?? []).includes(user.uid);
-        if (accessFilter === "joined" && !isMember) return false;
-        if (accessFilter === "notJoined" && isMember) return false;
+        if (filter === "joined" && !isMember) return false;
+        if (filter === "notJoined" && isMember) return false;
+        // Instructing is the roles they run but don't own; owned ones are only under Owned
+        if (filter === "instructing" && (!runs(role) || owns(role))) return false;
+        if (filter === "owned" && !owns(role)) return false;
         return !term || role.name.toLowerCase().includes(term) || (role.purpose ?? "").toLowerCase().includes(term);
     });
 
@@ -249,16 +267,16 @@ export default function RolesSelectorPage() {
                     </div>
                     {createStatus && <p role="status" className="text-sm text-green-600 dark:text-green-400">{createStatus}</p>}
                     {listed.length > 0 && (
-                    <div role="radiogroup" aria-label="Show roles" className="flex gap-1.5">
-                        {([["all", "All"], ["joined", "Joined"], ["notJoined", "Not Joined"]] as const).map(([key, label]) => (
+                    <div role="radiogroup" aria-label="Show roles" className="flex flex-wrap gap-1.5">
+                        {filterOptions.map(([key, label]) => (
                             <button
                                 key={key}
                                 type="button"
                                 role="radio"
-                                aria-checked={accessFilter === key}
+                                aria-checked={filter === key}
                                 onClick={() => setAccessFilter(key)}
                                 className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors hover:cursor-pointer ${
-                                    accessFilter === key ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                    filter === key ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                                 }`}
                             >
                                 {label} <span className="font-normal opacity-70">{accessCounts[key]}</span>
@@ -337,7 +355,9 @@ export default function RolesSelectorPage() {
                     <p className="text-gray-400 text-sm text-center py-8">
                         {listed.length === 0 ? "No roles available at the moment."
                             : term ? `No roles match "${search.trim()}".`
-                            : accessFilter === "joined" ? "You haven't joined any roles yet."
+                            : filter === "joined" ? "You haven't joined any roles yet."
+                            : filter === "instructing" ? "You aren't running any roles you don't own."
+                            : filter === "owned" ? "You don't own any roles yet."
                             : "You're in every role."}
                     </p>
                 )}

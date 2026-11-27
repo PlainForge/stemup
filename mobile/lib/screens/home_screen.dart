@@ -12,6 +12,7 @@ import '../state/app_state.dart';
 import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
+import '../widgets/motion.dart';
 import '../widgets/leaderboard.dart';
 import '../widgets/page_scaffold.dart';
 import '../widgets/profile_sheet.dart';
@@ -152,13 +153,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: _StatCard(label: 'Total Points', value: me.points),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
                   child: _StatCard(label: 'Tasks Done', value: me.taskCompleted),
                 ),
                 // Only instructors see how many tasks they've given out
                 if (app.isInstructor) ...[
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: _StatCard(label: 'Tasks Given', value: me.tasksGiven),
                   ),
@@ -312,18 +313,37 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-    padding: const EdgeInsets.all(24),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 20),
     child: Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SectionLabel(label, size: 12, padding: const EdgeInsets.only(bottom: 4)),
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: value.toDouble()),
-          duration: const Duration(milliseconds: 800),
-          curve: Curves.easeOutCubic,
-          builder: (context, v, _) => Text(
-            '${v.round()}',
-            style: TextStyle(fontSize: 36, fontWeight: FontWeight.w700, height: 1.1, color: Palette.label(context)),
+        // Number on top, label underneath; both stay on one centered line, shrinking to fit three cards on a small phone
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: value.toDouble()),
+            duration: motionDuration(context, const Duration(milliseconds: 800)),
+            curve: Curves.easeOutCubic,
+            builder: (context, v, _) => Text(
+              '${v.round()}',
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w700,
+                height: 1.1,
+                color: Palette.label(context),
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label.toUpperCase(),
+            maxLines: 1,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1, color: Palette.resolve(context, Palette.gray400)),
           ),
         ),
       ],

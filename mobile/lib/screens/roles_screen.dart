@@ -27,7 +27,8 @@ class RolesScreen extends StatefulWidget {
 }
 
 /// Every role, only the ones you're in, or only the ones you're not.
-enum _Access { all, joined, notJoined }
+/// Instructors also get the roles they run and the ones they own.
+enum _Access { all, joined, notJoined, instructing, owned }
 
 class _RolesScreenState extends State<RolesScreen> {
   final _search = TextEditingController();
@@ -183,11 +184,19 @@ class _RolesScreenState extends State<RolesScreen> {
         )
         .toList();
     final joined = listed.where((r) => r.members.contains(uid)).length;
+    bool runs(Role r) => r.instructors.contains(uid);
+    bool owns(Role r) => runs(r) && r.owner == uid;
+    final isInstructor = app.access == AccessLevel.instructor;
+    // Back to All if they stopped being an instructor while a staff-only filter was on
+    final access = !isInstructor && (_access == _Access.instructing || _access == _Access.owned) ? _Access.all : _access;
     final term = _search.text.trim().toLowerCase();
     final roles = listed.where((r) {
       final isMember = r.members.contains(uid);
-      if (_access == _Access.joined && !isMember) return false;
-      if (_access == _Access.notJoined && isMember) return false;
+      if (access == _Access.joined && !isMember) return false;
+      if (access == _Access.notJoined && isMember) return false;
+      // Instructing is the roles they run but don't own; owned ones are only under Owned
+      if (access == _Access.instructing && (!runs(r) || owns(r))) return false;
+      if (access == _Access.owned && !owns(r)) return false;
       return term.isEmpty || r.name.toLowerCase().contains(term) || r.purpose.toLowerCase().contains(term);
     }).toList();
     final todo = app.incompletePerRole;
@@ -230,8 +239,17 @@ class _RolesScreenState extends State<RolesScreen> {
                 SlidingTab(_Access.all, 'All', count: listed.length, countColor: Palette.gray400),
                 SlidingTab(_Access.joined, 'Joined', count: joined, countColor: Palette.blue600),
                 SlidingTab(_Access.notJoined, 'Not Joined', count: listed.length - joined, countColor: Palette.gray400),
+                if (isInstructor) ...[
+                  SlidingTab(
+                    _Access.instructing,
+                    'Instructing',
+                    count: listed.where((r) => runs(r) && !owns(r)).length,
+                    countColor: const Color(0xFF7C3AED),
+                  ),
+                  SlidingTab(_Access.owned, 'Owned', count: listed.where(owns).length, countColor: const Color(0xFFD97706)),
+                ],
               ],
-              selected: _access,
+              selected: access,
               onChanged: (v) => setState(() => _access = v),
             ),
         ],
@@ -241,8 +259,12 @@ class _RolesScreenState extends State<RolesScreen> {
                 ? 'No roles available at the moment.'
                 : term.isNotEmpty
                 ? 'No roles match "${_search.text.trim()}".'
-                : _access == _Access.joined
+                : access == _Access.joined
                 ? "You haven't joined any roles yet."
+                : access == _Access.instructing
+                ? "You aren't running any roles you don't own."
+                : access == _Access.owned
+                ? "You don't own any roles yet."
                 : "You're in every role.",
           )
         else
