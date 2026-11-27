@@ -169,6 +169,13 @@ function CardBody({ uid, onClose, role }: { uid: string; onClose: () => void; ro
                     </div>
                 </div>
 
+                {person.aboutMe?.trim() && (
+                    <div className="w-full rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 text-left">
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-1">About Me</p>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">{person.aboutMe.trim()}</p>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-2 w-full">
                     {stats.map(s => (
                         <div key={s.label} className={`rounded-xl border px-2 py-3 flex flex-col items-center gap-0.5 ${s.tint}`}>

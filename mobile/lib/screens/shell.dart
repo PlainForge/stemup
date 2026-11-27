@@ -26,6 +26,8 @@ class AppShell extends StatelessWidget {
     final tabs = [
       _Tab(0, GlassTabItem(icon: FontAwesomeIcons.house.data, label: 'Home')),
       _Tab(1, GlassTabItem(icon: FontAwesomeIcons.users.data, label: 'Roles', badge: app.rolesTabBadge)),
+      // Admins aren't given tasks, so only users and instructors get this tab
+      if (!app.isAdmin) _Tab(5, GlassTabItem(icon: FontAwesomeIcons.listCheck.data, label: 'Tasks')),
       if (app.isAdmin) _Tab(2, GlassTabItem(icon: FontAwesomeIcons.userShield.data, label: 'Admin', badge: app.adminQueue.isNotEmpty)),
       // Instructors (who aren't admins) get their own tab, like the Admin tab
       if (!app.isAdmin && app.isInstructor)

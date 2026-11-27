@@ -80,9 +80,13 @@ class _StemUpAppState extends State<StemUpApp> {
           textTheme: CupertinoTextThemeData(textStyle: GoogleFonts.googleSans(fontSize: 16, color: Palette.foreground)),
         ),
         // The web's base text: Google Sans Regular (font-weight 400) in the foreground color
-        builder: (context, child) => DefaultTextStyle(
-          style: GoogleFonts.googleSans(fontSize: 16, fontWeight: FontWeight.w400, color: Palette.label(context)),
-          child: child!,
+        // Reduce Motion in Settings works like the iPhone's own: widgets read it from MediaQuery (widgets/motion.dart)
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: MediaQuery.of(context).disableAnimations || app.reduceMotion),
+          child: DefaultTextStyle(
+            style: GoogleFonts.googleSans(fontSize: 16, fontWeight: FontWeight.w400, color: Palette.label(context)),
+            child: child!,
+          ),
         ),
       ),
     ),

@@ -27,7 +27,7 @@ import 'semester_reset_sheet.dart';
 
 /// Settings is a list of sections; each opens its own page at `/settings/<name>`.
 enum _SettingsTab {
-  profile('Profile', 'Photo, display name, email and current role'),
+  profile('Profile', 'Photo, display name, about me and email'),
   access('Access', 'Your access level and Instructor requests'),
   notifications('Notifications', 'Push, email and what to be notified about'),
   app('App', 'Appearance, bug reports and glass effects'),
@@ -58,6 +58,13 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _name = TextEditingController();
+  final _about = TextEditingController();
+
+  /// About Me limits (kept in sync with src/lib/aboutMe.ts, the rules and cleanProfileName)
+  static const _aboutMaxWords = 200;
+  static const _aboutMaxChars = 1500;
+  static int _words(String s) => RegExp(r'\S+').allMatches(s.trim()).length;
+  static String _tidy(String s) => s.trim().replaceAll(RegExp(r'\n{3,}'), '\n\n');
   Uint8List? _photo;
   String _photoType = 'image/jpeg';
   bool _saving = false;
@@ -68,6 +75,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _name.dispose();
+    _about.dispose();
     super.dispose();
   }
 
@@ -99,13 +107,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _save(UserData me) async {
     final name = _name.text.trim();
     if (name.isEmpty) return;
+    final about = _tidy(_about.text);
+    if (_words(about) > _aboutMaxWords) {
+      await alertDialog(context, title: 'About Me not saved', message: 'Please keep your About Me to $_aboutMaxWords words or fewer.');
+      return;
+    }
     setState(() => _saving = true);
     try {
       if (name != me.name && !await AuthService.isNameAllowed(name)) {
         if (mounted) await alertDialog(context, title: 'Name not saved', message: AuthService.blockedNameMessage);
         return;
       }
-      await AuthService.setAccountInformation(name: name, photo: _photo, contentType: _photoType, userData: me);
+      final aboutChanged = about != me.aboutMe;
+      if (aboutChanged && about.isNotEmpty && !await AuthService.isTextAllowed(about)) {
+        if (mounted) {
+          await alertDialog(
+            context,
+            title: 'About Me not saved',
+            message: "Your About Me has words that aren't allowed. Please change them.",
+          );
+        }
+        return;
+      }
+      if (name != me.name || _photo != null) {
+        await AuthService.setAccountInformation(name: name, photo: _photo, contentType: _photoType, userData: me);
+      }
+      if (aboutChanged) await Db.setAboutMe(me.uid, about);
+      _about.text = about;
       setState(() => _photo = null);
       if (mounted) showToast(context, 'Changes saved successfully!');
     } catch (_) {
@@ -160,10 +188,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_loadedFor != me.uid) {
       _loadedFor = me.uid;
       _name.text = me.name;
-    }
-    String? currentRoleName;
-    for (final r in app.roles) {
-      if (r.id == me.currentRole) currentRoleName = r.name;
+      _about.text = me.aboutMe;
     }
 
     final tab = _tab;
@@ -220,25 +245,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 label: 'Display Name',
                 child: AppTextField(controller: _name, placeholder: '', maxLength: 16),
               ),
-              _Field(label: 'Email', child: _EmailField(me)),
               _Field(
-                label: 'Current Role',
-                child: _InsetRow(
-                  label: currentRoleName ?? 'No role selected',
-                  muted: currentRoleName == null,
-                  action: AppButton(
-                    label: 'Reset',
-                    style: AppButtonStyle.red,
-                    size: AppButtonSize.xsm,
-                    onPressed: () => Db.setCurrentRole(me.uid, ''),
-                  ),
+                label: 'About Me (optional)',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppTextField(
+                      controller: _about,
+                      placeholder: "A few words about you: what you're into, what you're working on, what you'd like people to know.",
+                      maxLines: 5,
+                      maxLength: _aboutMaxChars,
+                    ),
+                    const SizedBox(height: 4),
+                    ListenableBuilder(
+                      listenable: _about,
+                      builder: (context, _) {
+                        final words = _words(_about.text);
+                        final over = words > _aboutMaxWords;
+                        return Row(
+                          children: [
+                            const Expanded(
+                              child: Muted('Shown on your profile card. Keep it friendly: no profanity.', size: 12, color: Palette.gray400),
+                            ),
+                            Text(
+                              '$words/$_aboutMaxWords words',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: over ? FontWeight.w700 : FontWeight.w400,
+                                color: over ? Palette.red500 : Palette.tertiary(context),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
+              _Field(label: 'Email', child: _EmailField(me)),
               // Save / Undo only while there are unsaved changes
-              ValueListenableBuilder(
-                valueListenable: _name,
-                builder: (context, value, _) {
-                  final changed = value.text.trim() != me.name || _photo != null;
+              ListenableBuilder(
+                listenable: Listenable.merge([_name, _about]),
+                builder: (context, _) {
+                  final changed = _name.text.trim() != me.name || _photo != null || _tidy(_about.text) != me.aboutMe;
                   return AnimatedSize(
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOutCubic,
@@ -265,6 +314,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   size: AppButtonSize.xsm,
                                   onPressed: () => setState(() {
                                     _name.text = me.name;
+                                    _about.text = me.aboutMe;
                                     _photo = null;
                                   }),
                                 ),
@@ -323,6 +373,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _InsetRow(
                 label: 'Reduce glass effects',
                 action: CupertinoSwitch(value: app.reduceGlass, activeTrackColor: Palette.blue600, onChanged: app.setReduceGlass),
+              ),
+              // Fades instead of sliding, scaling and bouncing (also on whenever the iPhone's Reduce Motion is)
+              _InsetRow(
+                label: 'Reduce motion',
+                action: CupertinoSwitch(value: app.reduceMotion, activeTrackColor: Palette.blue600, onChanged: app.setReduceMotion),
               ),
             ],
           ),
@@ -636,11 +691,10 @@ class _Field extends StatelessWidget {
 
 /// `bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl` row with a label and an action.
 class _InsetRow extends StatelessWidget {
-  const _InsetRow({required this.label, required this.action, this.muted = false});
+  const _InsetRow({required this.label, required this.action});
 
   final String label;
   final Widget action;
-  final bool muted;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -653,7 +707,7 @@ class _InsetRow extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: Text(label, style: TextStyle(fontSize: 14, color: muted ? Palette.tertiary(context) : Palette.label(context))),
+          child: Text(label, style: TextStyle(fontSize: 14, color: Palette.label(context))),
         ),
         const SizedBox(width: 8),
         action,

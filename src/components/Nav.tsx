@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useIsMobileBarHidden } from "../lib/useIsMobileBarHidden";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChalkboardUser, faGears, faHomeAlt, faUserShield, faUsers } from "@fortawesome/free-solid-svg-icons";
+import { faChalkboardUser, faGears, faHomeAlt, faListCheck, faUserShield, faUsers } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MainContext } from "../context/MainContext";
 import { IS_PHONE } from "../lib/device";
@@ -219,6 +219,9 @@ export default function Nav() {
                 >
                     <MobileNavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
                     <MobileNavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
+                    {!isAdmin && (
+                        <MobileNavItem icon={faListCheck} label="Tasks" onClick={() => navigate("/tasks")} active={path.startsWith("/tasks")} />
+                    )}
                     {isAdmin && (
                         <MobileNavItem icon={faUserShield} label="Admin" onClick={() => navigate("/admin")} active={path.startsWith("/admin")} ping={adminRequestCount > 0} />
                     )}
@@ -248,6 +251,10 @@ export default function Nav() {
 
                 <NavItem icon={faHomeAlt} label="Home" onClick={() => navigate("/")} active={path === "/"} />
                 <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
+                {/* Admins aren't given tasks, so only users and instructors get this tab */}
+                {!isAdmin && (
+                    <NavItem icon={faListCheck} label="Tasks" onClick={() => navigate("/tasks")} active={path.startsWith("/tasks")} />
+                )}
                 {isAdmin && (
                     <NavItem icon={faUserShield} label="Admin" onClick={() => navigate("/admin")} active={path.startsWith("/admin")} ping={adminRequestCount > 0} />
                 )}

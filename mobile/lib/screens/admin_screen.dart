@@ -15,6 +15,7 @@ import '../state/app_state.dart';
 import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
+import '../widgets/role_icons.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/instructor_card.dart';
 import '../widgets/page_scaffold.dart';
@@ -180,6 +181,8 @@ class _AdminScreenState extends State<AdminScreen> {
                       null => '',
                       _ => '${_who(r, 'An instructor')} wants to ${r.roleChangeAction}',
                     }, style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context))),
+                    if (r.type == RequestType.roleIcon)
+                      RoleIconChange(role: app.roles.where((x) => x.id == r.roleId).firstOrNull, request: r),
                     if (r.type?.isRoleChange == true)
                       Muted('${r.roleName} has no owner, so this came to admins.', size: 12, color: Palette.gray400),
                     if (r.createdAt != null) Muted(DateFormat('MMM d', 'en_US').format(r.createdAt!), size: 12, color: Palette.gray400),

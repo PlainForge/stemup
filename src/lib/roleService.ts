@@ -63,6 +63,7 @@ function roleChangeAction(req: StemRequest): string {
         case "editStats": return `set ${req.targetName || "a member"}'s stats to ${req.points ?? 0} pts and ${req.taskCompleted ?? 0} tasks`;
         case "kickMember": return `remove ${req.targetName || "a member"} from ${roleName}`;
         case "rewardsTitle": return req.title ? `change the rewards title to "${req.title}"` : "set the rewards title back to the current month";
+        case "roleIcon": return `change the icon of ${roleName}`;
         default: return "make a change";
     }
 }
@@ -122,7 +123,7 @@ export const roleService = {
         uid: string,
         userName: string,
         role: { id: string; name: string },
-        details: Pick<StemRequest, "saveName" | "newName" | "title" | "targetUid" | "targetName" | "points" | "taskCompleted">,
+        details: Pick<StemRequest, "saveName" | "newName" | "title" | "targetUid" | "targetName" | "points" | "taskCompleted" | "icon" | "iconColor">,
     ) {
         const clean = Object.fromEntries(Object.entries(details).filter(([, v]) => v !== undefined));
         await addDoc(collection(db, "requests"), {
@@ -180,6 +181,9 @@ export const roleService = {
                 break;
             case "rewardsTitle":
                 await this.setRewardsTitle(req.roleId, req.title ?? "");
+                break;
+            case "roleIcon":
+                if (req.icon && req.iconColor) await this.setRoleIcon(req.roleId, req.icon, req.iconColor);
                 break;
             case "editStats":
                 // Only while they're still in the role
@@ -397,6 +401,11 @@ export const roleService = {
         await Promise.all([batch.commit(), ...memberIds.map(uid => removeRoleFromUser(uid, roleId))]);
         await deleteDoc(doc(db, "rewards", roleId)).catch(() => {});
         await deleteDoc(doc(db, "roles", roleId));
+    },
+
+    /** The role's icon and color (owners and admins; other instructors request it) */
+    async setRoleIcon(roleId: string, icon: string, iconColor: string) {
+        await updateDoc(doc(db, "roles", roleId), { icon, iconColor });
     },
 
     async setRewardsTitle(roleId: string, title: string) {

@@ -16,6 +16,10 @@ import '../state/app_state.dart';
 import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
+import '../widgets/motion.dart';
+import '../widgets/page_scaffold.dart' show BackPill;
+import '../widgets/role_icon_picker.dart';
+import '../widgets/role_icons.dart';
 import '../widgets/date_field.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/instructor_card.dart';
@@ -283,6 +287,7 @@ class _RoleAdminViewState extends State<RoleAdminView> {
               r.describe(mine: mine),
               style: TextStyle(fontWeight: FontWeight.w500, color: Palette.label(context)),
             ),
+            if (r.type == RequestType.roleIcon) RoleIconChange(role: widget.role, request: r),
             if (r.createdAt != null) Muted(DateFormat('MMM d', 'en_US').format(r.createdAt!), size: 12, color: Palette.gray400),
             const SizedBox(height: 10),
             if (mine)
@@ -1520,9 +1525,15 @@ class _ConfigTab extends StatefulWidget {
   State<_ConfigTab> createState() => _ConfigTabState();
 }
 
+/// The Config tab's categories, each with its own page (like Settings).
+enum _ConfigPage { general, icon, reset, delete }
+
 class _ConfigTabState extends State<_ConfigTab> {
   final _name = TextEditingController();
   bool _resetting = false;
+
+  /// The open category, or null for the list.
+  _ConfigPage? _open;
 
   @override
   void dispose() {
@@ -1607,13 +1618,139 @@ class _ConfigTabState extends State<_ConfigTab> {
     // Your own reset request, or (for instructors who'd have to ask) one another instructor already sent
     final resets = widget.roleRequests.where((r) => r.type == RequestType.resetRole);
     final pending = resets.where((r) => r.uid == me).firstOrNull ?? (canChange ? null : resets.firstOrNull);
-    return Column(
+    final role = widget.role;
+    final sections = <({_ConfigPage key, String label, String hint, IconData icon, bool danger})>[
+      (
+        key: _ConfigPage.general,
+        label: 'General',
+        hint: 'Name and global leaderboard (${on ? 'on' : 'off'})',
+        icon: FontAwesomeIcons.pen.data,
+        danger: false,
+      ),
+      (
+        key: _ConfigPage.icon,
+        label: 'Icon',
+        hint: "The icon and color on the Roles screen and this role's page",
+        icon: FontAwesomeIcons.palette.data,
+        danger: false,
+      ),
+      (
+        key: _ConfigPage.reset,
+        label: 'Reset Role',
+        hint: pending != null ? 'Reset waiting for ${widget.approver}' : 'Save the leaderboard and start fresh',
+        icon: FontAwesomeIcons.rotate.data,
+        danger: false,
+      ),
+      if (isAdmin)
+        (
+          key: _ConfigPage.delete,
+          label: 'Delete Role',
+          hint: 'Permanently delete this role and its data',
+          icon: FontAwesomeIcons.trash.data,
+          danger: true,
+        ),
+    ];
+    final open = sections.where((x) => x.key == _open).firstOrNull;
+
+    // The list and each page slide between each other: pages come in from the right, the list from the left
+    return AnimatedSwitcher(
+      duration: motionDuration(context, const Duration(milliseconds: 260)),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (current, previous) => Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
+      transitionBuilder: (child, a) {
+        final fromLeft = child.key == const ValueKey('config-list');
+        return FadeTransition(
+          opacity: a,
+          child: SlideTransition(
+            position: Tween(begin: Offset(fromLeft ? -.12 : .12, 0), end: Offset.zero).animate(a),
+            child: child,
+          ),
+        );
+      },
+      child: open == null
+          ? Column(
+              key: const ValueKey('config-list'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final sec in sections)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Pressable(
+                      scale: .98,
+                      onPressed: () => setState(() => _open = sec.key),
+                      child: AppCard(
+                        shadow: false,
+                        borderColor: sec.danger ? const Color(0xFFFECACA) : null,
+                        child: Row(
+                          children: [
+                            if (sec.key == _ConfigPage.icon)
+                              RoleIconBadge.of(role)
+                            else
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: sec.danger ? Palette.red500.withValues(alpha: .12) : Palette.resolve(context, Palette.blue50),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  sec.icon,
+                                  size: 16,
+                                  color: sec.danger ? Palette.red500 : Palette.resolve(context, Palette.navActive),
+                                ),
+                              ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    sec.label,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: sec.danger ? Palette.red500 : Palette.label(context),
+                                    ),
+                                  ),
+                                  Muted(sec.hint, size: 13, maxLines: 1),
+                                ],
+                              ),
+                            ),
+                            Icon(CupertinoIcons.chevron_right, size: 16, color: Palette.tertiary(context)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            )
+          : Column(
+              key: ValueKey(open.key),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                BackPill(label: 'Config', onPressed: () => setState(() => _open = null)),
+                const SizedBox(height: 12),
+                Text(
+                  open.label,
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: open.danger ? Palette.red500 : Palette.label(context)),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(width: double.infinity, child: _page(context, open.key, canChange, on, pending, me)),
+              ],
+            ),
+    );
+  }
+
+  Widget _page(BuildContext context, _ConfigPage page, bool canChange, bool on, StemRequest? pending, String? me) => switch (page) {
+    _ConfigPage.icon => RoleIconPicker(role: widget.role),
+    // The role's name and whether its members see the global leaderboard, on one page
+    _ConfigPage.general => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Section(
           title: 'Rename role',
           children: [
-            if (!canChange) Muted('${_cap(widget.approver)} has to approve a new name.'),
+            Muted('Currently ${widget.role.name}.${canChange ? '' : ' ${_cap(widget.approver)} has to approve a new name.'}'),
             AppTextField(controller: _name, placeholder: 'New role name', onSubmitted: (_) => _rename()),
             Align(
               alignment: Alignment.centerLeft,
@@ -1622,71 +1759,57 @@ class _ConfigTabState extends State<_ConfigTab> {
           ],
         ),
         const SizedBox(height: 16),
-        _Section(
-          title: 'Global Leaderboard',
-          children: [
-            const Muted('When enabled, every member of this role can see the global leaderboard on the home page.'),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    on ? 'Enabled' : 'Disabled',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: on ? Palette.green600 : Palette.tertiary(context)),
-                  ),
-                ),
-                AppButton(
-                  label: on ? 'Disable' : 'Enable',
-                  size: AppButtonSize.xsm,
-                  style: on ? AppButtonStyle.red : AppButtonStyle.green,
-                  onPressed: () => Db.setShowInGlobal(widget.role.id, !on),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _Section(
-          title: 'Reset role',
-          children: [
-            Muted(
-              "Saves every member's points and tasks completed under a name you choose (shown with the date on the Saved Data tab), "
-              "then clears this role's tasks, submissions and prizes and sets everyone back to 0."
-              '${canChange ? '' : ' ${_cap(widget.approver)} has to approve it first.'}',
-            ),
-            if (pending != null)
-              PendingNotice(
-                '${pending.uid == me ? 'Reset requested' : '${pending.userName.isEmpty ? 'An instructor' : pending.userName} requested a reset'}'
-                ' as "${pending.saveName}". Waiting for ${widget.approver}.',
-                actionLabel: pending.uid == me ? 'Cancel' : null,
-                onAction: () => Db.deleteRequest(pending.id),
-              )
-            else
-              Align(
-                alignment: Alignment.centerLeft,
-                child: AppButton(
-                  label: canChange ? 'Reset Role' : 'Request Reset',
-                  size: AppButtonSize.sm,
-                  loading: _resetting,
-                  onPressed: _reset,
-                ),
-              ),
-          ],
-        ),
-        if (isAdmin) ...[
-          const SizedBox(height: 16),
-          _Section(
-            title: 'Danger Zone',
-            danger: true,
-            children: [
-              const Muted('Permanently deletes this role and all associated data, including its saved data.'),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: AppButton(label: 'Delete Role', size: AppButtonSize.sm, style: AppButtonStyle.red, onPressed: _delete),
-              ),
-            ],
+        const SectionLabel('Global Leaderboard', padding: EdgeInsets.fromLTRB(4, 0, 4, 8)),
+        AppCard(
+          shadow: false,
+          child: SwitchRow(
+            label: 'Show the global leaderboard',
+            hint: 'When on, every member of this role can see the global leaderboard on the Home screen.',
+            value: on,
+            onChanged: (v) => Db.setShowInGlobal(widget.role.id, v),
           ),
-        ],
+        ),
       ],
-    );
-  }
+    ),
+    _ConfigPage.reset => _Section(
+      title: 'Reset role',
+      children: [
+        Muted(
+          "Saves every member's points and tasks completed under a name you choose (shown with the date on the Saved Data tab), "
+          "then clears this role's tasks, submissions and prizes and sets everyone back to 0."
+          '${canChange ? '' : ' ${_cap(widget.approver)} has to approve it first.'}',
+        ),
+        if (pending != null)
+          PendingNotice(
+            '${pending.uid == me ? 'Reset requested' : '${pending.userName.isEmpty ? 'An instructor' : pending.userName} requested a reset'}'
+            ' as "${pending.saveName}". Waiting for ${widget.approver}.',
+            actionLabel: pending.uid == me ? 'Cancel' : null,
+            onAction: () => Db.deleteRequest(pending.id),
+          )
+        else
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton(
+              label: canChange ? 'Reset Role' : 'Request Reset',
+              size: AppButtonSize.sm,
+              loading: _resetting,
+              onPressed: _reset,
+            ),
+          ),
+      ],
+    ),
+    _ConfigPage.delete => _Section(
+      title: 'Danger Zone',
+      danger: true,
+      children: [
+        Muted(
+          'Permanently deletes ${widget.role.name} and all of its data, including its tasks, prizes and saved data. This cannot be undone.',
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AppButton(label: 'Delete Role', size: AppButtonSize.sm, style: AppButtonStyle.red, onPressed: _delete),
+        ),
+      ],
+    ),
+  };
 }

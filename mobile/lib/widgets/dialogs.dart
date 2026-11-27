@@ -3,6 +3,8 @@
 // bug report, edit-member and semester-reset modals. Selects and date inputs use
 // the native iOS pickers, as Safari does for the web app.
 import 'package:flutter/cupertino.dart';
+
+import 'motion.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/palette.dart';
@@ -44,6 +46,13 @@ Future<T?> showModalCard<T>(
     ),
   ),
   transitionBuilder: (ctx, anim, _, child) {
+    // Reduced motion: just fade, no bounce
+    if (reduceMotion(ctx)) {
+      return FadeTransition(
+        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+        child: child,
+      );
+    }
     final t = CurvedAnimation(parent: anim, curve: const ElasticOutCurve(1.1), reverseCurve: Curves.easeIn);
     return FadeTransition(
       opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
@@ -383,4 +392,97 @@ class _PersonSheetState extends State<_PersonSheet> {
       ),
     );
   }
+}
+
+/// A message in the middle of the screen that fades in, stays a couple of
+/// seconds and fades out (e.g. after sending a bug report).
+void showCenterNotice(OverlayState overlay, {required String title, String? message}) {
+  HapticFeedback.mediumImpact();
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (_) => _CenterNotice(title: title, message: message, onDone: () => entry.remove()),
+  );
+  overlay.insert(entry);
+}
+
+class _CenterNotice extends StatefulWidget {
+  const _CenterNotice({required this.title, required this.message, required this.onDone});
+
+  final String title;
+  final String? message;
+  final VoidCallback onDone;
+
+  @override
+  State<_CenterNotice> createState() => _CenterNoticeState();
+}
+
+class _CenterNoticeState extends State<_CenterNotice> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
+
+  @override
+  void initState() {
+    super.initState();
+    _c.forward();
+    Future.delayed(const Duration(milliseconds: 2500), () async {
+      if (!mounted) return;
+      await _c.reverse();
+      widget.onDone();
+    });
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Center(
+      child: FadeTransition(
+        opacity: _c,
+        child: ScaleTransition(
+          scale: Tween(begin: .9, end: 1.0).animate(CurvedAnimation(parent: _c, curve: Curves.easeOutBack)),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xE6111827),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 30, offset: Offset(0, 12))],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(CupertinoIcons.checkmark_circle_fill, color: Color(0xFF4ADE80), size: 26),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFFFFFFF),
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                      if (widget.message != null)
+                        Text(
+                          widget.message!,
+                          style: const TextStyle(fontSize: 13, color: Color(0xB3FFFFFF), decoration: TextDecoration.none),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }

@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/admin_screen.dart';
+import 'widgets/motion.dart';
 import 'screens/admin_user_screen.dart';
 import 'screens/alumni_batch_screen.dart';
 import 'screens/auth_screens.dart';
@@ -14,11 +15,12 @@ import 'screens/role_member_screen.dart';
 import 'screens/role_screen.dart';
 import 'screens/roles_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/tasks_screen.dart';
 import 'screens/shell.dart';
 import 'state/app_state.dart';
 import 'widgets/page_scaffold.dart';
 
-Page<void> _page(Widget child, GoRouterState state) => CupertinoPage<void>(key: state.pageKey, child: child);
+Page<void> _page(Widget child, GoRouterState state) => AppPage<void>(key: state.pageKey, child: child);
 
 /// A role member's page, under both the role page and the admin role page.
 final _memberRoute = GoRoute(
@@ -132,6 +134,10 @@ GoRouter buildRouter(AppState app) => GoRouter(
               ],
             ),
           ],
+        ),
+        // Every task you've been given, across your roles (users and instructors; shown after Roles)
+        StatefulShellBranch(
+          routes: [GoRoute(path: '/tasks', pageBuilder: (_, s) => _page(const TasksScreen(), s))],
         ),
       ],
     ),

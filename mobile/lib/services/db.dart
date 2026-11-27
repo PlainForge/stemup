@@ -83,6 +83,10 @@ class Db {
   static Stream<List<Task>> roleTasksStream(String roleId) =>
       _tasks.where('roleId', isEqualTo: roleId).snapshots().map((s) => s.docs.map(Task.fromDoc).toList());
 
+  /// Every task given to [uid], in every role (the Tasks tab).
+  static Stream<List<Task>> userTasksStream(String uid) =>
+      _tasks.where('assignedTo', isEqualTo: uid).snapshots().map((s) => s.docs.map(Task.fromDoc).toList());
+
   static Stream<List<Task>> userIncompleteTasksStream(String uid) => _tasks
       .where('assignedTo', isEqualTo: uid)
       .where('complete', isEqualTo: false)
@@ -163,6 +167,11 @@ class Db {
   });
 
   /// Admins can join any role directly, no approval needed.
+  /// Takes back a join request that hasn't been answered yet.
+  static Future<void> withdrawJoinRequest(String roleId, String uid) => _role(roleId).update({
+    'pendingRequests': FieldValue.arrayRemove([uid]),
+  });
+
   static Future<void> joinAsAdmin(Role role, String uid) async {
     await _role(role.id).set({
       'members': FieldValue.arrayUnion([uid]),
@@ -239,7 +248,12 @@ class Db {
         await grantInstructor(r.uid);
       case RequestType.createRole:
         await createRole(r.roleName.isEmpty ? 'Untitled Role' : r.roleName, purpose: r.purpose, ownerUid: r.uid);
-      case RequestType.resetRole || RequestType.renameRole || RequestType.editStats || RequestType.kickMember || RequestType.rewardsTitle:
+      case RequestType.resetRole ||
+          RequestType.renameRole ||
+          RequestType.editStats ||
+          RequestType.kickMember ||
+          RequestType.rewardsTitle ||
+          RequestType.roleIcon:
         await _applyRoleChange(r);
       case null:
         break;
@@ -261,6 +275,8 @@ class Db {
         if (r.newName.trim().isNotEmpty) await renameRole(r.roleId, r.newName);
       case RequestType.rewardsTitle:
         await setRewardsTitle(r.roleId, r.title);
+      case RequestType.roleIcon when r.icon.isNotEmpty && r.iconColor.isNotEmpty:
+        await setRoleIcon(r.roleId, r.icon, r.iconColor);
       // Only while they're still in the role
       case RequestType.editStats when members.contains(r.targetUid):
         await setMemberRoleStats(r.targetUid, r.roleId, points: r.points, tasks: r.taskCompleted, alsoGlobal: false);
@@ -352,6 +368,10 @@ class Db {
 
   static Future<void> setRewardsTitle(String roleId, String title) => _role(roleId).update({'rewardsTitle': title.trim()});
 
+  /// The role's icon and color (owners and admins; other instructors request it).
+  static Future<void> setRoleIcon(String roleId, String icon, String iconColor) =>
+      _role(roleId).update({'icon': icon, 'iconColor': iconColor});
+
   static Future<void> setShowGlobalLeaderboard(String uid, bool value) => _user(uid).update({'showGlobalLeaderboard': value});
 
   /// Clears what's left of someone who deleted their account but still shows up
@@ -360,6 +380,9 @@ class Db {
       FirebaseFunctions.instance.httpsCallable('purgeDeletedAccount').call<void>({'uid': uid});
 
   /// Lets a User see the global leaderboard on Home (admins and instructors already can). Admin-only in the rules.
+  /// Saves (or, when empty, removes) their About Me.
+  static Future<void> setAboutMe(String uid, String text) => _user(uid).update({'aboutMe': text.isEmpty ? FieldValue.delete() : text});
+
   static Future<void> setCanSeeGlobal(String uid, bool value) => _user(uid).update({'canSeeGlobal': value});
 
   /// Saves the sign-in email on the profile; [clearPending] drops a confirmed (or abandoned) pending email change.

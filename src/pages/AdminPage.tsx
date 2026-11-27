@@ -16,6 +16,7 @@ import Button from "../components/Button";
 import ProfileImg from "../components/ProfileImg";
 import InactiveUsers from "../components/InactiveUsers";
 import InstructorCard from "../components/InstructorCard";
+import RoleIcon from "../components/RoleIcon";
 
 type AdminTab = "requests" | "users" | "instructors" | "roles" | "inactive";
 const TABS: AdminTab[] = ["requests", "users", "instructors", "roles", "inactive"];
@@ -30,6 +31,7 @@ const REQUEST_LABELS: Record<StemRequest["type"], string> = {
     editStats: "Edit member stats",
     kickMember: "Kick member",
     rewardsTitle: "Rewards title",
+    roleIcon: "Role icon",
 };
 
 export function AccessBadge({ level }: { level: AccessLevel }) {
@@ -213,6 +215,11 @@ export default function AdminPage() {
                                         {req.type === "createRole" && `${req.userName || userName(req.uid) || "An instructor"} wants to create "${req.roleName}"`}
                                         {isRoleChange(req.type) && describeRoleChange({ ...req, userName: req.userName || userName(req.uid) || "" })}
                                     </p>
+                                    {req.type === "roleIcon" && (
+                                        <span className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                                            <RoleIcon role={roles.find(r => r.id === req.roleId)} size="sm" solid /> → <RoleIcon role={{ icon: req.icon, iconColor: req.iconColor }} size="sm" solid />
+                                        </span>
+                                    )}
                                     {isRoleChange(req.type) && <p className="text-xs text-gray-400 mt-0.5">{req.roleName} has no owner, so this came to admins.</p>}
                                 </div>
                                 <span className="text-xs text-gray-400 shrink-0">

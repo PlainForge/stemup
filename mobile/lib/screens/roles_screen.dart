@@ -16,6 +16,7 @@ import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/glass_tab_bar.dart' show PingDot;
 import '../widgets/page_scaffold.dart';
+import '../widgets/role_icons.dart';
 
 class RolesScreen extends StatefulWidget {
   const RolesScreen({super.key});
@@ -322,17 +323,7 @@ class _RoleRow extends StatelessWidget {
     final requested = role.pendingRequests.contains(uid);
     void enter() => context.push('/roles/${role.id}');
 
-    // RoleJoinButton.tsx
-    final Widget action;
-    if (isMember) {
-      action = LinkText('Enter', bold: true, onPressed: enter);
-    } else if (isAdmin) {
-      action = LinkText('Join', onPressed: () => Db.joinAsAdmin(role, uid));
-    } else if (requested) {
-      action = Text('Requested', style: TextStyle(color: Palette.label(context)));
-    } else {
-      action = LinkText('Request to join', onPressed: () => Db.requestToJoin(role.id, uid));
-    }
+    final action = _JoinPill(role: role, uid: uid, isMember: isMember, isAdmin: isAdmin, requested: requested, onOpen: enter);
 
     return Stack(
       clipBehavior: Clip.none,
@@ -350,20 +341,27 @@ class _RoleRow extends StatelessWidget {
             ),
             child: Row(
               children: [
-                // Same icon box as the Settings sections; a star marks your current role
-                Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isCurrent ? Palette.blue600 : Palette.resolve(context, Palette.blue50),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    (isCurrent ? FontAwesomeIcons.star : FontAwesomeIcons.users).data,
-                    size: 16,
-                    color: isCurrent ? const Color(0xFFFFFFFF) : Palette.resolve(context, Palette.navActive),
-                  ),
+                // The role's own icon; filled in, with a star, for your current role
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    RoleIconBadge.of(role, solid: isCurrent),
+                    if (isCurrent)
+                      Positioned(
+                        top: -6,
+                        right: -6,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFBBF24),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Palette.card(context), width: 2),
+                          ),
+                          child: Icon(FontAwesomeIcons.star.data, size: 8, color: const Color(0xFFFFFFFF)),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(width: 14),
                 // Takes all the leftover width, so the action always sits flush right
@@ -402,6 +400,138 @@ class _RoleRow extends StatelessWidget {
         ),
         if (todoCount > 0) Positioned(top: -8, right: -8, child: CountBadge(todoCount)),
       ],
+    );
+  }
+}
+
+/// RoleJoinButton.tsx: Open for members, Join for admins, Request to Join for
+/// everyone else, and Requested (tap to withdraw) while a request is waiting.
+class _JoinPill extends StatefulWidget {
+  const _JoinPill({
+    required this.role,
+    required this.uid,
+    required this.isMember,
+    required this.isAdmin,
+    required this.requested,
+    required this.onOpen,
+  });
+
+  final Role role;
+  final String uid;
+  final bool isMember;
+  final bool isAdmin;
+  final bool requested;
+  final VoidCallback onOpen;
+
+  @override
+  State<_JoinPill> createState() => _JoinPillState();
+}
+
+class _JoinPillState extends State<_JoinPill> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() => _busy = true);
+    try {
+      await action();
+    } catch (_) {
+      if (mounted) showToast(context, "That didn't go through. Please try again.", error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _withdraw() async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Withdraw Request?',
+      message: 'Withdraw your request to join ${widget.role.name}?',
+      confirmLabel: 'Withdraw',
+      destructive: true,
+    );
+    if (ok) await _run(() => Db.withdrawJoinRequest(widget.role.id, widget.uid));
+  }
+
+  Widget _pill(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required Color fg,
+    required Color bg,
+    Color? border,
+    bool iconAfter = false,
+    VoidCallback? onTap,
+  }) {
+    final iconWidget = _busy ? CupertinoActivityIndicator(radius: 6, color: fg) : Icon(icon, size: 11, color: fg);
+    return Pressable(
+      onPressed: _busy ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+          border: border == null ? null : Border.all(color: border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!iconAfter) ...[iconWidget, const SizedBox(width: 6)],
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg),
+            ),
+            if (iconAfter) ...[const SizedBox(width: 6), iconWidget],
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final blue = Palette.resolve(context, Palette.blue600);
+    const white = Color(0xFFFFFFFF);
+    if (widget.isMember) {
+      return _pill(
+        context,
+        label: 'Open',
+        icon: FontAwesomeIcons.arrowRight.data,
+        iconAfter: true,
+        fg: Palette.resolve(context, Palette.navActive),
+        bg: Palette.resolve(context, Palette.blue50),
+        onTap: widget.onOpen,
+      );
+    }
+    if (widget.isAdmin) {
+      return _pill(
+        context,
+        label: _busy ? 'Joining...' : 'Join',
+        icon: FontAwesomeIcons.plus.data,
+        fg: white,
+        bg: blue,
+        onTap: () => _run(() => Db.joinAsAdmin(widget.role, widget.uid)),
+      );
+    }
+    if (widget.requested) {
+      const amber = Color(0xFFD97706);
+      return _pill(
+        context,
+        label: 'Requested',
+        icon: CupertinoIcons.hourglass,
+        fg: Palette.resolve(context, amber),
+        bg: amber.withValues(alpha: Palette.isDark(context) ? .18 : .1),
+        border: amber.withValues(alpha: .35),
+        onTap: _withdraw,
+      );
+    }
+    return _pill(
+      context,
+      label: _busy ? 'Sending...' : 'Request to Join',
+      icon: FontAwesomeIcons.paperPlane.data,
+      fg: white,
+      bg: blue,
+      onTap: () => _run(() => Db.requestToJoin(widget.role.id, widget.uid)),
     );
   }
 }

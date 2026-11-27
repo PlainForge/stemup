@@ -5,6 +5,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+
+import 'motion.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
@@ -55,6 +57,10 @@ class _GlassTabBarState extends State<GlassTabBar> with TickerProviderStateMixin
   }
 
   void _springTo(int index, [double velocity = 0]) {
+    if (reduceMotion(context)) {
+      _pos.value = index.toDouble();
+      return;
+    }
     _pos.animateWith(SpringSimulation(_spring, _pos.value, index.toDouble(), velocity));
   }
 
@@ -181,7 +187,7 @@ class _TabButtonState extends State<_TabButton> with TickerProviderStateMixin {
   @override
   void didUpdateWidget(_TabButton old) {
     super.didUpdateWidget(old);
-    if (widget.selected && !old.selected) _pop.forward(from: 0);
+    if (widget.selected && !old.selected && !reduceMotion(context)) _pop.forward(from: 0);
   }
 
   @override

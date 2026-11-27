@@ -240,6 +240,7 @@ function roleChangeAction(req: DocumentData): string | null {
     case "editStats": return `change ${req.targetName || "a member"}'s stats in ${role}`;
     case "kickMember": return `remove ${req.targetName || "a member"} from ${role}`;
     case "rewardsTitle": return `change the rewards title of ${role}`;
+    case "roleIcon": return `change the icon of ${role}`;
     default: return null;
   }
 }

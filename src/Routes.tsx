@@ -15,6 +15,7 @@ import AdminRolePage from "./pages/AdminRolePage";
 import AdminUserPage from "./pages/AdminUserPage";
 import InstructorPage from "./pages/InstructorPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
+import TasksPage from "./pages/TasksPage";
 
 export const router = createBrowserRouter([
   {
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
       { path: "settings", element: <Settings /> },
       { path: "settings/:section", element: <Settings /> },
       { path: "roles", element: <RolesSelectorPage /> },
+      { path: "tasks", element: <TasksPage /> },
       { path: "admin", element: <AdminPage /> },
       { path: "admin/roles/:id", element: <AdminRolePage /> },
       // A member's page opened from the Admin or Instructor tab stays under that tab

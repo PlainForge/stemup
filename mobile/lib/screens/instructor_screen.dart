@@ -16,6 +16,7 @@ import '../state/app_state.dart';
 import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
+import '../widgets/role_icons.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/page_scaffold.dart';
 import '../widgets/sliding_tabs.dart';
@@ -150,7 +151,15 @@ class _InstructorScreenState extends State<InstructorScreen> {
                   shadow: false,
                   child: Row(
                     children: [
-                      Expanded(child: _roleSummary(context, app, roles[i], me, (attention[roles[i].id] ?? 0) + toReview.where((r) => r.roleId == roles[i].id).length)),
+                      Expanded(
+                        child: _roleSummary(
+                          context,
+                          app,
+                          roles[i],
+                          me,
+                          (attention[roles[i].id] ?? 0) + toReview.where((r) => r.roleId == roles[i].id).length,
+                        ),
+                      ),
                       Icon(FontAwesomeIcons.chevronRight.data, size: 14, color: Palette.resolve(context, Palette.gray300)),
                     ],
                   ),
@@ -308,12 +317,16 @@ class _InstructorScreenState extends State<InstructorScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Text(r.describe(mine: mine), style: TextStyle(fontWeight: FontWeight.w500, color: Palette.label(context))),
+          child: Text(
+            r.describe(mine: mine),
+            style: TextStyle(fontWeight: FontWeight.w500, color: Palette.label(context)),
+          ),
         ),
         const SizedBox(width: 8),
         _roleChip(context, role),
       ],
     ),
+    if (r.type == RequestType.roleIcon) RoleIconChange(role: role, request: r),
     if (r.createdAt != null) Muted(DateFormat('MMM d', 'en_US').format(r.createdAt!), size: 12, color: Palette.gray400),
     const SizedBox(height: 10),
     if (mine)

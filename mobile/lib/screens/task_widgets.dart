@@ -261,10 +261,13 @@ class TaskTitleRow extends StatelessWidget {
 }
 
 class MemberTaskCard extends StatefulWidget {
-  const MemberTaskCard({super.key, required this.task, required this.submitted});
+  const MemberTaskCard({super.key, required this.task, required this.submitted, this.header});
 
   final Task task;
   final bool submitted;
+
+  /// Shown above the title (the Tasks tab puts the task's role here).
+  final Widget? header;
 
   @override
   State<MemberTaskCard> createState() => _MemberTaskCardState();
@@ -303,6 +306,7 @@ class _MemberTaskCardState extends State<MemberTaskCard> {
       child: TaskCardFrame(
         borderColor: t.complete ? const Color(0xFF4ADE80) : (overdue ? const Color(0xFFFCA5A5) : null),
         children: [
+          ?widget.header,
           TaskTitleRow(title: t.title, points: t.points, isNew: isNew),
           Muted(t.description.isEmpty ? 'No description' : t.description),
           if (overdue)

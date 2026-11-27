@@ -11,7 +11,8 @@ import { MainContext } from '../context/MainContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faChalkboardUser, faEnvelopeOpenText, faStar, faUsers } from '@fortawesome/free-solid-svg-icons';
+import { faChalkboardUser, faEnvelopeOpenText, faStar } from '@fortawesome/free-solid-svg-icons';
+import RoleIcon from '../components/RoleIcon';
 import { useNavigate } from 'react-router-dom';
 
 
@@ -215,11 +216,14 @@ export default function RolesSelectorPage() {
                                     {incompletePerRole[role.id]}
                                 </span>
                             )}
-                            {/* Star marks your current role */}
-                            <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
-                                isActive ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white"
-                            }`}>
-                                <FontAwesomeIcon icon={isActive ? faStar : faUsers} />
+                            {/* The role's own icon; filled in, with a star, for your default role */}
+                            <span className="relative shrink-0 transition-transform duration-200 group-hover:scale-105">
+                                <RoleIcon role={role} solid={isActive} />
+                                {isActive && (
+                                    <span className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-amber-400 text-white ring-2 ring-white dark:ring-gray-900" title="Your default role">
+                                        <FontAwesomeIcon icon={faStar} className="text-[9px]" />
+                                    </span>
+                                )}
                             </span>
                             <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">

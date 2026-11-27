@@ -143,6 +143,9 @@ class UserData implements Ranked {
   /// Tasks this person has given out as an instructor or admin (counted by a Cloud Function).
   final int tasksGiven;
 
+  /// A short, optional bio (200 words at most), set in Settings > Profile and shown on their card.
+  final String aboutMe;
+
   const UserData({
     required this.uid,
     required this.name,
@@ -158,6 +161,7 @@ class UserData implements Ranked {
     this.notifications = const NotificationPrefs(),
     this.hideOnHome = const [],
     this.tasksGiven = 0,
+    this.aboutMe = '',
   });
 
   factory UserData.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) => UserData.fromMap(doc.id, doc.data() ?? {});
@@ -179,6 +183,7 @@ class UserData implements Ranked {
     notifications: NotificationPrefs.fromMap(m['notifications']),
     hideOnHome: m['hideOnHome'] is List ? (m['hideOnHome'] as List).whereType<String>().toList() : const [],
     tasksGiven: _int(m['tasksGiven']),
+    aboutMe: _str(m['aboutMe']).trim(),
   );
 
   UserRoleData? roleData(String roleId) {
@@ -213,6 +218,7 @@ class UserData implements Ranked {
         notifications: notifications,
         hideOnHome: hideOnHome,
         tasksGiven: tasksGiven,
+        aboutMe: aboutMe,
       );
 }
 
@@ -236,6 +242,10 @@ class Role {
   /// Heading on the Rewards tab; the current month when empty.
   final String rewardsTitle;
 
+  /// Its icon and color (keys from widgets/role_icons.dart); '' for the defaults.
+  final String icon;
+  final String iconColor;
+
   const Role({
     required this.id,
     required this.name,
@@ -247,6 +257,8 @@ class Role {
     this.ownerField,
     this.purpose = '',
     this.rewardsTitle = '',
+    this.icon = '',
+    this.iconColor = '',
   });
 
   factory Role.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -262,6 +274,8 @@ class Role {
       ownerField: m['owner'] is String ? m['owner'] as String : null,
       purpose: _str(m['purpose']),
       rewardsTitle: _str(m['rewardsTitle']).trim(),
+      icon: _str(m['icon']),
+      iconColor: _str(m['iconColor']),
     );
   }
 
@@ -304,6 +318,9 @@ class Task {
   final bool extensionDeclined;
   final int declineCount;
 
+  /// Who gave it ('' on older tasks, from before this was recorded).
+  final String assignedBy;
+
   const Task({
     required this.id,
     required this.assignedTo,
@@ -320,6 +337,7 @@ class Task {
     this.extensionRequested = false,
     this.extensionDeclined = false,
     this.declineCount = 0,
+    this.assignedBy = '',
   });
 
   factory Task.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -340,6 +358,7 @@ class Task {
       extensionRequested: m['extensionRequested'] == true,
       extensionDeclined: m['extensionDeclined'] == true,
       declineCount: _int(m['declineCount']),
+      assignedBy: _str(m['assignedBy']),
     );
   }
 
@@ -539,7 +558,7 @@ class Bug {
   }
 }
 
-enum RequestType { instructor, createRole, resetRole, renameRole, editStats, kickMember, rewardsTitle }
+enum RequestType { instructor, createRole, resetRole, renameRole, editStats, kickMember, rewardsTitle, roleIcon }
 
 extension RequestTypeInfo on RequestType {
   /// The value stored in Firestore.
@@ -556,6 +575,7 @@ extension RequestTypeInfo on RequestType {
     RequestType.editStats => 'Edit member stats',
     RequestType.kickMember => 'Kick member',
     RequestType.rewardsTitle => 'Rewards title',
+    RequestType.roleIcon => 'Role icon',
   };
 }
 
@@ -634,6 +654,10 @@ class StemRequest {
   final int points;
   final int taskCompleted;
 
+  /// roleIcon: the icon and color asked for (keys from widgets/role_icons.dart).
+  final String icon;
+  final String iconColor;
+
   const StemRequest({
     required this.id,
     required this.type,
@@ -651,6 +675,8 @@ class StemRequest {
     this.targetName = '',
     this.points = 0,
     this.taskCompleted = 0,
+    this.icon = '',
+    this.iconColor = '',
   });
 
   /// What a role change asks for, e.g. `rename Robotics to "Drones"` (kept in
@@ -665,6 +691,7 @@ class StemRequest {
       RequestType.kickMember => 'remove $who from $role',
       RequestType.rewardsTitle =>
         title.isEmpty ? 'set the rewards title back to the current month' : 'change the rewards title to "$title"',
+      RequestType.roleIcon => 'change the icon of $role',
       _ => 'make a change',
     };
   }
@@ -692,6 +719,8 @@ class StemRequest {
       targetName: _str(m['targetName']),
       points: _int(m['points']),
       taskCompleted: _int(m['taskCompleted']),
+      icon: _str(m['icon']),
+      iconColor: _str(m['iconColor']),
     );
   }
 }

@@ -4,8 +4,7 @@ import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/f
 import { type Task, type UserData, type SubmittedTask, type SavedData } from "../myDataTypes";
 import { useRole } from "../lib/useRole";
 import { canManageRole, isRoleStaff, roleService } from "../lib/roleService";
-import { motion } from "motion/react";
-import DoneButton from "../components/TaskDoneButton";
+import { AnimatePresence, motion } from "motion/react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Loading from "./Loading";
 import { MainContext } from "../context/MainContext";
@@ -15,12 +14,12 @@ import ProfileImg from "../components/ProfileImg";
 import MedalIcon from "../components/MedalIcon";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowUpWideShort, faBell, faBellSlash, faCalendar, faCalendarDays, faCheck, faChevronRight, faCircleDot, faClock, faCopy, faFlagCheckered, faHomeAlt, faMagnifyingGlass, faPersonRunning, faRotateLeft, faTriangleExclamation, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowUpWideShort, faBell, faBellSlash, faCalendar, faCalendarDays, faCheck, faChevronRight, faCopy, faHomeAlt, faMagnifyingGlass, faStar, faXmark } from "@fortawesome/free-solid-svg-icons";
 import BackButton from "../components/BackButton";
 import { splitLeaderboard } from "../lib/leaderboard";
 import Dropdown from "../components/Dropdown";
-import { Chip, ChipRow, TaskCard, TaskDescription, TaskHeader, type TaskTone } from "../components/TaskCardParts";
-import { dueInfo } from "../lib/taskDates";
+import RoleIcon from "../components/RoleIcon";
+import MemberTaskCard from "../components/MemberTaskCard";
 
 
 /** Stable fallback so hooks that depend on these lists don't re-run every render */
@@ -221,17 +220,10 @@ export default function RolePage() {
         await roleService.setShowOnHome(user.uid, roleId, !showOnHome);
     };
 
-    const setCurrentRole = async (id : string) => {
-        if (!user) return;
-        await updateDoc(doc(db, "users", user.uid), { currentRole: id });
-    }
-
-    const setTaskStatus = async (taskId: string, status: string) => {
-        await updateDoc(doc(db, "tasks", taskId), { status });
-    };
-
-    const requestExtension = async (taskId: string) => {
-        await updateDoc(doc(db, "tasks", taskId), { extensionRequested: true });
+    // Their default role opens when they log in (stored as currentRole)
+    const toggleDefaultRole = async () => {
+        if (!user || !roleId) return;
+        await updateDoc(doc(db, "users", user.uid), { currentRole: isCurrentRole ? "" : roleId });
     };
 
     const markTaskSeen = (taskId: string) => {
@@ -251,14 +243,6 @@ export default function RolePage() {
             key: `${d.getFullYear()}-${d.getMonth()}`,
         };
     });
-
-    const isTaskOverdue = (task: Task) =>
-        !task.complete && !!task.dueDate && task.dueDate.toDate() < new Date();
-
-    const daysUntilDeletion = (task: Task): number | null => {
-        if (!task.deleteAt) return null;
-        return Math.ceil((task.deleteAt.toDate().getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    };
 
     if (loading || isMember === null) return <Loading />;
     if (!isMember || !user || !role ) return null;
@@ -291,9 +275,12 @@ export default function RolePage() {
 
             {/* Role header */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-                <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-widest">Role</p>
-                    <h1 className="text-2xl font-bold">{role.name}</h1>
+                <div className="flex items-center gap-3 min-w-0">
+                    <RoleIcon role={role} size="lg" solid />
+                    <div className="min-w-0">
+                        <p className="text-xs text-gray-400 uppercase tracking-widest">Role</p>
+                        <h1 className="text-2xl font-bold truncate">{role.name}</h1>
+                    </div>
                 </div>
                 <div className="flex items-center gap-3">
                     {membersWithData.map((m) => {
@@ -326,17 +313,17 @@ export default function RolePage() {
                             )}
                         </span>
                     ) : null}
-                    {isCurrentRole ?
+                    {/* Their default role (picked in this role's Settings tab) opens when they log in */}
+                    {isCurrentRole && (
                         <motion.span
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
-                            className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-full"
+                            className="flex items-center gap-1.5 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30"
                         >
-                            Your Role
+                            <FontAwesomeIcon icon={faStar} className="text-[10px]" />
+                            Default Role
                         </motion.span>
-                        :
-                        <Button size="xsm" onClick={() => setCurrentRole(role.id)}>Set Role</Button>
-                    }
+                    )}
                 </div>
             </div>
 
@@ -678,63 +665,15 @@ export default function RolePage() {
                         return (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {sorted.map((task) => {
-                                    const overdue = isTaskOverdue(task);
-                                    const daysLeft = daysUntilDeletion(task);
                                     const isSubmitted = submittedTasks.some(s => s.id === task.id);
-                                    const isNew = !task.complete && !isSubmitted && !seenTaskIds.has(task.id);
-                                    const tone: TaskTone = task.complete ? "green" : isSubmitted ? "amber" : overdue ? "red" : task.status === "Almost Done" ? "orange" : "blue";
-                                    const due = task.dueDate && !task.complete && !isSubmitted ? dueInfo(task.dueDate) : null;
-                                    const declines = task.declineCount ?? 0;
                                     return (
                                         <motion.div key={task.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-                                            <TaskCard tone={tone} onMouseEnter={() => markTaskSeen(task.id)} faded={task.complete}>
-                                                <TaskHeader title={task.title} points={task.points} isNew={isNew} done={task.complete} />
-                                                <TaskDescription text={task.description} />
-                                                {(due || overdue || task.extensionRequested || task.extensionDeclined || declines > 0) && (
-                                                    <ChipRow>
-                                                        {due && <Chip tone={due.tone} icon={faCalendarDays}>{due.label}</Chip>}
-                                                        {overdue && (
-                                                            <Chip tone="red" icon={faTriangleExclamation}>
-                                                                {daysLeft === null ? "Overdue" : daysLeft > 0 ? `Expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}` : "Expiring soon"}
-                                                            </Chip>
-                                                        )}
-                                                        {task.extensionRequested && <Chip tone="amber" icon={faClock}>Extension requested</Chip>}
-                                                        {task.extensionDeclined && <Chip tone="gray">Extension declined</Chip>}
-                                                        {declines > 0 && (
-                                                            <Chip tone="red" icon={faRotateLeft}>
-                                                                Sent back {declines}×{declines === 3 ? " · Closed" : ""}
-                                                            </Chip>
-                                                        )}
-                                                    </ChipRow>
-                                                )}
-                                                {overdue && !task.extensionRequested && !task.extensionDeclined && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => requestExtension(task.id)}
-                                                        className="self-start flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700 hover:cursor-pointer"
-                                                    >
-                                                        <FontAwesomeIcon icon={faClock} className="text-xs" />
-                                                        Request an extension
-                                                    </button>
-                                                )}
-                                                <div className="mt-auto flex flex-col gap-2">
-                                                    {!task.complete && !overdue && !isSubmitted && (
-                                                        <Dropdown
-                                                            label="Status"
-                                                            fullWidth
-                                                            tone="gray"
-                                                            value={task.status ?? ""}
-                                                            onChange={v => setTaskStatus(task.id, v)}
-                                                            options={[
-                                                                { value: "", label: "Not started", icon: faCircleDot },
-                                                                { value: "In Progress", label: "In Progress", icon: faPersonRunning },
-                                                                { value: "Almost Done", label: "Almost Done", icon: faFlagCheckered },
-                                                            ]}
-                                                        />
-                                                    )}
-                                                    {!overdue && <DoneButton task={task} />}
-                                                </div>
-                                            </TaskCard>
+                                            <MemberTaskCard
+                                                task={task}
+                                                isSubmitted={isSubmitted}
+                                                isNew={!task.complete && !isSubmitted && !seenTaskIds.has(task.id)}
+                                                onSeen={() => markTaskSeen(task.id)}
+                                            />
                                         </motion.div>
                                     );
                                 })}
@@ -744,9 +683,18 @@ export default function RolePage() {
                 </motion.div>
             )}
 
-            {/* Settings for this role: its Notifications page, and whether it shows on Home */}
+            {/* Settings for this role: its Notifications page, whether it's their default role, and
+                whether it shows on Home. Settings and its Notifications page slide between each other. */}
+            <AnimatePresence mode="wait" initial={false}>
             {pageState === "settings" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-3">
+                <motion.div
+                    key="settings"
+                    initial={{ opacity: 0, x: -24 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -24 }}
+                    transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+                    className="flex flex-col gap-3"
+                >
                     <button
                         type="button"
                         onClick={() => setPageState("notifications")}
@@ -761,6 +709,28 @@ export default function RolePage() {
                         </span>
                         <FontAwesomeIcon icon={faChevronRight} className="text-gray-300 transition-transform group-hover:translate-x-0.5" />
                     </button>
+
+                    <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${isCurrentRole ? "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300" : "bg-gray-100 text-gray-400"}`}>
+                                <FontAwesomeIcon icon={faStar} />
+                            </span>
+                            <div className="min-w-0">
+                                <p className="font-semibold">Default Role</p>
+                                <p className="text-sm text-gray-500">Open {role.name} when you log in</p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={isCurrentRole}
+                            aria-label={`Make ${role.name} your default role`}
+                            onClick={toggleDefaultRole}
+                            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 hover:cursor-pointer ${isCurrentRole ? "bg-green-500" : "bg-gray-300"}`}
+                        >
+                            <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 ${isCurrentRole ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                    </div>
 
                     <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3 min-w-0">
@@ -788,7 +758,14 @@ export default function RolePage() {
 
             {/* Notifications for this role (opened from Settings) */}
             {pageState === "notifications" && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
+                <motion.div
+                    key="notifications"
+                    initial={{ opacity: 0, x: 24 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 24 }}
+                    transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+                    className="flex flex-col gap-4"
+                >
                     <BackButton label="Settings" onClick={() => setPageState("settings")} />
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
                         <div className="flex items-center justify-between gap-4">
@@ -826,6 +803,8 @@ export default function RolePage() {
                     </div>
                 </motion.div>
             )}
+
+            </AnimatePresence>
         </div>
     )
 }

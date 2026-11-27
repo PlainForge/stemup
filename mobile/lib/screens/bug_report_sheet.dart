@@ -46,7 +46,6 @@ class _BugFormState extends State<_BugForm> {
   final _title = TextEditingController();
   final _desc = TextEditingController();
   bool _busy = false;
-  bool _submitted = false;
 
   @override
   void dispose() {
@@ -59,17 +58,20 @@ class _BugFormState extends State<_BugForm> {
     final user = context.read<AppState>().user;
     if (user == null || _title.text.trim().isEmpty || _desc.text.trim().isEmpty) return;
     setState(() => _busy = true);
-    await Db.submitBug(title: _title.text.trim(), desc: _desc.text.trim(), email: user.email ?? '', uid: user.uid);
+    try {
+      await Db.submitBug(title: _title.text.trim(), desc: _desc.text.trim(), email: user.email ?? '', uid: user.uid);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        showToast(context, "Couldn't send your report. Please try again.", error: true);
+      }
+      return;
+    }
     if (!mounted) return;
-    _title.clear();
-    _desc.clear();
-    setState(() {
-      _busy = false;
-      _submitted = true;
-    });
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _submitted = false);
-    });
+    // Close the form, then confirm in the middle of the screen
+    final overlay = Overlay.of(context, rootOverlay: true);
+    Navigator.pop(context);
+    showCenterNotice(overlay, title: 'Bug report submitted', message: 'Thanks for helping us improve StemUp.');
   }
 
   @override
@@ -100,13 +102,7 @@ class _BugFormState extends State<_BugForm> {
       const SizedBox(height: 16),
       Align(
         alignment: Alignment.centerLeft,
-        child: AppButton(
-          label: _submitted ? 'Submitted!' : 'Submit',
-          style: AppButtonStyle.blue,
-          size: AppButtonSize.sm,
-          loading: _busy,
-          onPressed: _submit,
-        ),
+        child: AppButton(label: 'Submit', style: AppButtonStyle.blue, size: AppButtonSize.sm, loading: _busy, onPressed: _submit),
       ),
     ],
   );

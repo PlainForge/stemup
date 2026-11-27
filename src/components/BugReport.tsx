@@ -4,7 +4,8 @@ import { db } from "../lib/firebase";
 import { MainContext } from "../context/MainContext";
 import Button from "./Button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBug, faMoon, faSun, faWrench, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faBug, faCircleCheck, faMoon, faSun, faWrench, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { AnimatePresence, motion } from "motion/react";
 
 interface Bug {
     id: string;
@@ -18,7 +19,14 @@ interface Bug {
 export default function BugReport() {
     const context = useContext(MainContext);
     const [bugs, setBugs] = useState<Bug[]>([]);
+    // The centered "submitted" message, shown for a couple of seconds after the form closes
     const [submitted, setSubmitted] = useState(false);
+    const [sending, setSending] = useState(false);
+    useEffect(() => {
+        if (!submitted) return;
+        const t = setTimeout(() => setSubmitted(false), 2500);
+        return () => clearTimeout(t);
+    }, [submitted]);
 
     const user = context?.user ?? null;
     const admins = context?.admins ?? [];
@@ -59,17 +67,24 @@ export default function BugReport() {
         const bugDesc = formData.get("bugDesc") as string;
         if (!bugTitle || !bugDesc) return;
 
-        await addDoc(collection(db, "bugs"), {
-            bugTitle,
-            bugDesc,
-            userEmail: user.email ?? "",
-            userId: user.uid,
-            createdAt: Timestamp.now(),
-        });
-
-        form.reset();
-        setSubmitted(true);
-        setTimeout(() => setSubmitted(false), 3000);
+        setSending(true);
+        try {
+            await addDoc(collection(db, "bugs"), {
+                bugTitle,
+                bugDesc,
+                userEmail: user.email ?? "",
+                userId: user.uid,
+                createdAt: Timestamp.now(),
+            });
+            form.reset();
+            // Close the form, then confirm in the middle of the screen
+            setOpen(false);
+            setSubmitted(true);
+        } catch (err) {
+            console.error("Error submitting bug report:", err);
+        } finally {
+            setSending(false);
+        }
     };
 
     const dismissBug = async (id: string) => {
@@ -109,6 +124,33 @@ export default function BugReport() {
             >
                 <FontAwesomeIcon icon={isAdmin ? faWrench : faBug} />
             </button>
+
+            <AnimatePresence>
+                {submitted && (
+                    <motion.div
+                        key="bug-submitted"
+                        role="status"
+                        className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none px-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.25 }}
+                    >
+                        <motion.div
+                            className="flex items-center gap-3 rounded-2xl bg-gray-900/90 text-white px-6 py-4 shadow-2xl backdrop-blur"
+                            initial={{ scale: 0.9, y: 8 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.95 }}
+                        >
+                            <FontAwesomeIcon icon={faCircleCheck} className="text-green-400 text-xl" />
+                            <div>
+                                <p className="font-semibold">Bug report submitted</p>
+                                <p className="text-sm text-white/70">Thanks for helping us improve StemUp.</p>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Backdrop + panel */}
             {open && (
@@ -177,8 +219,8 @@ export default function BugReport() {
                                             rows={4}
                                             className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors resize-none"
                                         />
-                                        <Button type="submit" size="sm" color="blue">
-                                            {submitted ? "Submitted!" : "Submit"}
+                                        <Button type="submit" size="sm" color="blue" disabled={sending}>
+                                            {sending ? "Sending..." : "Submit"}
                                         </Button>
                                     </form>
                                 </>

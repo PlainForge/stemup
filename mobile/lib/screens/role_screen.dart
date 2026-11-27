@@ -18,10 +18,14 @@ import '../widgets/leaderboard.dart';
 import '../widgets/page_scaffold.dart';
 import '../widgets/profile_sheet.dart';
 import '../widgets/glass_tab_bar.dart' show PingDot;
+import '../widgets/motion.dart';
+import '../widgets/role_icons.dart';
 import '../widgets/sliding_tabs.dart';
 import 'task_widgets.dart';
 
 enum _Tab { leaderboard, rewards, saved, tasks, settings }
+
+enum _SettingsPage { main, notifications }
 
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key, required this.roleId});
@@ -48,8 +52,8 @@ class _RoleScreenState extends State<RoleScreen> {
   List<LeaderboardSnapshot> _snapshots = const [];
   _Tab _tab = _Tab.leaderboard;
 
-  /// The Notifications page inside the Settings tab is open.
-  bool _notificationsOpen = false;
+  /// Which page of the Settings tab is open: its list or Notifications.
+  _SettingsPage _settingsPage = _SettingsPage.main;
   final _filters = TaskFilters();
 
   String get _id => widget.roleId;
@@ -148,11 +152,20 @@ class _RoleScreenState extends State<RoleScreen> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const SectionLabel('Role', size: 12, padding: EdgeInsets.zero),
-                Heading(role.name, size: 24, maxLines: 2),
+                RoleIconBadge.of(role, size: 52, solid: true),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SectionLabel('Role', size: 12, padding: EdgeInsets.zero),
+                      Heading(role.name, size: 24, maxLines: 2),
+                    ],
+                  ),
+                ),
               ],
             ),
             Row(
@@ -180,20 +193,16 @@ class _RoleScreenState extends State<RoleScreen> {
                   ),
                   const SizedBox(width: 12),
                 ],
+                // Their default role (picked in this role's Settings tab) opens when they log in
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
+                  duration: motionDuration(context, const Duration(milliseconds: 300)),
                   transitionBuilder: (child, a) => ScaleTransition(
                     scale: CurvedAnimation(parent: a, curve: Curves.easeOutBack),
                     child: child,
                   ),
                   child: isCurrent
-                      ? const Tag('Your Role', color: Palette.green700, key: ValueKey('current'))
-                      : AppButton(
-                          key: const ValueKey('set'),
-                          label: 'Set Role',
-                          size: AppButtonSize.xsm,
-                          onPressed: () => Db.setCurrentRole(me.uid, _id),
-                        ),
+                      ? const Tag('★ Default Role', color: Color(0xFFD97706), key: ValueKey('default'))
+                      : const SizedBox.shrink(),
                 ),
               ],
             ),
@@ -205,7 +214,7 @@ class _RoleScreenState extends State<RoleScreen> {
           selected: tab,
           onChanged: (t) => setState(() {
             _tab = t;
-            _notificationsOpen = false;
+            _settingsPage = _SettingsPage.main;
           }),
         ),
         AnimatedSwitcher(
@@ -236,7 +245,30 @@ class _RoleScreenState extends State<RoleScreen> {
       filters: _filters,
       onFiltersChanged: () => setState(() {}),
     ),
-    _Tab.settings => _notificationsOpen ? _notificationsTab(context, app, role) : _settingsTab(context, app, role),
+    // Settings and its pages slide between each other: pages come in from the right, the list from the left
+    _Tab.settings => AnimatedSwitcher(
+      duration: motionDuration(context, const Duration(milliseconds: 260)),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (current, previous) => Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
+      transitionBuilder: (child, a) {
+        final fromLeft = child.key == const ValueKey(_SettingsPage.main);
+        return FadeTransition(
+          opacity: a,
+          child: SlideTransition(
+            position: Tween(begin: Offset(fromLeft ? -.12 : .12, 0), end: Offset.zero).animate(a),
+            child: child,
+          ),
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey(_settingsPage),
+        child: switch (_settingsPage) {
+          _SettingsPage.main => _settingsTab(context, app, role),
+          _SettingsPage.notifications => _notificationsTab(context, app, role),
+        },
+      ),
+    ),
   };
 
   /// This role's settings for the signed-in person: its Notifications page, and
@@ -245,6 +277,7 @@ class _RoleScreenState extends State<RoleScreen> {
     final me = app.userData!;
     final notificationsOn = me.notifications.roleIsOn(_id);
     final showOnHome = !me.hideOnHome.contains(_id);
+    final isDefault = me.currentRole == _id;
     final blue = Palette.resolve(context, Palette.navActive);
 
     Widget badge(IconData icon, bool on) => Container(
@@ -262,7 +295,7 @@ class _RoleScreenState extends State<RoleScreen> {
       children: [
         Pressable(
           scale: .98,
-          onPressed: () => setState(() => _notificationsOpen = true),
+          onPressed: () => setState(() => _settingsPage = _SettingsPage.notifications),
           child: AppCard(
             shadow: false,
             child: Row(
@@ -284,6 +317,34 @@ class _RoleScreenState extends State<RoleScreen> {
                 Icon(CupertinoIcons.chevron_right, size: 16, color: Palette.tertiary(context)),
               ],
             ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          shadow: false,
+          child: Row(
+            children: [
+              badge(CupertinoIcons.star_fill, isDefault),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Default Role',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
+                    ),
+                    Muted('Open ${role.name} when you log in', size: 13),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              CupertinoSwitch(
+                value: isDefault,
+                activeTrackColor: Palette.green500,
+                onChanged: (v) => Db.setCurrentRole(me.uid, v ? _id : ''),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 12),
@@ -321,7 +382,7 @@ class _RoleScreenState extends State<RoleScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        BackPill(label: 'Settings', onPressed: () => setState(() => _notificationsOpen = false)),
+        BackPill(label: 'Settings', onPressed: () => setState(() => _settingsPage = _SettingsPage.main)),
         const SizedBox(height: 12),
         AppCard(
           shadow: false,

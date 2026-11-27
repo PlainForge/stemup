@@ -2,6 +2,8 @@
 // a 2px blue-600 underline that slides to the active tab (useSlidingIndicator).
 // Scrolls horizontally when the tabs don't fit.
 import 'package:flutter/cupertino.dart';
+
+import 'motion.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/palette.dart';
@@ -101,7 +103,7 @@ class _SlidingTabsState<T> extends State<SlidingTabs<T>> {
               top: _active!.bottom - 2,
               width: _active!.width,
               height: 2,
-              duration: _ready ? const Duration(milliseconds: 300) : Duration.zero,
+              duration: _ready ? motionDuration(context, const Duration(milliseconds: 300)) : Duration.zero,
               curve: const Cubic(.32, .72, 0, 1),
               child: const DecoratedBox(
                 decoration: BoxDecoration(color: Palette.blue600, borderRadius: BorderRadius.all(Radius.circular(2))),

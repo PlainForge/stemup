@@ -1,6 +1,8 @@
 // components/Button.tsx and LinkButton.tsx. Same colors, radius and sizes as the
 // web, plus a springy press-down in place of the web's hover effects.
 import 'package:flutter/cupertino.dart';
+
+import 'motion.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
@@ -136,11 +138,14 @@ class _PressableState extends State<Pressable> with SingleTickerProviderStateMix
         if (widget.haptic) HapticFeedback.lightImpact();
         widget.onPressed!();
       },
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (context, child) => Transform.scale(scale: 1 - (1 - widget.scale) * _c.value, child: child),
-        child: widget.child,
-      ),
+      // No press-in shrink when motion is reduced
+      child: reduceMotion(context)
+          ? widget.child
+          : AnimatedBuilder(
+              animation: _c,
+              builder: (context, child) => Transform.scale(scale: 1 - (1 - widget.scale) * _c.value, child: child),
+              child: widget.child,
+            ),
     );
   }
 }

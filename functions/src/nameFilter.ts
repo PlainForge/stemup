@@ -1,4 +1,4 @@
-// Keeps profanity out of display names.
+// Keeps profanity out of display names and About Me.
 //
 // The apps check a name before saving it (the web app with the same library,
 // the iOS app through checkName below). cleanProfileName is the backstop: it
@@ -7,6 +7,7 @@
 
 import { onCall } from "firebase-functions/v2/https";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { RegExpMatcher, englishDataset, englishRecommendedTransformers } from "obscenity";
 
@@ -35,18 +36,42 @@ export function isProfaneName(name: string): boolean {
  * yes or no.
  */
 export const checkName = onCall({ invoker: "public" }, (request) => {
+  // An About Me is checked the same way (sent as text, up to its 1,500-character cap)
+  const text = typeof request.data?.text === "string" ? request.data.text.slice(0, ABOUT_ME_MAX_CHARS) : null;
   const name = typeof request.data?.name === "string" ? request.data.name.slice(0, 200) : "";
-  return { ok: !isProfaneName(name) };
+  return { ok: !isProfaneName(text ?? name) };
 });
 
-/** Replaces a profane name on any profile save with FALLBACK_NAME. */
+/** About Me limits (kept in sync with src/lib/aboutMe.ts and the Firestore rules) */
+const ABOUT_ME_MAX_WORDS = 200;
+const ABOUT_ME_MAX_CHARS = 1500;
+
+/**
+ * On any profile save: replaces a profane name with FALLBACK_NAME, removes a
+ * profane About Me, and trims one that's over the word limit.
+ */
 export const cleanProfileName = onDocumentWritten("users/{uid}", async (event) => {
   const after = event.data?.after;
   if (!after?.exists) return;
-  const name = after.get("name");
-  if (typeof name !== "string" || name === event.data?.before?.get("name")) return;
-  if (!isProfaneName(name)) return;
+  const before = event.data?.before;
+  const fix: Record<string, unknown> = {};
 
-  await after.ref.update({ name: FALLBACK_NAME });
-  logger.info(`Replaced a blocked display name for uid ${event.params.uid}`);
+  const name = after.get("name");
+  if (typeof name === "string" && name !== before?.get("name") && isProfaneName(name)) {
+    fix.name = FALLBACK_NAME;
+  }
+
+  const about = after.get("aboutMe");
+  if (typeof about === "string" && about !== before?.get("aboutMe")) {
+    if (isProfaneName(about)) {
+      fix.aboutMe = FieldValue.delete();
+    } else {
+      const words = about.trim().split(/\s+/);
+      if (words.length > ABOUT_ME_MAX_WORDS) fix.aboutMe = words.slice(0, ABOUT_ME_MAX_WORDS).join(" ");
+    }
+  }
+
+  if (Object.keys(fix).length === 0) return;
+  await after.ref.update(fix);
+  logger.info(`Cleaned ${Object.keys(fix).join(" and ")} for uid ${event.params.uid}`);
 });

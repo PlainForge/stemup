@@ -3,7 +3,7 @@ import { alertDialog, confirmDialog, promptDialog } from "../lib/confirm";
 import { roleService, isRoleStaff, canChangeRole, roleOwner, describeRoleChange, isRoleChange } from "../lib/roleService";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useContext, useEffect, useState, type FormEvent } from "react";
 import { db } from "../lib/firebase";
 import { type Role, type RoleInvite, type StemRequest, type SubmittedTask, type Task, type UserData, type UserRoleData } from "../myDataTypes";
@@ -14,10 +14,13 @@ import Input from "./Input";
 import { Alert } from "./PhraseAlert";
 import ProfileImg from "./ProfileImg";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowRightArrowLeft, faArrowUpWideShort, faCalendar, faCalendarDays, faChevronRight, faCircleCheck, faCircleDot, faClock, faFlagCheckered, faInbox, faMagnifyingGlass, faPen, faPersonRunning, faRotateLeft, faTrashCan, faTriangleExclamation, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faArrowDownAZ, faArrowDownWideShort, faArrowDownZA, faArrowRightArrowLeft, faArrowUpWideShort, faCalendar, faCalendarDays, faChevronRight, faPalette, faRotate, faTrash, faCircleCheck, faCircleDot, faClock, faFlagCheckered, faInbox, faMagnifyingGlass, faPen, faPersonRunning, faRotateLeft, faTrashCan, faTriangleExclamation, faXmark } from "@fortawesome/free-solid-svg-icons";
 import PersonPicker from "./PersonPicker";
 import Dropdown from "./Dropdown";
 import DatePicker from "./DatePicker";
+import RoleIcon from "./RoleIcon";
+import RoleIconPicker from "./RoleIconPicker";
+import BackButton from "./BackButton";
 import { CardAction, Chip, ChipRow, TaskCard, TaskDescription, TaskHeader, type TaskTone } from "./TaskCardParts";
 import { dueInfo, shortDateTime } from "../lib/taskDates";
 import MedalIcon from "./MedalIcon";
@@ -106,6 +109,14 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const setPage = (tab: string) => setSearchParams(p => {
         const next = new URLSearchParams(p);
         next.set("tab", tab);
+        next.delete("section");
+        return next;
+    }, { replace: true });
+    // The Config tab is a list of categories, each with its own page (?section=), like Settings
+    const configSection = searchParams.get("section");
+    const setConfigSection = (section: string | null) => setSearchParams(p => {
+        const next = new URLSearchParams(p);
+        if (section) next.set("section", section); else next.delete("section");
         return next;
     }, { replace: true });
     const [userRequested, setUserRequested] = useState<UserData[]>([]);
@@ -795,6 +806,11 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                     >
                                         <div className="flex items-start justify-between gap-3">
                                             <p className="text-sm font-medium">{describeRoleChange(req, isMine)}</p>
+                                            {req.type === "roleIcon" && (
+                                                <span className="mt-1.5 flex items-center gap-2 text-xs text-gray-500">
+                                                    <RoleIcon role={role} size="sm" solid /> → <RoleIcon role={{ icon: req.icon, iconColor: req.iconColor }} size="sm" solid />
+                                                </span>
+                                            )}
                                             <span className="text-xs text-gray-400 shrink-0">
                                                 {req.createdAt?.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                                             </span>
@@ -1306,59 +1322,120 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
             )}
 
             {/* Config */}
-            {page.match("config") && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
-                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Rename role</h2>
-                        {!canChange && <p className="text-sm text-gray-500 -mt-2">{approverName} has to approve a new name.</p>}
-                        <form id="rolename" onSubmit={changeRoleName} className="flex flex-col gap-3">
-                            <Input type="text" name="newName" placeholder="New role name" required={true} autocomplete="false" size="full" />
-                            <Button type="submit" size="sm">{canChange ? "Save Name" : "Request Rename"}</Button>
-                            <Alert value={phrase} setValue={setPhrase} />
-                        </form>
-                    </div>
-
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
-                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Global Leaderboard</h2>
-                        <p className="text-sm text-gray-500">When enabled, every member of this role can see the global leaderboard on the home page.</p>
-                        <div className="flex items-center justify-between">
-                            <span className={`text-sm font-medium ${showInGlobal ? "text-green-600" : "text-gray-400"}`}>
-                                {showInGlobal ? "Enabled" : "Disabled"}
-                            </span>
-                            <Button onClick={toggleGlobalLeaderboard} size="xsm" color={showInGlobal ? "red" : "green"}>
-                                {showInGlobal ? "Disable" : "Enable"}
-                            </Button>
+            {page.match("config") && (() => {
+                const sections = [
+                    { key: "general", label: "General", hint: `Name and global leaderboard (${showInGlobal ? "on" : "off"})`, icon: faPen },
+                    { key: "icon", label: "Icon", hint: "The icon and color on the Roles page and this role's page", icon: faPalette },
+                    { key: "reset", label: "Reset Role", hint: pendingReset ? `Reset waiting for ${waitingOn}` : "Save the leaderboard and start fresh", icon: faRotate },
+                    ...(isAdmin ? [{ key: "delete", label: "Delete Role", hint: "Permanently delete this role and its data", icon: faTrash, danger: true }] : []),
+                ] as { key: string; label: string; hint: string; icon: typeof faPen; danger?: boolean }[];
+                const open = sections.find(x => x.key === configSection) ?? null;
+                const slide = { duration: 0.2, ease: [0.32, 0.72, 0, 1] as const };
+                return (
+                <AnimatePresence mode="wait" initial={false}>
+                {!open ? (
+                    <motion.div key="config-list" initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={slide} className="flex flex-col gap-3">
+                        {sections.map(sec => (
+                            <button
+                                key={sec.key}
+                                type="button"
+                                onClick={() => setConfigSection(sec.key)}
+                                className={`group flex items-center gap-4 w-full text-left px-5 py-4 rounded-2xl border bg-white transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 hover:cursor-pointer ${
+                                    sec.danger ? "border-red-100 hover:border-red-300" : "border-gray-200 hover:border-gray-400"
+                                }`}
+                            >
+                                {sec.key === "icon" ? (
+                                    <RoleIcon role={role} className="transition-transform group-hover:scale-105" />
+                                ) : (
+                                    <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                                        sec.danger
+                                            ? "bg-red-50 text-red-500 group-hover:bg-red-500 group-hover:text-white dark:bg-red-500/15"
+                                            : "bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white"
+                                    }`}>
+                                        <FontAwesomeIcon icon={sec.icon} />
+                                    </span>
+                                )}
+                                <span className="min-w-0 flex-1">
+                                    <span className={`block font-semibold ${sec.danger ? "text-red-600 dark:text-red-400" : ""}`}>{sec.label}</span>
+                                    <span className="block text-sm text-gray-500 truncate">{sec.hint}</span>
+                                </span>
+                                <FontAwesomeIcon icon={faChevronRight} className="shrink-0 text-gray-300 transition-all duration-200 group-hover:text-gray-600 group-hover:translate-x-1" />
+                            </button>
+                        ))}
+                    </motion.div>
+                ) : (
+                    <motion.div key={`config-${open.key}`} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 24 }} transition={slide} className="flex flex-col gap-4">
+                        <div className="flex flex-col items-start gap-3">
+                            <BackButton label="Config" onClick={() => setConfigSection(null)} />
+                            <h2 className={`text-xl font-bold ${open.danger ? "text-red-600 dark:text-red-400" : ""}`}>{open.label}</h2>
                         </div>
-                    </div>
 
-                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
-                        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Reset role</h2>
-                        <p className="text-sm text-gray-500">
-                            Saves every member's points and tasks completed under a name you choose (shown with the date on the Saved Data tab), then clears this role's tasks, submissions and prizes and sets everyone back to 0.
-                            {!canChange && ` ${approverName} has to approve it first.`}
-                        </p>
-                        {pendingReset ? (
-                            <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                                <p className="text-sm text-amber-700">
-                                    {pendingReset.uid === user.uid ? "Reset requested" : `${pendingReset.userName || "An instructor"} requested a reset`} as "{pendingReset.saveName}". Waiting for {waitingOn}.
-                                </p>
-                                {pendingReset.uid === user.uid && <Button onClick={() => withdrawRequest(pendingReset)} size="xsm" color="cancel" extraClasses="shrink-0">Cancel</Button>}
+                        {open.key === "icon" && <RoleIconPicker role={role} />}
+
+                        {open.key === "general" && (
+                            <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
+                                <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Role name</h3>
+                                <p className="text-sm text-gray-500 -mt-2">Currently <span className="font-semibold text-gray-800">{role.name}</span>.{!canChange && ` ${approverName} has to approve a new name.`}</p>
+                                <form id="rolename" onSubmit={changeRoleName} className="flex flex-col gap-3">
+                                    <Input type="text" name="newName" placeholder="New role name" required={true} autocomplete="false" size="full" />
+                                    <Button type="submit" size="sm">{canChange ? "Save Name" : "Request Rename"}</Button>
+                                    <Alert value={phrase} setValue={setPhrase} />
+                                </form>
                             </div>
-                        ) : (
-                            <Button onClick={resetRole} size="sm">{canChange ? "Reset Role" : "Request Reset"}</Button>
                         )}
-                        <Alert value={phrase2} setValue={setPhrase2} />
-                    </div>
+                        {open.key === "general" && (
+                            <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
+                                <h3 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Global Leaderboard</h3>
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="min-w-0">
+                                        <p className="font-semibold">Show the global leaderboard</p>
+                                        <p className="text-sm text-gray-500">When on, every member of this role can see the global leaderboard on the Home page.</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={showInGlobal}
+                                        aria-label="Show the global leaderboard to this role's members"
+                                        onClick={toggleGlobalLeaderboard}
+                                        className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 hover:cursor-pointer ${showInGlobal ? "bg-green-500" : "bg-gray-300"}`}
+                                    >
+                                        <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 ${showInGlobal ? "translate-x-6" : "translate-x-1"}`} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
-                    {isAdmin && (
-                        <div className="bg-white border border-red-100 rounded-2xl p-5 flex flex-col gap-3">
-                            <h2 className="text-sm font-semibold uppercase tracking-widest text-red-400">Danger Zone</h2>
-                            <p className="text-sm text-gray-500">Permanently deletes this role and all associated data, including its saved data.</p>
-                            <Button onClick={deleteRole} color="red" size="sm">Delete Role</Button>
-                        </div>
-                    )}
-                </motion.div>
-            )}
+                        {open.key === "reset" && (
+                            <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                                <p className="text-sm text-gray-500">
+                                    Saves every member's points and tasks completed under a name you choose (shown with the date on the Saved Data tab), then clears this role's tasks, submissions and prizes and sets everyone back to 0.
+                                    {!canChange && ` ${approverName} has to approve it first.`}
+                                </p>
+                                {pendingReset ? (
+                                    <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                                        <p className="text-sm text-amber-700">
+                                            {pendingReset.uid === user.uid ? "Reset requested" : `${pendingReset.userName || "An instructor"} requested a reset`} as "{pendingReset.saveName}". Waiting for {waitingOn}.
+                                        </p>
+                                        {pendingReset.uid === user.uid && <Button onClick={() => withdrawRequest(pendingReset)} size="xsm" color="cancel" extraClasses="shrink-0">Cancel</Button>}
+                                    </div>
+                                ) : (
+                                    <Button onClick={resetRole} size="sm">{canChange ? "Reset Role" : "Request Reset"}</Button>
+                                )}
+                                <Alert value={phrase2} setValue={setPhrase2} />
+                            </div>
+                        )}
+
+                        {open.key === "delete" && isAdmin && (
+                            <div className="bg-white border border-red-100 rounded-2xl p-5 flex flex-col gap-3">
+                                <p className="text-sm text-gray-500">Permanently deletes {role.name} and all of its data, including its tasks, prizes and saved data. This can't be undone.</p>
+                                <Button onClick={deleteRole} color="red" size="sm">Delete Role</Button>
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+                </AnimatePresence>
+                );
+            })()}
 
         </motion.div>
     );

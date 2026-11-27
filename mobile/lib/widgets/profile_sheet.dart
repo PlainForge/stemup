@@ -39,6 +39,9 @@ class _ProfileCardState extends State<_ProfileCard> {
   final _tasks = TextEditingController();
   Set<String>? _globalViewers;
 
+  /// Their About Me, read from their profile (the card is often opened with only part of it).
+  late final Stream<UserData?> _profile = Db.userStream(widget.user.uid);
+
   @override
   void initState() {
     super.initState();
@@ -170,6 +173,15 @@ class _ProfileCardState extends State<_ProfileCard> {
             children: [
               Heading(_user.name, size: 20, maxLines: 2),
               if (access != AccessLevel.user) ...[const SizedBox(height: 6), AccessTag(access)],
+              StreamBuilder<UserData?>(
+                stream: _profile,
+                builder: (context, snap) {
+                  final about = snap.data?.aboutMe ?? '';
+                  return about.isEmpty
+                      ? const SizedBox.shrink()
+                      : Padding(padding: const EdgeInsets.only(top: 14), child: AboutMeBox(about));
+                },
+              ),
               // Admins are in every role automatically, so their card is just who they are
               if (!targetIsAdmin) ...[
                 const SizedBox(height: 16),

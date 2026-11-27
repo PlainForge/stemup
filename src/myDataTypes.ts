@@ -20,6 +20,8 @@ export type UserData = {
     notifications?: NotificationPrefs,
     /** Roles whose rewards and top 3 they've hidden from Home (each role's Settings tab) */
     hideOnHome?: string[],
+    /** A short, optional bio (200 words at most), set in Settings > Profile and shown on their card */
+    aboutMe?: string,
     /** Tasks this person has given out as an instructor or admin (counted by a Cloud Function) */
     tasksGiven?: number,
 }
@@ -82,6 +84,9 @@ export type Role = {
   purpose?: string;
   /** Heading on the Rewards tab; the current month when unset */
   rewardsTitle?: string;
+  /** Its icon and color on the Roles page and its own page (keys from src/lib/roleIcons.ts) */
+  icon?: string;
+  iconColor?: string;
   showInGlobalLeaderboard?: boolean;
 };
 
@@ -95,7 +100,7 @@ export const ACCESS_LABELS: Record<AccessLevel, string> = {
 };
 
 /** Changes to a role that its instructors ask the role's owner for (or admins, when it has none) */
-export const ROLE_CHANGE_TYPES = ["resetRole", "renameRole", "editStats", "kickMember", "rewardsTitle"] as const;
+export const ROLE_CHANGE_TYPES = ["resetRole", "renameRole", "editStats", "kickMember", "rewardsTitle", "roleIcon"] as const;
 export type RoleChangeType = (typeof ROLE_CHANGE_TYPES)[number];
 
 /** Something to approve, in the `requests` collection: by an admin, or by a role's owner for role changes */
@@ -121,6 +126,9 @@ export type StemRequest = {
   targetName?: string;
   points?: number;
   taskCompleted?: number;
+  /** roleIcon: the icon and color asked for */
+  icon?: string;
+  iconColor?: string;
   /** Set by an admin just before removing the request, so the person can be told the outcome */
   status?: "approved" | "declined";
 };

@@ -49,7 +49,9 @@ service cloud.firestore {
       allow delete: if signedIn() && me() == userId;
       // Your own profile, but not your own points, tasks completed or role list
       allow update: if signedIn() && me() == userId
-        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email', 'pendingEmail', 'notifications', 'hideOnHome']);
+        && changes().hasOnly(['name', 'photoURL', 'currentRole', 'showGlobalLeaderboard', 'email', 'pendingEmail', 'notifications', 'hideOnHome', 'aboutMe'])
+        // About Me is short (200 words, checked in the apps and by the cleanProfileName function)
+        && (!('aboutMe' in request.resource.data) || (request.resource.data.aboutMe is string && request.resource.data.aboutMe.size() <= 1500));
       // canSeeGlobal (seeing the global leaderboard) is set by admins only (above)
       // Instructors award points, edit stats, accept members and remove them
       allow update: if isInstructor()
@@ -88,7 +90,7 @@ service cloud.firestore {
     }
 
     // Instructors who don't own the role ask the owner to rename it, change the
-    // rewards title or kick members. Admins choose the owner; the owner can also
+    // rewards title or its icon, or kick members. Admins choose the owner; the owner can also
     // hand the role on to another of its instructors.
     function ownerOnlyChangesAllowed() {
       return !changes().hasAny(['createdBy'])
@@ -96,7 +98,7 @@ service cloud.firestore {
             || (ownsRoleData(resource.data)
                 && request.resource.data.get('owner', '') in resource.data.get('instructors', [])))
         && (ownsRoleData(resource.data)
-            || (!changes().hasAny(['name', 'rewardsTitle'])
+            || (!changes().hasAny(['name', 'rewardsTitle', 'icon', 'iconColor'])
                 && resource.data.get('members', []).toSet()
                      .difference(request.resource.data.get('members', []).toSet()).size() == 0));
     }
@@ -168,7 +170,7 @@ service cloud.firestore {
         && request.resource.data.uid == me()
         && (request.resource.data.type == 'instructor'
             || (request.resource.data.type == 'createRole' && isInstructor())
-            || (request.resource.data.type in ['resetRole', 'renameRole', 'editStats', 'kickMember', 'rewardsTitle']
+            || (request.resource.data.type in ['resetRole', 'renameRole', 'editStats', 'kickMember', 'rewardsTitle', 'roleIcon']
                 && runsRole(request.resource.data.roleId)));
       // Withdrawing your own request
       allow delete: if signedIn() && resource.data.uid == me();

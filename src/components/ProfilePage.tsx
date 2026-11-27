@@ -5,7 +5,7 @@ import Button from "./Button";
 import ProfileImg from "./ProfileImg";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { firebaseAuthService, GLOBAL_ROLE_ID } from "../lib/firebaseService";
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import type { AccessLevel, UserRoleData } from "../myDataTypes";
 import { AccessBadge } from "../pages/AdminPage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -49,6 +49,14 @@ export default function ProfilePage() {
             .catch(err => console.error("Error loading global leaderboard viewers:", err));
         return () => { cancelled = true; };
     }, [selectedUid, viewerIsAdmin]);
+
+    // Their About Me, read from their profile (the card is often opened with only part of it)
+    const [aboutMe, setAboutMe] = useState("");
+    useEffect(() => {
+        setAboutMe("");
+        if (!selectedUid) return;
+        return onSnapshot(doc(db, "users", selectedUid), snap => setAboutMe((snap.data()?.aboutMe as string | undefined)?.trim() ?? ""), () => {});
+    }, [selectedUid]);
 
     const location = useLocation();
     const navigate = useNavigate();
@@ -171,6 +179,13 @@ export default function ProfilePage() {
                     <h1 className="text-xl font-bold break-words">{selectedUser.name}</h1>
                     {targetAccess !== "user" && <AccessBadge level={targetAccess} />}
                 </div>
+
+                {aboutMe && (
+                    <div className="w-full rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 text-left">
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-1">About Me</p>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">{aboutMe}</p>
+                    </div>
+                )}
 
                 {/* Admins are in every role automatically, so their card is just who they are */}
                 {targetAccess === "admin" ? null : !isEditing ? (

@@ -18,6 +18,7 @@ class AppState extends ChangeNotifier {
   AppState(this._prefs, {Stream<User?>? authChanges}) {
     themePref = ThemePref.values.firstWhere((t) => t.name == _prefs.getString('theme'), orElse: () => ThemePref.system);
     reduceGlass = _prefs.getBool('reduceGlass') ?? false;
+    reduceMotion = _prefs.getBool('reduceMotion') ?? false;
     _authSub = (authChanges ?? FirebaseAuth.instance.authStateChanges()).listen(_onAuth);
   }
 
@@ -72,6 +73,9 @@ class AppState extends ChangeNotifier {
   /// Swap real refraction for a plain blur (cheaper on older phones).
   late bool reduceGlass;
 
+  /// Fade instead of sliding, scaling and springing (also on when the iPhone's own Reduce Motion is).
+  late bool reduceMotion;
+
   // ── Badge data (the dot on the Roles tab and the counts on the roles list) ──
   List<Role> roles = const [];
   List<Task> myIncompleteTasks = const [];
@@ -96,8 +100,7 @@ class AppState extends ChangeNotifier {
   }
 
   /// Join requests and change requests waiting on this Instructor, across their roles.
-  int get instructorRequestCount =>
-      instructedRoles.fold(0, (n, r) => n + r.pendingRequests.length) + instructorChangesToReview.length;
+  int get instructorRequestCount => instructedRoles.fold(0, (n, r) => n + r.pendingRequests.length) + instructorChangesToReview.length;
 
   /// The requests admins handle: Instructor access, new roles, and changes to
   /// roles without an owner (a role's owner handles the rest).
@@ -291,6 +294,12 @@ class AppState extends ChangeNotifier {
   void setReduceGlass(bool v) {
     reduceGlass = v;
     _prefs.setBool('reduceGlass', v);
+    notifyListeners();
+  }
+
+  void setReduceMotion(bool v) {
+    reduceMotion = v;
+    _prefs.setBool('reduceMotion', v);
     notifyListeners();
   }
 

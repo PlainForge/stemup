@@ -188,6 +188,7 @@ class _InstructorCardState extends State<InstructorCard> {
                     ),
                 ],
               ),
+              if (p.aboutMe.isNotEmpty) ...[const SizedBox(height: 14), AboutMeBox(p.aboutMe)],
               const SizedBox(height: 16),
               Row(
                 children: [

@@ -3,7 +3,7 @@ import { alertDialog, confirmDialog, promptDialog } from "../lib/confirm";
 import { motion } from "motion/react";
 import { MainContext } from "../context/MainContext";
 import { cancelEmailChange, firebaseAuthService, hasPasswordSignIn, requestEmailChange } from "../lib/firebaseService";
-import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
+import { collection, deleteField, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { signOut } from "firebase/auth";
 import Loading from "./Loading";
@@ -20,6 +20,7 @@ import type { ThemeMode } from "../context/MainProvider";
 import { NOTIFICATION_TYPES, type StemRequest } from "../myDataTypes";
 import { roleService } from "../lib/roleService";
 import { BLOCKED_NAME_MESSAGE, isProfaneName } from "../lib/nameFilter";
+import { ABOUT_ME_MAX_CHARS, ABOUT_ME_MAX_WORDS, aboutMeProblem, countWords, tidyAboutMe } from "../lib/aboutMe";
 import { AccessBadge } from "./AdminPage";
 import BackButton from "../components/BackButton";
 
@@ -53,7 +54,7 @@ function SwitchRow({ label, hint, checked, onChange, disabled = false }: {
 }
 
 const SETTINGS_SECTIONS = [
-    { key: "profile", label: "Profile", hint: "Photo, display name, email and current role", icon: faUser },
+    { key: "profile", label: "Profile", hint: "Photo, display name, about me and email", icon: faUser },
     { key: "access", label: "Access", hint: "Your access level and Instructor requests", icon: faUserShield },
     { key: "notifications", label: "Notifications", hint: "Push, email and what to be notified about", icon: faBell },
     { key: "app", label: "App", hint: "Appearance and bug reports", icon: faSliders },
@@ -72,8 +73,8 @@ export default function Settings() {
     const { section } = useParams();
     const tab: SettingsSection | null = SETTINGS_SECTIONS.find(x => x.key === section)?.key ?? null;
 
-    const [roleName, setRoleName] = useState("");
     const [name, setName] = useState(userData?.name ?? "");
+    const [aboutMe, setAboutMe] = useState(userData?.aboutMe ?? "");
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(userData?.photoURL ?? null);
     const [phrase, setPhrase] = useState("");
@@ -103,16 +104,6 @@ export default function Settings() {
     const access = context?.access ?? "user";
 
     const fileRef = useRef<HTMLInputElement | null>(null);
-
-    // Fetch role display name
-    useEffect(() => {
-        const loadRole = async () => {
-            if (!userData?.currentRole) return setRoleName("");
-            const snap = await getDoc(doc(db, "roles", userData.currentRole));
-            setRoleName(snap.exists() ? snap.data().name : "");
-        };
-        loadRole();
-    }, [userData?.currentRole]);
 
     // A User's open request to become an Instructor
     useEffect(() => {
@@ -178,12 +169,30 @@ export default function Settings() {
             await alertDialog(BLOCKED_NAME_MESSAGE, "Name not saved");
             return;
         }
-        const result = await firebaseAuthService.setAccountInformation(name, file, user, userData);
-
-        if (!result) return;
+        const bio = tidyAboutMe(aboutMe);
+        const bioProblem = aboutMeProblem(bio);
+        if (bioProblem) {
+            await alertDialog(bioProblem, "About Me not saved");
+            return;
+        }
+        if (name !== userData.name || file !== null) {
+            const result = await firebaseAuthService.setAccountInformation(name, file, user, userData);
+            if (!result) return;
+        }
+        if (bio !== (userData.aboutMe ?? "")) {
+            try {
+                await updateDoc(doc(db, "users", user.uid), { aboutMe: bio ? bio : deleteField() });
+            } catch (err) {
+                console.error("Error saving About Me:", err);
+                await alertDialog("Couldn't save your About Me. Please try again.", "Something went wrong");
+                return;
+            }
+        }
+        setAboutMe(bio);
         context?.setUserData({
             ...userData,
             name,
+            aboutMe: bio,
             photoURL: preview ?? userData.photoURL
         });
 
@@ -194,20 +203,15 @@ export default function Settings() {
 
     const handleUndoChanges = () => {
         setName(userData.name);
+        setAboutMe(userData.aboutMe ?? "");
         setFile(null);
         setPreview(userData.photoURL || null);
 
         if (fileRef.current) fileRef.current.value = "";
     };
 
-    const hasChanges = name !== userData.name || file !== null;
-
-    const resetRole = async () => {
-        await updateDoc(doc(db, "users", user.uid), { currentRole: "" });
-        context.setUserData(prev =>
-            prev ? { ...prev, currentRole: "" } : prev
-        );
-    };
+    const hasChanges = name !== userData.name || file !== null || tidyAboutMe(aboutMe) !== (userData.aboutMe ?? "");
+    const aboutMeWords = countWords(aboutMe);
 
     const handleSignOut = async () => {
         await signOut(auth);
@@ -353,6 +357,27 @@ export default function Settings() {
                             </div>
 
                             <div className="flex flex-col gap-1.5">
+                                <div className="flex items-baseline justify-between gap-2">
+                                    <label htmlFor="settings-about" className="text-sm font-medium text-gray-600">About Me <span className="font-normal text-gray-400">(optional)</span></label>
+                                    <span className={`text-xs tabular-nums ${aboutMeWords > ABOUT_ME_MAX_WORDS ? "text-red-500 font-semibold" : "text-gray-400"}`}>
+                                        {aboutMeWords}/{ABOUT_ME_MAX_WORDS} words
+                                    </span>
+                                </div>
+                                <textarea
+                                    id="settings-about"
+                                    value={aboutMe}
+                                    onChange={e => setAboutMe(e.target.value)}
+                                    maxLength={ABOUT_ME_MAX_CHARS}
+                                    rows={4}
+                                    placeholder="A few words about you: what you're into, what you're working on, what you'd like people to know."
+                                    className={`w-full bg-gray-50 border px-3 py-2 rounded-xl text-sm leading-relaxed focus:outline-none transition-colors resize-y min-h-24 ${
+                                        aboutMeWords > ABOUT_ME_MAX_WORDS ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-gray-400"
+                                    }`}
+                                />
+                                <p className="text-xs text-gray-400">Shown on your profile card. Keep it friendly: no profanity.</p>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
                                 <label htmlFor="settings-email" className="text-sm font-medium text-gray-600">Email</label>
                                 {!editingEmail ? (
                                     <div className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
@@ -413,16 +438,6 @@ export default function Settings() {
                                         </div>
                                     </div>
                                 )}
-                            </div>
-
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-sm font-medium text-gray-600">Current Role</label>
-                                <div className="flex items-center justify-between bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl">
-                                    <span className="text-sm">{roleName || <span className="text-gray-400">No role selected</span>}</span>
-                                    <Button onClick={resetRole} color="red" size="xsm" type="button">
-                                        Reset
-                                    </Button>
-                                </div>
                             </div>
                         </form>
                     </div>

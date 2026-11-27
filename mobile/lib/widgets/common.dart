@@ -1,6 +1,8 @@
 // Shared pieces matching the web's recurring Tailwind patterns: white bordered
 // cards, uppercase tracking-widest captions, gray-50 inputs, pill chips, etc.
 import 'package:flutter/cupertino.dart';
+
+import 'motion.dart';
 import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -491,17 +493,19 @@ class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStat
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _c,
-    builder: (context, child) {
-      final t = Curves.easeOutCubic.transform(_c.value);
-      return Opacity(
-        opacity: t,
-        child: Transform.translate(offset: Offset(widget.dx * (1 - t), widget.offset * (1 - t)), child: child),
-      );
-    },
-    child: widget.child,
-  );
+  Widget build(BuildContext context) => reduceMotion(context)
+      ? widget.child
+      : AnimatedBuilder(
+          animation: _c,
+          builder: (context, child) {
+            final t = Curves.easeOutCubic.transform(_c.value);
+            return Opacity(
+              opacity: t,
+              child: Transform.translate(offset: Offset(widget.dx * (1 - t), widget.offset * (1 - t)), child: child),
+            );
+          },
+          child: widget.child,
+        );
 }
 
 /// Staggered delay for list item [i], capped so long lists don't crawl in.
@@ -596,6 +600,32 @@ class SwitchRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         CupertinoSwitch(value: value, activeTrackColor: Palette.green500, onChanged: onChanged),
+      ],
+    ),
+  );
+}
+
+/// A person's About Me on their card.
+class AboutMeBox extends StatelessWidget {
+  const AboutMeBox(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: Palette.fill(context),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Palette.separator(context)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionLabel('About Me', size: 11, padding: EdgeInsets.zero),
+        const SizedBox(height: 4),
+        Text(text, style: TextStyle(fontSize: 14, height: 1.45, color: Palette.label(context))),
       ],
     ),
   );
