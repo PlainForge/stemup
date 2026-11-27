@@ -13,6 +13,7 @@ import AlumniBatchPage from "./pages/AlumniBatchPage";
 import AdminPage from "./pages/AdminPage";
 import AdminRolePage from "./pages/AdminRolePage";
 import AdminUserPage from "./pages/AdminUserPage";
+import InstructorPage from "./pages/InstructorPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 
 export const router = createBrowserRouter([
@@ -42,6 +43,8 @@ export const router = createBrowserRouter([
       { path: "roles", element: <RolesSelectorPage /> },
       { path: "admin", element: <AdminPage /> },
       { path: "admin/roles/:id", element: <AdminRolePage /> },
+      { path: "instructor", element: <InstructorPage /> },
+      { path: "instructor/roles/:id", element: <AdminRolePage mode="instructor" /> },
       { path: "admin/users/:uid", element: <AdminUserPage /> },
       { path: "admin/inactive/:id", element: <AlumniBatchPage /> },
       // Alumni and Old Users became the Admin page's Inactive Users tab

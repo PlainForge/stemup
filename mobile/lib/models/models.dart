@@ -54,11 +54,15 @@ class NotificationPrefs {
   final bool email;
   final Set<NotifyType> off;
 
-  const NotificationPrefs({this.push = false, this.email = false, this.off = const {}});
+  /// Roles (by id) whose notifications are turned off on the role's Notifications tab.
+  final Set<String> rolesOff;
+
+  const NotificationPrefs({this.push = false, this.email = false, this.off = const {}, this.rolesOff = const {}});
 
   factory NotificationPrefs.fromMap(dynamic m) {
     if (m is! Map) return const NotificationPrefs();
     final types = m['types'] is Map ? m['types'] as Map : const {};
+    final roles = m['roles'] is Map ? m['roles'] as Map : const {};
     return NotificationPrefs(
       push: m['push'] == true,
       email: m['email'] == true,
@@ -66,10 +70,29 @@ class NotificationPrefs {
         for (final t in NotifyType.values)
           if (types[t.name] == false) t,
       },
+      rolesOff: {
+        for (final e in roles.entries)
+          if (e.value == false && e.key is String) e.key as String,
+      },
     );
   }
 
   bool isOn(NotifyType t) => !off.contains(t);
+
+  /// Notifications about a role are on unless turned off on its Notifications tab.
+  bool roleIsOn(String roleId) => !rolesOff.contains(roleId);
+}
+
+/// Anyone shown on a leaderboard.
+abstract interface class Ranked {
+  int get points;
+  String get name;
+}
+
+/// Leaderboard order: most points first; ties go alphabetically by name, ignoring case.
+int byPointsThenName(Ranked a, Ranked b) {
+  final byPoints = b.points.compareTo(a.points);
+  return byPoints != 0 ? byPoints : a.name.toLowerCase().compareTo(b.name.toLowerCase());
 }
 
 class UserRoleData {
@@ -89,11 +112,13 @@ class UserRoleData {
       UserRoleData(id: id, name: name, points: points ?? this.points, taskCompleted: taskCompleted ?? this.taskCompleted);
 }
 
-class UserData {
+class UserData implements Ranked {
   final String uid;
+  @override
   final String name;
   final String email;
   final String photoURL;
+  @override
   final int points;
   final int taskCompleted;
   final List<UserRoleData> roles;
@@ -456,10 +481,12 @@ class AlumniBatch {
   }
 }
 
-class AlumniMember {
+class AlumniMember implements Ranked {
   final String uid;
+  @override
   final String name;
   final String photoURL;
+  @override
   final int points;
   final int taskCompleted;
 

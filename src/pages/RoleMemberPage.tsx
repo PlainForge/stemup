@@ -64,7 +64,7 @@ export default function RoleMemberPage() {
 
     if (loading || !user || role === undefined || member === undefined || !roleId || !uid) return <Loading />;
 
-    const fallbackBack = isAdmin ? `/admin/roles/${roleId}?tab=members` : `/roles/${roleId}?view=admin&tab=members`;
+    const fallbackBack = isAdmin ? `/admin/roles/${roleId}?tab=members` : `/instructor/roles/${roleId}?tab=members`;
     const goBack = () => {
         // Back to wherever they came from (keeps the Members tab open), or the role's Members tab
         if ((window.history.state?.idx ?? 0) > 0) navigate(-1);

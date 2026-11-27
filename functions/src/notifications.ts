@@ -10,6 +10,7 @@
 //   push   iOS push notifications (off unless turned on in the iOS app)
 //   email  emails to their account address (off unless turned on)
 //   types  per-kind switches, e.g. { newTask: false }; a missing kind is on
+//   roles  per-role switches, e.g. { abc123: false }, from a role's Notifications tab
 // Push tokens live in users/{uid}/devices/{token}, one per signed-in phone.
 
 import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
@@ -70,13 +71,19 @@ async function sendEmail(to: string, msg: Message) {
   });
 }
 
-/** Sends [msg] to [uid] the ways they've turned on, unless they've switched off this kind. */
-export async function notify(uid: string, type: NotifyType, msg: Message) {
+/**
+ * Sends [msg] to [uid] the ways they've turned on, unless they've switched off
+ * this kind, or turned off notifications for [roleId] (the role it's about).
+ */
+export async function notify(uid: string, type: NotifyType, msg: Message, roleId?: unknown) {
   if (!uid) return;
   const snap = await getFirestore().doc(`users/${uid}`).get();
   if (!snap.exists) return;
-  const prefs = (snap.get("notifications") ?? {}) as { push?: boolean; email?: boolean; types?: Record<string, boolean> };
+  const prefs = (snap.get("notifications") ?? {}) as {
+    push?: boolean; email?: boolean; types?: Record<string, boolean>; roles?: Record<string, boolean>;
+  };
   if (prefs.types?.[type] === false) return;
+  if (typeof roleId === "string" && roleId && prefs.roles?.[roleId] === false) return;
 
   const email = snap.get("email") as string | undefined;
   const jobs: Promise<unknown>[] = [];
@@ -156,7 +163,7 @@ export const notifyOnTaskChange = onDocumentWritten({ document: "tasks/{taskId}"
   const after = event.data?.after.exists ? event.data.after.data() : undefined;
   if (!after) return;
   const notice = taskNotice(before, after, await roleName(after.roleId));
-  if (notice) await notify(after.assignedTo, notice[0], notice[1]);
+  if (notice) await notify(after.assignedTo, notice[0], notice[1], after.roleId);
 });
 
 /** Join requests: approved if they became a member, declined otherwise. */
@@ -180,7 +187,8 @@ export const notifyOnJoinDecision = onDocumentUpdated({ document: "roles/{roleId
     }
     await notify(uid, "joinRole", member
       ? { title: "Request accepted", body: `You're now a member of ${after.name}.`, path }
-      : { title: "Request declined", body: `Your request to join ${after.name} was declined.`, path: "/roles" });
+      : { title: "Request declined", body: `Your request to join ${after.name} was declined.`, path: "/roles" },
+    event.params.roleId);
   }));
 });
 
@@ -215,12 +223,12 @@ export const notifyOnRequestDecision = onDocumentDeleted({ document: "requests/{
         return {
           title: ok ? "Request approved" : "Request declined",
           body: `Your request to ${action} was ${ok ? "approved" : "declined"}.`,
-          path: `/roles/${req.roleId}?view=admin`,
+          path: `/instructor/roles/${req.roleId}`,
         };
       }
     }
   })();
-  if (msg) await notify(req.uid, "accessRequest", msg);
+  if (msg) await notify(req.uid, "accessRequest", msg, req.roleId);
 });
 
 /** What a role change request asks for (kept in sync with roleChangeAction in src/lib/roleService.ts). */
@@ -252,8 +260,8 @@ export const notifyOnRoleRequest = onDocumentCreated({ document: "requests/{requ
   await notify(owner, "accessRequest", {
     title: `Request in ${role.name}`,
     body: `${req.userName || "An instructor"} wants to ${action}.`,
-    path: `/roles/${req.roleId}?view=admin&tab=requests`,
-  });
+    path: `/instructor/roles/${req.roleId}?tab=requests`,
+  }, req.roleId);
 });
 
 /** A deleted (or archived) profile takes its push tokens with it. */

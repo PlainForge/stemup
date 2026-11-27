@@ -5,32 +5,50 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faArrowRight } from "@fortawesome/free-solid-svg-icons";
 import { MainContext } from "../context/MainContext";
 import { useRole } from "../lib/useRole";
+import { canManageRole } from "../lib/roleService";
 import RoleAdminPage from "../components/RoleAdmin";
 import Button from "../components/Button";
 import Loading from "./Loading";
 
-/** /admin/roles/:id — an admin running any role, with everything an instructor can do. */
-export default function AdminRolePage() {
+/**
+ * Running one role, with everything its instructors can do:
+ * - /admin/roles/:id for admins (any role), under the Admin tab
+ * - /instructor/roles/:id for an Instructor (roles they run), under the Instructor tab
+ */
+export default function AdminRolePage({ mode = "admin" }: { mode?: "admin" | "instructor" }) {
     const context = useContext(MainContext);
     const navigate = useNavigate();
     const { id: roleId } = useParams<{ id: string }>();
 
     const user = context?.user ?? null;
     const loading = context?.loading ?? true;
-    const isAdmin = !!user && (context?.admins ?? []).includes(user.uid);
-    const { role, membersWithData, requested } = useRole(roleId, isAdmin);
+    const admins = context?.admins ?? [];
+    const instructors = context?.instructors ?? [];
+    const isAdmin = !!user && admins.includes(user.uid);
+    const isInstructor = !!user && instructors.includes(user.uid);
+    const allowed = mode === "admin" ? isAdmin : isInstructor && !isAdmin;
+    const { role, membersWithData, requested } = useRole(roleId, allowed);
+
+    const home = mode === "admin" ? "/admin?tab=roles" : "/instructor";
+    const homeLabel = mode === "admin" ? "Admin" : "Instructor";
 
     useEffect(() => {
-        if (!loading && (!user || !isAdmin)) navigate("/", { replace: true });
-    }, [loading, user, isAdmin, navigate]);
+        if (loading || !user) return;
+        // Admins who open an Instructor link get the same view on the Admin page
+        if (mode === "instructor" && isAdmin && roleId) navigate(`/admin/roles/${roleId}`, { replace: true });
+        else if (!allowed) navigate("/", { replace: true });
+    }, [loading, user, allowed, isAdmin, mode, roleId, navigate]);
 
-    if (loading || !user || !isAdmin || role === undefined) return <Loading />;
+    if (loading || !user || !allowed || role === undefined) return <Loading />;
 
-    if (role === null) {
+    // Instructors only run the roles they've been added to
+    if (role === null || (mode === "instructor" && !canManageRole(role, user.uid, admins, instructors))) {
         return (
             <div className="w-full max-w-2xl mx-auto flex flex-col gap-4 px-4 py-6 items-center">
-                <p className="text-gray-400 text-sm text-center py-8">This role no longer exists.</p>
-                <Button onClick={() => navigate("/admin?tab=roles")} color="gray" size="sm">Back to Admin</Button>
+                <p className="text-gray-400 text-sm text-center py-8">
+                    {role === null ? "This role no longer exists." : "You don't run this role any more."}
+                </p>
+                <Button onClick={() => navigate(home)} color="gray" size="sm">Back to {homeLabel}</Button>
             </div>
         );
     }
@@ -45,10 +63,10 @@ export default function AdminRolePage() {
         >
             <div className="pt-1">
                 <button
-                    onClick={() => navigate("/admin?tab=roles")}
+                    onClick={() => navigate(home)}
                     className="text-sm text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1.5 hover:cursor-pointer"
                 >
-                    <FontAwesomeIcon icon={faArrowLeft} className="text-xs" /> Admin
+                    <FontAwesomeIcon icon={faArrowLeft} className="text-xs" /> {homeLabel}
                 </button>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">

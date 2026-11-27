@@ -43,7 +43,9 @@ export default function ProfileImg({ src, alt, size }: ProfileImgProps) {
             alt={alt}
             // Google's photo servers can refuse hotlinked images that send a referrer
             referrerPolicy="no-referrer"
-            className={`${imgSize} shrink-0 aspect-square ${!src ? "bg-[#e0e0e0]" : ""} object-cover rounded-full border`}
+            // max-w-none: the base img { max-width: 100% } let a shrink-to-fit parent (a button,
+            // on mobile Safari) squeeze the width but not the height, turning the circle into an oval
+            className={`${imgSize} shrink-0 max-w-none aspect-square ${!src ? "bg-[#e0e0e0]" : ""} object-cover rounded-full border`}
         />
     );
 }

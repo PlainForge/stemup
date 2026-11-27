@@ -195,6 +195,21 @@ export const roleService = {
         }
     },
 
+    /** Accepts someone's request to join a role. One role write, so the notification function sees them join rather than a decline. */
+    async acceptJoinRequest(role: { id: string; name: string }, uid: string) {
+        await updateDoc(doc(db, "roles", role.id), { pendingRequests: arrayRemove(uid), members: arrayUnion(uid) });
+        await addRoleToUser(uid, role);
+    },
+
+    async declineJoinRequest(roleId: string, uid: string) {
+        await updateDoc(doc(db, "roles", roleId), { pendingRequests: arrayRemove(uid) });
+    },
+
+    /** Turns notifications for one role on or off for this person (they're on unless turned off). */
+    async setRoleNotifications(uid: string, roleId: string, on: boolean) {
+        await updateDoc(doc(db, "users", uid), { [`notifications.roles.${roleId}`]: on });
+    },
+
     /** Sets a member's points and tasks completed in one role (their global totals are untouched). */
     async setMemberRoleStats(uid: string, roleId: string, points: number, taskCompleted: number) {
         const ref = doc(db, "users", uid);
@@ -306,7 +321,7 @@ export const roleService = {
                 const stats = (Array.isArray(data.roles) ? data.roles : []).find(r => r.id === roleId);
                 return { uid: s.id, name: data.name ?? "Unknown User", photoURL: data.photoURL ?? "", points: stats?.points ?? 0, taskCompleted: stats?.taskCompleted ?? 0 };
             })
-            .sort((a, b) => b.points - a.points);
+            .sort((a, b) => b.points - a.points || (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }));
 
         const now = Timestamp.now();
         await addDoc(collection(db, "leaderboardSnapshots"), {

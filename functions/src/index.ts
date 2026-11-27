@@ -38,6 +38,8 @@ export const notifyAdminsOnTaskSubmission = onDocumentCreated(
     const recipientDocs = await Promise.all(recipientIds.map((id) => db.doc(`users/${id}`).get()));
 
     const adminEmails = recipientDocs
+      // Leave out anyone who turned off notifications for this role
+      .filter((d) => d.data()?.notifications?.roles?.[submission.roleId] !== false)
       .map((d) => d.data()?.email as string | undefined)
       .filter((email): email is string => !!email);
 

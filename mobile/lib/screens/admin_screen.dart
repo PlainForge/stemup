@@ -499,10 +499,14 @@ class _Quote extends StatelessWidget {
 }
 
 /// /admin/roles/:id — an admin running any role, with everything an instructor can do.
+/// Running one role, with everything its instructors can do: /admin/roles/:id
+/// for admins (any role), and /instructor/roles/:id ([instructorMode]) for an
+/// Instructor running one of their roles, under the Instructor tab.
 class AdminRoleScreen extends StatefulWidget {
-  const AdminRoleScreen({super.key, required this.roleId});
+  const AdminRoleScreen({super.key, required this.roleId, this.instructorMode = false});
 
   final String roleId;
+  final bool instructorMode;
 
   @override
   State<AdminRoleScreen> createState() => _AdminRoleScreenState();
@@ -545,14 +549,22 @@ class _AdminRoleScreenState extends State<AdminRoleScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
-    if (!app.isAdmin || !_loaded) return const LoadingView();
+    final instructor = widget.instructorMode;
+    final allowed = instructor ? app.isInstructor && !app.isAdmin : app.isAdmin;
+    if (!allowed || !_loaded) return const LoadingView();
     final role = _role;
-    if (role == null) {
-      return const PageScaffold(backLabel: 'Admin', backPath: '/admin', children: [EmptyState('This role no longer exists.')]);
+    final backLabel = instructor ? 'Instructor' : 'Admin';
+    final backPath = instructor ? '/instructor' : '/admin';
+    if (role == null || (instructor && !app.canManage(role))) {
+      return PageScaffold(
+        backLabel: backLabel,
+        backPath: backPath,
+        children: [EmptyState(role == null ? 'This role no longer exists.' : "You don't run this role any more.")],
+      );
     }
     return PageScaffold(
-      backLabel: 'Admin',
-      backPath: '/admin',
+      backLabel: backLabel,
+      backPath: backPath,
       trailing: role.members.contains(app.user!.uid)
           ? Pressable(
               onPressed: () => context.go('/roles/${role.id}'),

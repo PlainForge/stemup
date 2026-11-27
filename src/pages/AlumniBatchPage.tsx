@@ -66,7 +66,7 @@ export default function AlumniBatchPage() {
 
                 setBatch(batchSnap.data() as AlumniBatch);
                 const list = membersSnap.docs.map(d => d.data() as AlumniMember);
-                list.sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+                list.sort((a, b) => (b.points ?? 0) - (a.points ?? 0) || (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }));
                 setMembers(list);
             } catch (err) {
                 console.error("Error loading alumni batch:", err);

@@ -1,6 +1,6 @@
-// pages/RolePage.tsx. The role's instructors get the Instructor tab
-// (role_admin.dart) in place of Tasks; admins get a Manage button that opens
-// the same view on the Admin page.
+// pages/RolePage.tsx. Admins and the role's instructors get a Manage button
+// that opens role_admin.dart on the Admin or Instructor tab. Everyone gets a
+// Notifications tab to turn this role's notifications on or off.
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -17,11 +17,11 @@ import '../widgets/common.dart';
 import '../widgets/leaderboard.dart';
 import '../widgets/page_scaffold.dart';
 import '../widgets/profile_sheet.dart';
+import '../widgets/glass_tab_bar.dart' show PingDot;
 import '../widgets/sliding_tabs.dart';
-import 'role_admin.dart';
 import 'task_widgets.dart';
 
-enum _Tab { leaderboard, rewards, saved, tasks, instructor }
+enum _Tab { leaderboard, rewards, saved, tasks, notifications }
 
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key, required this.roleId});
@@ -112,7 +112,7 @@ class _RoleScreenState extends State<RoleScreen> {
     final canManage = app.canManage(role);
     // Admins and this role's instructors run it rather than take part: no Tasks tab, no ranking
     final isStaff = app.isStaff(role, me.uid);
-    final ranked = _members.where((m) => !app.isStaff(role, m.uid)).toList()..sort((a, b) => b.points.compareTo(a.points));
+    final ranked = _members.where((m) => !app.isStaff(role, m.uid)).toList()..sort((a, b) => byPointsThenName(a, b));
     final myStats = me.roleData(_id);
     final isCurrent = me.currentRole == _id;
     final openTasks = _myTasks.where((t) => !t.complete && !_mySubmitted.contains(t.id)).toList();
@@ -123,15 +123,15 @@ class _RoleScreenState extends State<RoleScreen> {
         if (app.instructors.contains(uid)) ?_members.where((m) => m.uid == uid).firstOrNull,
     ];
     var tab = _tab;
-    if ((tab == _Tab.tasks && isStaff) || (tab == _Tab.instructor && (!canManage || isAdmin))) tab = _Tab.leaderboard;
+    if (tab == _Tab.tasks && isStaff) tab = _Tab.leaderboard;
+    final notificationsOn = me.notifications.roleIsOn(_id);
 
     final tabs = <SlidingTab<_Tab>>[
       const SlidingTab(_Tab.leaderboard, 'Leaderboard'),
       const SlidingTab(_Tab.rewards, 'Rewards'),
       const SlidingTab(_Tab.saved, 'Saved Data'),
       if (!isStaff) SlidingTab(_Tab.tasks, 'Tasks', newBadge: hasNew, count: openTasks.length, countColor: Palette.green500),
-      if (canManage && !isAdmin)
-        SlidingTab(_Tab.instructor, 'Instructor', dot: role.pendingRequests.isNotEmpty || _pendingSubmitted.isNotEmpty),
+      SlidingTab(_Tab.notifications, notificationsOn ? 'Notifications' : 'Notifications (off)'),
     ];
 
     return PageScaffold(
@@ -161,11 +161,20 @@ class _RoleScreenState extends State<RoleScreen> {
                   StatText(myStats.taskCompleted, 'tasks'),
                   const SizedBox(width: 12),
                 ],
-                if (isAdmin) ...[
-                  AppButton(label: 'Manage', size: AppButtonSize.xsm, onPressed: () => context.push('/admin/roles/$_id')),
-                  const SizedBox(width: 12),
-                ] else if (canManage) ...[
-                  const Tag('Instructor', color: Palette.blue700),
+                // Opens the role on the Admin or Instructor tab (go, not push, so the tab switches)
+                if (isAdmin || canManage) ...[
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      AppButton(
+                        label: 'Manage',
+                        size: AppButtonSize.xsm,
+                        onPressed: () => context.go(isAdmin ? '/admin/roles/$_id' : '/instructor/roles/$_id'),
+                      ),
+                      if (!isAdmin && (role.pendingRequests.isNotEmpty || _pendingSubmitted.isNotEmpty))
+                        const Positioned(top: -3, right: -3, child: PingDot(size: 10)),
+                    ],
+                  ),
                   const SizedBox(width: 12),
                 ],
                 AnimatedSwitcher(
@@ -217,8 +226,39 @@ class _RoleScreenState extends State<RoleScreen> {
       filters: _filters,
       onFiltersChanged: () => setState(() {}),
     ),
-    _Tab.instructor => RoleAdminView(role: role, members: _members),
+    _Tab.notifications => _notificationsTab(context, app, role),
   };
+
+  /// Turns this role's notifications on or off for the signed-in person.
+  Widget _notificationsTab(BuildContext context, AppState app, Role role) {
+    final me = app.userData!;
+    final on = me.notifications.roleIsOn(_id);
+    return AppCard(
+      shadow: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SwitchRow(
+            label: 'Notifications from ${role.name}',
+            hint: on ? 'On' : 'Off',
+            value: on,
+            onChanged: (v) => Db.setRoleNotifications(me.uid, _id, v),
+          ),
+          const SizedBox(height: 8),
+          Muted(
+            'Covers everything about this role: tasks, reviews, extensions and requests'
+            '${app.canManage(role) ? ', including submissions waiting for you to review' : ''}. '
+            'Turning it off stops push notifications and emails about this role only.',
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: LinkText("Choose how you're notified in Settings", size: 14, onPressed: () => context.go('/settings/notifications')),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _rewardsTab(BuildContext context, Role role, List<UserData> ranked) {
     const labels = ['First', 'Second', 'Third'];

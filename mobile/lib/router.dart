@@ -9,6 +9,7 @@ import 'screens/admin_user_screen.dart';
 import 'screens/alumni_batch_screen.dart';
 import 'screens/auth_screens.dart';
 import 'screens/home_screen.dart';
+import 'screens/instructor_screen.dart';
 import 'screens/role_member_screen.dart';
 import 'screens/role_screen.dart';
 import 'screens/roles_screen.dart';
@@ -45,6 +46,11 @@ GoRouter buildRouter(AppState app) => GoRouter(
     // Alumni and Old Users became the Admin tab's Inactive Users
     if (loc.startsWith('/alumni') || loc.startsWith('/old-users')) return '/admin';
     if (!app.isAdmin && app.admins.isNotEmpty && _adminPrefixes.any(loc.startsWith)) return '/';
+    // The Instructor tab is for Instructors; admins get the same views on the Admin tab
+    if (loc.startsWith('/instructor') && app.admins.isNotEmpty) {
+      if (app.isAdmin) return loc.replaceFirst('/instructor', '/admin');
+      if (!app.isInstructor) return '/';
+    }
     return null;
   },
   routes: [
@@ -106,6 +112,22 @@ GoRouter buildRouter(AppState app) => GoRouter(
                 GoRoute(
                   path: ':section',
                   pageBuilder: (_, s) => _page(SettingsScreen(section: s.pathParameters['section']), s),
+                ),
+              ],
+            ),
+          ],
+        ),
+        // Shown between Admin and Settings in the tab bar (see shell.dart)
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/instructor',
+              pageBuilder: (_, s) => _page(const InstructorScreen(), s),
+              routes: [
+                GoRoute(
+                  path: 'roles/:id',
+                  pageBuilder: (_, s) => _page(AdminRoleScreen(roleId: s.pathParameters['id']!, instructorMode: true), s),
+                  routes: [_memberRoute],
                 ),
               ],
             ),

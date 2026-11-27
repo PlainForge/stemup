@@ -27,6 +27,9 @@ class AppShell extends StatelessWidget {
       _Tab(0, GlassTabItem(icon: FontAwesomeIcons.house.data, label: 'Home')),
       _Tab(1, GlassTabItem(icon: FontAwesomeIcons.users.data, label: 'Roles', badge: app.rolesTabBadge)),
       if (app.isAdmin) _Tab(2, GlassTabItem(icon: FontAwesomeIcons.userShield.data, label: 'Admin', badge: app.adminQueue.isNotEmpty)),
+      // Instructors (who aren't admins) get their own tab, like the Admin tab
+      if (!app.isAdmin && app.isInstructor)
+        _Tab(4, GlassTabItem(icon: FontAwesomeIcons.chalkboardUser.data, label: 'Instructor', badge: app.instructorRequestCount > 0)),
       _Tab(3, GlassTabItem(icon: FontAwesomeIcons.gears.data, label: 'Settings')),
     ];
     final current = tabs.indexWhere((t) => t.branch == shell.currentIndex).clamp(0, tabs.length - 1);

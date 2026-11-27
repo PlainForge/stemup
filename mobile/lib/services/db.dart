@@ -343,6 +343,10 @@ class Db {
   static Future<void> setNotificationType(String uid, NotifyType type, bool on) =>
       _user(uid).update({'notifications.types.${type.name}': on});
 
+  /// Turns notifications for one role on or off (they're on unless turned off).
+  static Future<void> setRoleNotifications(String uid, String roleId, bool on) =>
+      _user(uid).update({'notifications.roles.$roleId': on});
+
   /// Remembers this phone's push token so Cloud Functions can reach it.
   static Future<void> saveDevice(String uid, String token) =>
       _db.doc('users/$uid/devices/$token').set({'token': token, 'platform': 'ios', 'updatedAt': Timestamp.now()});
@@ -521,7 +525,7 @@ class Db {
     final members = await getUsers(role.members);
     final ranked =
         members.where((u) => !admins.contains(u.uid) && !role.instructors.contains(u.uid)).map((u) => u.withRoleStats(roleId)).toList()
-          ..sort((a, b) => b.points.compareTo(a.points));
+          ..sort((a, b) => byPointsThenName(a, b));
 
     await _db.collection('leaderboardSnapshots').add({
       'roleId': roleId,
@@ -712,7 +716,7 @@ class Db {
     final batchSnap = results[0] as DocumentSnapshot<Map<String, dynamic>>;
     if (!batchSnap.exists) return (null, <AlumniMember>[]);
     final members = (results[1] as QuerySnapshot<Map<String, dynamic>>).docs.map(AlumniMember.fromDoc).toList()
-      ..sort((a, b) => b.points.compareTo(a.points));
+      ..sort((a, b) => byPointsThenName(a, b));
     return (AlumniBatch.fromDoc(batchSnap), members);
   }
 

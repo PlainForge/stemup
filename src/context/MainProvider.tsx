@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MainContext } from './MainContext';
 import { firebaseAuthService } from '../lib/firebaseService';
 import type { User } from 'firebase/auth';
-import { type AccessLevel, type UserData } from '../myDataTypes';
+import { type AccessLevel, type Role, type StemRequest, type UserData } from '../myDataTypes';
+import { isRoleChange, roleOwner } from '../lib/roleService';
 import { collection, deleteField, doc, onSnapshot, updateDoc, type FieldValue } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 
@@ -20,6 +21,10 @@ export interface MainContextType {
     access: AccessLevel;
     /** Requests waiting for an admin (admins only; 0 for everyone else) */
     adminRequestCount: number;
+    /** The roles an Instructor runs (live; empty for admins and users) */
+    instructedRoles: Role[];
+    /** Join requests and change requests waiting on this Instructor, across their roles */
+    instructorRequestCount: number;
     needsVerification: boolean;
     justLoggedIn: boolean;
     setJustLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
@@ -59,7 +64,8 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     const [loading, setLoading] = useState<boolean>(true);
     const [admins, setAdmins] = useState<string[]>([]);
     const [instructors, setInstructors] = useState<string[]>([]);
-    const [adminRequestCount, setAdminRequestCount] = useState(0);
+    const [allRoles, setAllRoles] = useState<Role[]>([]);
+    const [allRequests, setAllRequests] = useState<StemRequest[]>([]);
     const [needsVerification, setNeedsVerification] = useState<boolean>(false);
     const [justLoggedIn, setJustLoggedIn] = useState(false);
     const [showAccount, setShowAccount] = useState<UserData | null>(null);
@@ -230,15 +236,40 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     }, [user, needsVerification]);
 
     const isAdminUser = !!user && admins.includes(user.uid);
+    const isInstructorUser = !!user && !isAdminUser && instructors.includes(user.uid);
+    // Admins and Instructors keep live roles and requests for the Admin and Instructor tabs' badges
+    const watchesRequests = isAdminUser || isInstructorUser;
     useEffect(() => {
-        if (!isAdminUser) {
-            setAdminRequestCount(0);
+        if (!watchesRequests) {
+            setAllRoles([]);
+            setAllRequests([]);
             return;
         }
-        return onSnapshot(collection(db, "requests"), (snap) => setAdminRequestCount(snap.size), (err) => {
-            console.warn("Error loading requests:", err);
-        });
-    }, [isAdminUser]);
+        const unsubs = [
+            onSnapshot(collection(db, "roles"), (snap) => {
+                setAllRoles(snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Role, "id">) })));
+            }, (err) => console.warn("Error loading roles:", err)),
+            onSnapshot(collection(db, "requests"), (snap) => {
+                setAllRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as StemRequest)));
+            }, (err) => console.warn("Error loading requests:", err)),
+        ];
+        return () => unsubs.forEach(u => u());
+    }, [watchesRequests]);
+
+    const uid = user?.uid;
+    const { adminRequestCount, instructedRoles, instructorRequestCount } = useMemo(() => {
+        const roleById = new Map(allRoles.map(r => [r.id, r]));
+        // A role's owner handles its instructors' change requests; admins get them only for roles without one
+        const adminRequestCount = isAdminUser
+            ? allRequests.filter(r => !isRoleChange(r.type) || !roleOwner(roleById.get(r.roleId ?? ""))).length
+            : 0;
+        const instructedRoles = isInstructorUser && uid
+            ? allRoles.filter(r => (r.instructors ?? []).includes(uid)).sort((a, b) => a.name.localeCompare(b.name))
+            : [];
+        const instructorRequestCount = instructedRoles.reduce((n, r) => n + (r.pendingRequests ?? []).length, 0)
+            + allRequests.filter(r => isRoleChange(r.type) && r.uid !== uid && roleOwner(roleById.get(r.roleId ?? "")) === uid).length;
+        return { adminRequestCount, instructedRoles, instructorRequestCount };
+    }, [allRoles, allRequests, isAdminUser, isInstructorUser, uid]);
 
     const access: AccessLevel = !user ? "user"
         : admins.includes(user.uid) ? "admin"
@@ -263,8 +294,8 @@ export default function MainProvider({ children }: { children: React.ReactNode }
     }, [user]);
 
     const val = useMemo(
-        () => ({ user, setUser, loading, setLoading, userData, setUserData, admins, instructors, access, adminRequestCount, needsVerification, justLoggedIn, setJustLoggedIn, showAccount, setShowAccount, roleNotification, setRoleNotification, dark, setDark, themeMode, setThemeMode, bugReportOpen, setBugReportOpen }),
-        [user, loading, userData, admins, instructors, access, adminRequestCount, needsVerification, justLoggedIn, showAccount, roleNotification, dark, setDark, themeMode, bugReportOpen]
+        () => ({ user, setUser, loading, setLoading, userData, setUserData, admins, instructors, access, adminRequestCount, instructedRoles, instructorRequestCount, needsVerification, justLoggedIn, setJustLoggedIn, showAccount, setShowAccount, roleNotification, setRoleNotification, dark, setDark, themeMode, setThemeMode, bugReportOpen, setBugReportOpen }),
+        [user, loading, userData, admins, instructors, access, adminRequestCount, instructedRoles, instructorRequestCount, needsVerification, justLoggedIn, showAccount, roleNotification, dark, setDark, themeMode, bugReportOpen]
     );
 
     return (

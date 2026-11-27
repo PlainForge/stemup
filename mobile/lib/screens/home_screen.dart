@@ -82,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final members = roleDoc?.members ?? const <String>[];
         // Admins and the role's instructors run it, so they aren't ranked
         final ranked = (await Db.getUsers(members)).where((u) => !app.isStaff(roleDoc, u.uid)).map((u) => u.withRoleStats(id)).toList()
-          ..sort((a, b) => b.points.compareTo(a.points));
+          ..sort((a, b) => byPointsThenName(a, b));
         final myIdx = ranked.indexWhere((u) => u.uid == me.uid);
         return _RoleBoard(
           roleId: id,
@@ -122,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final month = DateFormat('MMMM', 'en_US').format(DateTime.now());
-    final globalRanked = _global.where((u) => !app.admins.contains(u.uid)).toList()..sort((a, b) => b.points.compareTo(a.points));
+    final globalRanked = _global.where((u) => !app.admins.contains(u.uid)).toList()..sort((a, b) => byPointsThenName(a, b));
     final placings = _boards.where((b) => b.myRank != null && b.myRank! <= 3).toList()..sort((a, b) => a.myRank!.compareTo(b.myRank!));
     final rewardsCard = app.isAdmin ? _adminOverview(context, month) : _myRewards(context, month, placings);
 

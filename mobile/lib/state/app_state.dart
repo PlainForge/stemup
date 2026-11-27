@@ -78,8 +78,26 @@ class AppState extends ChangeNotifier {
   Set<String> mySubmittedIds = const {};
   List<SubmittedTask> pendingSubmissions = const [];
 
-  /// Every open request (admins only).
+  /// Every open request (admins and Instructors).
   List<StemRequest> adminRequests = const [];
+
+  /// The roles an Instructor runs (empty for admins and users), by name.
+  List<Role> get instructedRoles {
+    final uid = user?.uid;
+    if (uid == null || isAdmin || !isInstructor) return const [];
+    return roles.where((r) => r.instructors.contains(uid)).toList()..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  /// Change requests about a role this Instructor owns, from its other instructors.
+  List<StemRequest> get instructorChangesToReview {
+    final uid = user?.uid;
+    final owned = {for (final r in instructedRoles.where((r) => r.owner == uid)) r.id};
+    return adminRequests.where((r) => r.type?.isRoleChange == true && r.uid != uid && owned.contains(r.roleId)).toList();
+  }
+
+  /// Join requests and change requests waiting on this Instructor, across their roles.
+  int get instructorRequestCount =>
+      instructedRoles.fold(0, (n, r) => n + r.pendingRequests.length) + instructorChangesToReview.length;
 
   /// The requests admins handle: Instructor access, new roles, and changes to
   /// roles without an owner (a role's owner handles the rest).
@@ -184,7 +202,8 @@ class AppState extends ChangeNotifier {
         }),
       );
     }
-    if (isAdmin) {
+    // Admins approve requests; Instructors see the ones about the roles they run
+    if (isAdmin || isInstructor) {
       _badgeSubs.add(
         Db.requestsStream().listen((r) {
           adminRequests = r;

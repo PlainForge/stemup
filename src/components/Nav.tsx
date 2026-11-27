@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useIsMobileBarHidden } from "../lib/useIsMobileBarHidden";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGears, faHomeAlt, faUserShield, faUsers } from "@fortawesome/free-solid-svg-icons";
+import { faChalkboardUser, faGears, faHomeAlt, faUserShield, faUsers } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MainContext } from "../context/MainContext";
 import { IS_PHONE } from "../lib/device";
@@ -192,13 +192,15 @@ export default function Nav() {
     const barHidden = useIsMobileBarHidden(IS_PHONE);
 
     if (!context) return null;
-    const { user, userData, roleNotification, admins, adminRequestCount } = context;
+    const { user, userData, roleNotification, admins, adminRequestCount, access, instructorRequestCount } = context;
 
     if (!user || !userData) return null;
 
     const path = location.pathname;
     const isAdmin = admins.includes(user.uid);
-    const activeKey = `${path.split("/")[1] ?? ""}|${isAdmin}`;
+    // Instructors (who aren't admins) get their own tab, like the Admin tab
+    const isInstructor = access === "instructor";
+    const activeKey = `${path.split("/")[1] ?? ""}|${isAdmin}|${isInstructor}`;
 
     // Real device detection, not a viewport-width breakpoint — a laptop keeps the
     // top bar even with a narrow window; only an actual phone gets the bottom one.
@@ -219,6 +221,9 @@ export default function Nav() {
                     <MobileNavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
                     {isAdmin && (
                         <MobileNavItem icon={faUserShield} label="Admin" onClick={() => navigate("/admin")} active={path.startsWith("/admin")} ping={adminRequestCount > 0} />
+                    )}
+                    {isInstructor && (
+                        <MobileNavItem icon={faChalkboardUser} label="Instructor" onClick={() => navigate("/instructor")} active={path.startsWith("/instructor")} ping={instructorRequestCount > 0} />
                     )}
                     <MobileNavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path.startsWith("/settings")} />
                 </PillBar>
@@ -245,6 +250,9 @@ export default function Nav() {
                 <NavItem icon={faUsers} label="Roles" onClick={() => navigate("/roles")} active={path.startsWith("/roles")} ping={roleNotification} />
                 {isAdmin && (
                     <NavItem icon={faUserShield} label="Admin" onClick={() => navigate("/admin")} active={path.startsWith("/admin")} ping={adminRequestCount > 0} />
+                )}
+                {isInstructor && (
+                    <NavItem icon={faChalkboardUser} label="Instructor" onClick={() => navigate("/instructor")} active={path.startsWith("/instructor")} ping={instructorRequestCount > 0} />
                 )}
                 <NavItem icon={faGears} label="Settings" onClick={() => navigate("/settings")} active={path.startsWith("/settings")} />
 

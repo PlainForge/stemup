@@ -3,9 +3,8 @@ import { db } from "../lib/firebase";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { type Task, type UserData, type SubmittedTask, type SavedData } from "../myDataTypes";
 import { useRole } from "../lib/useRole";
-import { canManageRole, isRoleStaff } from "../lib/roleService";
+import { canManageRole, isRoleStaff, roleService } from "../lib/roleService";
 import { motion } from "motion/react";
-import RoleAdminPage from "../components/RoleAdmin";
 import DoneButton from "../components/TaskDoneButton";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Loading from "./Loading";
@@ -16,7 +15,7 @@ import ProfileImg from "../components/ProfileImg";
 import MedalIcon from "../components/MedalIcon";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faCopy } from "@fortawesome/free-solid-svg-icons";
+import { faBell, faBellSlash, faCheck, faCopy } from "@fortawesome/free-solid-svg-icons";
 
 
 /** Stable fallback so hooks that depend on these lists don't re-run every render */
@@ -97,7 +96,7 @@ export default function RolePage() {
     useEffect(() => {
         const sorted = membersWithData
             .filter(m => !isRoleStaff(role, m.uid, admins))
-            .sort((a, b) => (b.points || 0) - (a.points || 0));
+            .sort((a, b) => (b.points || 0) - (a.points || 0) || (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }));
         setLeaders(sorted);
     }, [membersWithData, role, admins]);
 
@@ -176,6 +175,14 @@ export default function RolePage() {
         }
     }, [isMember, liveRole, loading, navigate]);
 
+    // The role's instructors run it from the Instructor tab now; old ?view=admin links go there
+    const subTab = searchParams.get("tab");
+    useEffect(() => {
+        if (pageState !== "admin" || !roleId || liveRole === undefined) return;
+        if (canManage && !isAdmin) navigate(`/instructor/roles/${roleId}${subTab ? `?tab=${subTab}` : ""}`, { replace: true });
+        else if (isAdmin) navigate(`/admin/roles/${roleId}${subTab ? `?tab=${subTab}` : ""}`, { replace: true });
+    }, [pageState, roleId, liveRole, canManage, isAdmin, subTab, navigate]);
+
     useEffect(() => {
         if (!user) return;
         const stored = localStorage.getItem(`stemup_seen_tasks_${user.uid}`);
@@ -195,6 +202,13 @@ export default function RolePage() {
         return () => { setRoleNotification?.(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Notifications about this role are on unless turned off on its Notifications tab
+    const roleNotificationsOn = !!roleId && userData?.notifications?.roles?.[roleId] !== false;
+    const toggleRoleNotifications = async () => {
+        if (!user || !roleId) return;
+        await roleService.setRoleNotifications(user.uid, roleId, !roleNotificationsOn);
+    };
 
     const setCurrentRole = async (id : string) => {
         if (!user) return;
@@ -294,10 +308,19 @@ export default function RolePage() {
                         }
                         return null;
                     })}
+                    {/* Admins manage the role from the Admin tab, its instructors from the Instructor tab */}
                     {isAdmin ? (
                         <Button size="xsm" color="blue" onClick={() => navigate(`/admin/roles/${role.id}`)}>Manage</Button>
                     ) : canManage ? (
-                        <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Instructor</span>
+                        <span className="relative inline-flex">
+                            <Button size="xsm" color="blue" onClick={() => navigate(`/instructor/roles/${role.id}`)}>Manage</Button>
+                            {(requested.length > 0 || submittedTasks.length > 0) && (
+                                <span className="absolute -top-1 -right-1 flex size-2.5">
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
+                                    <span className="relative inline-flex size-2.5 rounded-full bg-sky-500"></span>
+                                </span>
+                            )}
+                        </span>
                     ) : null}
                     {isCurrentRole ?
                         <motion.span
@@ -340,7 +363,7 @@ export default function RolePage() {
                     { key: "rewards", label: "Rewards" },
                     { key: "saved", label: "Saved Data" },
                     ...(!isStaff ? [{ key: "tasks", label: "Tasks" }] : []),
-                    ...(canManage && !isAdmin ? [{ key: "admin", label: "Instructor" }] : []),
+                    { key: "notifications", label: "Notifications" },
                 ].map((tab) => (
                     <div key={tab.key} data-active={pageState === tab.key ? "true" : "false"} className="relative shrink-0">
                         <button
@@ -359,11 +382,8 @@ export default function RolePage() {
                                     ? <span className="ml-1.5 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">{taskCount}</span>
                                     : null
                             )}
-                            {tab.key === "admin" && (requested.length > 0 || submittedTasks.length > 0) && (
-                                <span className="absolute top-1 right-0.5 flex size-2.5">
-                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
-                                    <span className="relative inline-flex size-2.5 rounded-full bg-sky-500"></span>
-                                </span>
+                            {tab.key === "notifications" && !roleNotificationsOn && (
+                                <FontAwesomeIcon icon={faBellSlash} className="ml-1.5 text-gray-400" aria-label="Off" />
                             )}
                         </button>
                     </div>
@@ -710,13 +730,44 @@ export default function RolePage() {
                 </motion.div>
             )}
 
-            {/* Admin */}
-            {pageState === "admin" && canManage && !isAdmin && (
-                <RoleAdminPage
-                    role={role}
-                    membersWithData={membersWithData}
-                    requested={requested}
-                />
+            {/* Notifications for this role */}
+            {pageState === "notifications" && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
+                    <div className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col gap-4">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${roleNotificationsOn ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-400"}`}>
+                                    <FontAwesomeIcon icon={roleNotificationsOn ? faBell : faBellSlash} />
+                                </span>
+                                <div className="min-w-0">
+                                    <p className="font-semibold">Notifications from {role.name}</p>
+                                    <p className="text-sm text-gray-500">{roleNotificationsOn ? "On" : "Off"}</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={roleNotificationsOn}
+                                aria-label={`Notifications from ${role.name}`}
+                                onClick={toggleRoleNotifications}
+                                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 hover:cursor-pointer ${roleNotificationsOn ? "bg-green-500" : "bg-gray-300"}`}
+                            >
+                                <span className={`inline-block size-5 rounded-full bg-white shadow transition-transform duration-200 ${roleNotificationsOn ? "translate-x-6" : "translate-x-1"}`} />
+                            </button>
+                        </div>
+                        <p className="text-sm text-gray-500">
+                            Covers everything about this role: tasks, reviews, extensions and requests{canManage ? ", including submissions waiting for you to review" : ""}.
+                            {" "}Turning it off stops push notifications and emails about this role only.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => navigate("/settings/notifications")}
+                            className="self-start text-sm font-medium text-blue-600 hover:text-blue-700 hover:cursor-pointer"
+                        >
+                            Choose how you're notified in Settings
+                        </button>
+                    </div>
+                </motion.div>
             )}
         </div>
     )

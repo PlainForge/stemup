@@ -143,7 +143,7 @@ export default function Dash() {
                             rolePoints: roleData?.points ?? 0,
                         } as UserData & { rolePoints: number };
                     })
-                    .sort((a, b) => b.rolePoints - a.rolePoints);
+                    .sort((a, b) => b.rolePoints - a.rolePoints || (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }));
 
                 const rewardData = rewardSnap.exists() ? rewardSnap.data() : {};
                 const myIdx = ranked.findIndex(r => r.uid === user.uid);
@@ -179,7 +179,7 @@ export default function Dash() {
 
     const sorted =[...globalLeaders]
         .filter(u => !admins.includes(u.uid))
-        .sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+        .sort((a, b) => (b.points ?? 0) - (a.points ?? 0) || (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }));
 
     // Roles where the user currently places top 3, best placing first
     const currentMonth = new Date().toLocaleString("en-US", { month: "long" });
@@ -261,7 +261,7 @@ export default function Dash() {
                     type="button"
                     onClick={() => context.setShowAccount({ ...userData, uid: user.uid })}
                     aria-label="View your profile card"
-                    className="rounded-full transition-transform duration-200 hover:scale-105 active:scale-95 hover:cursor-pointer"
+                    className="flex shrink-0 rounded-full transition-transform duration-200 hover:scale-105 active:scale-95 hover:cursor-pointer"
                 >
                     <ProfileImg src={userData.photoURL} alt={userData.name} />
                 </button>

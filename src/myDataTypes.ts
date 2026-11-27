@@ -38,6 +38,8 @@ export type NotificationPrefs = {
     email?: boolean,
     /** A kind set to false is off; missing kinds are on */
     types?: Partial<Record<NotifyType, boolean>>,
+    /** Per role (by id), from the role's Notifications tab: false is off; missing roles are on */
+    roles?: Record<string, boolean>,
 }
 
 export type RoleUserData = {
