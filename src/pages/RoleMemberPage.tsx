@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronLeft, faChevronRight, faCircleCheck, faEnvelope, faTrophy } from "@fortawesome/free-solid-svg-icons";
+import { faChevronRight, faCircleCheck, faEnvelope, faTrophy } from "@fortawesome/free-solid-svg-icons";
 import { db } from "../lib/firebase";
 import { MainContext } from "../context/MainContext";
 import { canChangeRole, canManageRole, isRoleStaff, roleOwner, roleService } from "../lib/roleService";
@@ -14,6 +14,7 @@ import Loading from "./Loading";
 import Button from "../components/Button";
 import ProfileImg from "../components/ProfileImg";
 import { AccessBadge } from "./AdminPage";
+import BackButton from "../components/BackButton";
 
 /**
  * /roles/:id/members/:uid — one member of a role, for the people who run it:
@@ -71,14 +72,7 @@ export default function RoleMemberPage() {
         else navigate(fallbackBack, { replace: true });
     };
     const back = (
-        <button
-            type="button"
-            onClick={goBack}
-            className="self-start flex items-center gap-1.5 pl-2.5 pr-4 py-1.5 rounded-full text-sm font-semibold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors hover:cursor-pointer group"
-        >
-            <FontAwesomeIcon icon={faChevronLeft} className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-            Members
-        </button>
+        <BackButton label="Members" onClick={goBack} />
     );
     const shell = (children: React.ReactNode) => (
         <motion.div className="w-full max-w-2xl mx-auto flex flex-col gap-4 px-4 py-6" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>

@@ -15,6 +15,7 @@ import '../theme/palette.dart';
 import '../widgets/buttons.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/page_scaffold.dart' show BackPill;
 
 final privacyPolicyUrl = Uri.parse('https://stemup.web.app/privacy');
 
@@ -485,7 +486,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Heading('Create your account', size: 24),
-          LinkText('Back', icon: FontAwesomeIcons.arrowLeft.data, size: 15, onPressed: () => setState(() => _withEmail = false)),
+          const SizedBox(height: 8),
+          BackPill(label: 'Back', onPressed: () => setState(() => _withEmail = false)),
         ],
       ),
       AutofillGroup(

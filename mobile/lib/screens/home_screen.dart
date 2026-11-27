@@ -83,14 +83,8 @@ class _HomeScreenState extends State<HomeScreen> {
         // Admins and the role's instructors run it, so they aren't ranked
         final ranked = (await Db.getUsers(members)).where((u) => !app.isStaff(roleDoc, u.uid)).map((u) => u.withRoleStats(id)).toList()
           ..sort((a, b) => byPointsThenName(a, b));
-        final myIdx = ranked.indexWhere((u) => u.uid == me.uid);
-        return _RoleBoard(
-          roleId: id,
-          roleName: name,
-          top3: ranked.take(3).toList(),
-          rewards: results[1] as Rewards,
-          myRank: myIdx >= 0 ? myIdx + 1 : null,
-        );
+        final board = splitLeaderboard(ranked);
+        return _RoleBoard(roleId: id, roleName: name, top3: board.podium, rewards: results[1] as Rewards, myRank: rankOf(board, me.uid));
       }),
     );
     if (mounted) {
@@ -180,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Heading('${b.roleName} Leaderboard'),
                 const SizedBox(height: 8),
                 if (b.top3.isEmpty)
-                  const EmptyState('No participants yet.')
+                  const EmptyState('No one has earned points yet.')
                 else
                   for (var i = 0; i < b.top3.length; i++)
                     FadeSlideIn(
@@ -260,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 8),
               if (b.top3.isEmpty)
-                const Muted('No participants yet.', size: 12, color: Palette.gray400)
+                const Muted('No one has earned points yet.', size: 12, color: Palette.gray400)
               else
                 for (var i = 0; i < b.top3.length; i++)
                   Padding(

@@ -97,7 +97,7 @@ class FadingBranchContainer extends StatelessWidget {
           // outgoing page's fade-out at full opacity, leaving it painted on top
           child: AnimatedOpacity(
             opacity: i == currentIndex ? 1 : 0,
-            duration: const Duration(milliseconds: 220),
+            duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
             child: TickerMode(enabled: i == currentIndex, child: children[i]),
           ),

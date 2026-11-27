@@ -2,13 +2,13 @@ import { useContext, useEffect } from "react";
 import { motion } from "motion/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faArrowRight } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight } from "@fortawesome/free-solid-svg-icons";
 import { MainContext } from "../context/MainContext";
 import { useRole } from "../lib/useRole";
 import { canManageRole } from "../lib/roleService";
 import RoleAdminPage from "../components/RoleAdmin";
-import Button from "../components/Button";
 import Loading from "./Loading";
+import BackButton from "../components/BackButton";
 
 /**
  * Running one role, with everything its instructors can do:
@@ -48,7 +48,7 @@ export default function AdminRolePage({ mode = "admin" }: { mode?: "admin" | "in
                 <p className="text-gray-400 text-sm text-center py-8">
                     {role === null ? "This role no longer exists." : "You don't run this role any more."}
                 </p>
-                <Button onClick={() => navigate(home)} color="gray" size="sm">Back to {homeLabel}</Button>
+                <BackButton label={homeLabel} onClick={() => navigate(home)} className="self-center" />
             </div>
         );
     }
@@ -62,12 +62,7 @@ export default function AdminRolePage({ mode = "admin" }: { mode?: "admin" | "in
             animate={{ opacity: 1, y: 0 }}
         >
             <div className="pt-1">
-                <button
-                    onClick={() => navigate(home)}
-                    className="text-sm text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1.5 hover:cursor-pointer"
-                >
-                    <FontAwesomeIcon icon={faArrowLeft} className="text-xs" /> {homeLabel}
-                </button>
+                <BackButton label={homeLabel} onClick={() => navigate(home)} />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">

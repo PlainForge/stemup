@@ -14,13 +14,14 @@ import ProfileImg from "../components/ProfileImg";
 import Input from "../components/Input";
 import SemesterResetModal from "../components/SemesterResetModal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBell, faBug, faCheck, faChevronLeft, faChevronRight, faCopy, faCircleHalfStroke, faSliders, faUser, faUserGear, faUserShield, faMoon, faRightFromBracket, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
+import { faBell, faBug, faCheck, faChevronRight, faCopy, faCircleHalfStroke, faSliders, faUser, faUserGear, faUserShield, faMoon, faRightFromBracket, faSun, faWrench } from "@fortawesome/free-solid-svg-icons";
 import Dropdown from "../components/Dropdown";
 import type { ThemeMode } from "../context/MainProvider";
 import { NOTIFICATION_TYPES, type StemRequest } from "../myDataTypes";
 import { roleService } from "../lib/roleService";
 import { BLOCKED_NAME_MESSAGE, isProfaneName } from "../lib/nameFilter";
 import { AccessBadge } from "./AdminPage";
+import BackButton from "../components/BackButton";
 
 /** A gray inset row with a title, a hint under it, and an on/off switch. */
 function SwitchRow({ label, hint, checked, onChange, disabled = false }: {
@@ -309,14 +310,7 @@ export default function Settings() {
                 </>
             ) : (
                 <div className="mb-6 flex flex-col items-start gap-4">
-                    <button
-                        type="button"
-                        onClick={() => navigate("/settings")}
-                        className="flex items-center gap-1.5 pl-2.5 pr-4 py-1.5 rounded-full text-sm font-semibold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors hover:cursor-pointer group"
-                    >
-                        <FontAwesomeIcon icon={faChevronLeft} className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-                        Settings
-                    </button>
+                    <BackButton label="Settings" onClick={() => navigate("/settings")} />
                     <h1 className="text-2xl font-bold">{SETTINGS_SECTIONS.find(x => x.key === tab)?.label}</h1>
                 </div>
             )}

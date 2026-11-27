@@ -16,6 +16,8 @@ import MedalIcon from "../components/MedalIcon";
 import { useSlidingIndicator } from "../lib/useSlidingIndicator";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBell, faBellSlash, faCheck, faCopy } from "@fortawesome/free-solid-svg-icons";
+import BackButton from "../components/BackButton";
+import { splitLeaderboard } from "../lib/leaderboard";
 
 
 /** Stable fallback so hooks that depend on these lists don't re-run every render */
@@ -258,6 +260,7 @@ export default function RolePage() {
         .map(uid => membersWithData.find(m => m.uid === uid))
         .filter((m): m is UserData => !!m);
 
+    const board = splitLeaderboard(leaders);
     const taskCount = userTasks.filter(task => !task.complete && !submittedTasks.some(s => s.id === task.id)).length;
     const hasNewTasks = !isStaff && userTasks.some(t => !t.complete && !seenTaskIds.has(t.id) && !submittedTasks.some(s => s.id === t.id));
 
@@ -265,15 +268,7 @@ export default function RolePage() {
         <div className="w-full max-w-3xl mx-auto flex flex-col gap-4 px-4 pb-10">
             {/* Breadcrumb / back nav */}
             <div className="flex items-center justify-between pt-1">
-                <button
-                    onClick={() => navigate("/roles")}
-                    className="flex items-center gap-1.5 pl-2.5 pr-4 py-1.5 rounded-full text-sm font-semibold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors hover:cursor-pointer group"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Roles
-                </button>
+                <BackButton label="Roles" onClick={() => navigate("/roles")} />
                 <button
                     type="button"
                     title="Role ID (click to copy)"
@@ -399,10 +394,10 @@ export default function RolePage() {
                 >
                     {leaders.length === 0 && <p className="text-gray-400 text-sm text-center py-8">No members yet.</p>}
 
-                    {/* Podium for top 3 */}
+                    {/* Podium for top 3 (only people who've earned a point or finished a task) */}
                     {(() => {
-                        const top = leaders.slice(0, 3);
-                        if (top.length === 0) return null;
+                        const top = board.podium;
+                        if (leaders.length === 0) return null;
 
                         const podiumOrder = [top[1], top[0], top[2]]; // 2nd, 1st, 3rd
                         const podiumConfig = [
@@ -468,7 +463,7 @@ export default function RolePage() {
                     })()}
 
                     {/* Rest of the list (4th+) */}
-                    {leaders.slice(3).map((u, idx) => {
+                    {board.rest.map((u, idx) => {
                         const rank = idx + 4;
                         return (
                             <div
@@ -502,7 +497,7 @@ export default function RolePage() {
                 >
                     <h2 className="text-lg font-semibold">{role.rewardsTitle?.trim() || `${currentMonth} Rewards`}</h2>
                     {["First", "Second", "Third"].map((label, idx) => {
-                        const winner = leaders[idx];
+                        const winner = board.podium[idx];
                         return (
                             <div key={label} className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-5 py-4">
                                 <div className="flex items-center gap-3">

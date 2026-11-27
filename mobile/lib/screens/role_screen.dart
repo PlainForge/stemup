@@ -262,6 +262,7 @@ class _RoleScreenState extends State<RoleScreen> {
 
   Widget _rewardsTab(BuildContext context, Role role, List<UserData> ranked) {
     const labels = ['First', 'Second', 'Third'];
+    final podium = splitLeaderboard(ranked).podium;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -286,7 +287,7 @@ class _RoleScreenState extends State<RoleScreen> {
                           '${labels[i]} Place',
                           style: TextStyle(fontWeight: FontWeight.w600, color: Palette.label(context)),
                         ),
-                        Muted(i < ranked.length ? ranked[i].name : 'No user yet'),
+                        Muted(i < podium.length ? podium[i].name : 'No user yet'),
                       ],
                     ),
                   ),

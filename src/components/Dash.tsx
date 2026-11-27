@@ -7,6 +7,7 @@ import MedalIcon from "./MedalIcon";
 import { collection, doc, getDoc, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import type { UserData, UserRoleData } from "../myDataTypes";
+import { rankOf, splitLeaderboard } from "../lib/leaderboard";
 
 interface RoleLeaderboard {
     roleId: string;
@@ -141,17 +142,18 @@ export default function Dash() {
                             roles,
                             currentRole: data.currentRole ?? "",
                             rolePoints: roleData?.points ?? 0,
-                        } as UserData & { rolePoints: number };
+                            roleTasks: roleData?.taskCompleted ?? 0,
+                        } as UserData & { rolePoints: number; roleTasks: number };
                     })
                     .sort((a, b) => b.rolePoints - a.rolePoints || (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }));
 
                 const rewardData = rewardSnap.exists() ? rewardSnap.data() : {};
-                const myIdx = ranked.findIndex(r => r.uid === user.uid);
+                const board = splitLeaderboard(ranked, u => u.rolePoints > 0 || u.roleTasks > 0);
                 return {
                     roleId: myRole.id,
                     roleName: myRole.name,
-                    myRank: myIdx >= 0 ? myIdx + 1 : null,
-                    top3: ranked.slice(0, 3),
+                    myRank: rankOf(board, r => r.uid === user.uid),
+                    top3: board.podium,
                     rewardsTitle: roleSnap.exists() ? ((roleSnap.data().rewardsTitle as string | undefined)?.trim() ?? "") : "",
                     rewards: [
                         rewardData.first ?? "No reward set",
@@ -181,6 +183,8 @@ export default function Dash() {
         .filter(u => !admins.includes(u.uid))
         .sort((a, b) => (b.points ?? 0) - (a.points ?? 0) || (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }));
 
+    const globalBoard = splitLeaderboard(sorted);
+
     // Roles where the user currently places top 3, best placing first
     const currentMonth = new Date().toLocaleString("en-US", { month: "long" });
     const placings = roleLeaderboards
@@ -199,7 +203,7 @@ export default function Dash() {
                     <p className="font-semibold leading-tight truncate">{rl.roleName}</p>
                     {rl.rewardsTitle && <p className="text-xs text-gray-400 -mt-1.5 truncate">{rl.rewardsTitle}</p>}
                     {rl.top3.length === 0 ? (
-                        <p className="text-xs text-gray-400">No participants yet.</p>
+                        <p className="text-xs text-gray-400">No one has earned points yet.</p>
                     ) : rl.top3.map((m, idx) => (
                         <div key={m.uid} className="flex items-center gap-2.5">
                             <span className="text-xl shrink-0 w-7 text-center"><MedalIcon rank={idx} /></span>
@@ -294,10 +298,9 @@ export default function Dash() {
                         <p className="text-gray-400 text-sm text-center py-6">No participants yet.</p>
                     ) : (
                         <>
-                            {/* Podium for top 3 */}
+                            {/* Podium for top 3 (only people who've earned a point or finished a task) */}
                             {(() => {
-                                const top = sorted.slice(0, 3);
-                                if (top.length === 0) return null;
+                                const top = globalBoard.podium;
                                 const podiumOrder = [top[1], top[0], top[2]];
                                 const podiumConfig = [
                                     { rank: 2, barH: "h-16", avatarSize: "sm", textSize: "text-sm", mt: "mt-8", avatarClass: "size-24" },
@@ -361,7 +364,7 @@ export default function Dash() {
                             })()}
 
                             {/* 4th+ */}
-                            {sorted.slice(3).map((u, idx) => (
+                            {globalBoard.rest.map((u, idx) => (
                                 <motion.div
                                     key={u.uid}
                                     className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
@@ -397,7 +400,7 @@ export default function Dash() {
                         <div key={rl.roleId} className="w-full flex flex-col gap-2">
                             <h2 className="text-lg font-semibold truncate">{rl.roleName} Leaderboard</h2>
                             {rl.top3.length === 0 ? (
-                                <p className="text-gray-400 text-sm text-center py-4">No participants yet.</p>
+                                <p className="text-gray-400 text-sm text-center py-4">No one has earned points yet.</p>
                             ) : (
                                 <div className="flex flex-col gap-3">
                                     {rl.top3.map((m, idx) => {

@@ -44,7 +44,7 @@ class PageScaffold extends StatelessWidget {
         Row(
           children: [
             if (backLabel != null)
-              _BackPill(label: backLabel!, onPressed: () => context.canPop() ? context.pop() : context.go(backPath ?? '/')),
+              BackPill(label: backLabel!, onPressed: () => context.canPop() ? context.pop() : context.go(backPath ?? '/')),
             const Spacer(),
             ?trailing,
           ],
@@ -81,9 +81,9 @@ class PageScaffold extends StatelessWidget {
   }
 }
 
-/// The "‹ Roles" back button: a blue pill so it's easy to spot.
-class _BackPill extends StatelessWidget {
-  const _BackPill({required this.label, required this.onPressed});
+/// The "‹ Roles" back button used everywhere: a blue pill so it's easy to spot.
+class BackPill extends StatelessWidget {
+  const BackPill({super.key, required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;

@@ -1,11 +1,9 @@
 import { motion } from "motion/react";
 import { auth } from "../lib/firebase";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import Input from "./Input";
 import Button from "./Button";
-import LinkButton from "./LinkButton";
 import ErrorMessage from "./ErrorMessage";
+import BackButton from "./BackButton";
 
 interface RegisterCardProps {
     email: string;
@@ -31,9 +29,7 @@ export default function RegisterCard({email, setEmail, password, setPassword, na
         >
             <div>
                 <h2 className="text-2xl font-bold">Create your account</h2>
-                <LinkButton onClick={() => setSignInEmail(false)}>
-                    <FontAwesomeIcon icon={faArrowLeft} className="mr-1" /> Back
-                </LinkButton>
+                <BackButton label="Back" onClick={() => setSignInEmail(false)} className="mt-2" />
             </div>
             <form className="flex flex-col gap-3 text-black" action={registerWithEmail} onSubmit={async (e) => {
                 e.preventDefault();

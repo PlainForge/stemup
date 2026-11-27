@@ -72,7 +72,7 @@ class _AlumniBatchScreenState extends State<AlumniBatchScreen> {
         final subtitle = '$created${batch.roleNames.isNotEmpty ? ' · Archived from: ${batch.roleNames.join(', ')}' : ''}';
 
         return PageScaffold(
-          backLabel: 'Back to Admin',
+          backLabel: 'Admin',
           backPath: '/admin',
           title: batch.name,
           subtitle: subtitle.isEmpty ? null : subtitle,

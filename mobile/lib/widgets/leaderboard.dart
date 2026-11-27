@@ -10,6 +10,26 @@ import 'buttons.dart';
 import 'common.dart';
 import 'profile_sheet.dart';
 
+/// Only people who've earned a point or finished a task can take a top-3 spot.
+bool hasEarned(UserData u) => u.points > 0 || u.taskCompleted > 0;
+
+/// Splits a ranking (already sorted, best first) into the top-3 podium and everyone
+/// else. Anyone who hasn't earned anything yet starts from 4th, so the podium can
+/// have empty spots. `rest[i]` is ranked `i + 4`.
+({List<UserData> podium, List<UserData> rest}) splitLeaderboard(List<UserData> ranked) {
+  final podium = ranked.where(hasEarned).take(3).toList();
+  final onPodium = {for (final u in podium) u.uid};
+  return (podium: podium, rest: ranked.where((u) => !onPodium.contains(u.uid)).toList());
+}
+
+/// 1-3 on the podium, 4+ after it, or null if they aren't on the board.
+int? rankOf(({List<UserData> podium, List<UserData> rest}) board, String uid) {
+  final p = board.podium.indexWhere((u) => u.uid == uid);
+  if (p >= 0) return p + 1;
+  final r = board.rest.indexWhere((u) => u.uid == uid);
+  return r >= 0 ? r + 4 : null;
+}
+
 class _Slot {
   const _Slot(this.rank, this.bar, this.avatar, this.text, this.top, this.fill, this.border, this.meFill, this.meBorder);
 
@@ -28,7 +48,7 @@ const _slots = [
 class Podium extends StatelessWidget {
   const Podium({super.key, required this.ranked, required this.meUid, this.roleId});
 
-  /// Already sorted, best first. Only the first three are used.
+  /// The podium, best first (see [splitLeaderboard]). Missing places show empty.
   final List<UserData> ranked;
   final String meUid;
 
@@ -209,16 +229,17 @@ class Leaderboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (ranked.isEmpty) return EmptyState(emptyText);
+    final board = splitLeaderboard(ranked);
     return Column(
       children: [
-        Podium(ranked: ranked, meUid: meUid, roleId: roleId),
-        for (var i = 3; i < ranked.length; i++)
+        Podium(ranked: board.podium, meUid: meUid, roleId: roleId),
+        for (var i = 0; i < board.rest.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: FadeSlideIn(
-              delay: stagger(i - 3, 30),
+              delay: stagger(i, 30),
               offset: 8,
-              child: RankRow(rank: i + 1, user: ranked[i], isMe: ranked[i].uid == meUid, roleId: roleId),
+              child: RankRow(rank: i + 4, user: board.rest[i], isMe: board.rest[i].uid == meUid, roleId: roleId),
             ),
           ),
       ],

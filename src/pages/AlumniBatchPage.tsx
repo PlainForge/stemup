@@ -9,8 +9,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import Loading from "./Loading";
 import Button from "../components/Button";
 import ProfileImg from "../components/ProfileImg";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
+import BackButton from "../components/BackButton";
 
 interface AlumniMember {
     uid: string;
@@ -100,7 +99,7 @@ export default function AlumniBatchPage() {
         return (
             <div className="w-full max-w-2xl mx-auto flex flex-col gap-4 px-4 py-6 items-center">
                 <p className="text-gray-400 text-sm text-center py-8">This archive no longer exists.</p>
-                <Button onClick={() => navigate("/admin?tab=inactive")} color="gray" size="sm">Back to Inactive Users</Button>
+                <BackButton label="Inactive Users" onClick={() => navigate("/admin?tab=inactive")} className="self-center" />
             </div>
         );
     }
@@ -112,12 +111,7 @@ export default function AlumniBatchPage() {
             animate={{ opacity: 1, y: 0 }}
         >
             <div>
-                <button
-                    onClick={() => navigate("/admin?tab=inactive")}
-                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors mb-2 flex items-center gap-1.5 hover:cursor-pointer"
-                >
-                    <FontAwesomeIcon icon={faArrowLeft} className="text-[10px]" /> Back to Inactive Users
-                </button>
+                <BackButton label="Inactive Users" onClick={() => navigate("/admin?tab=inactive")} className="mb-4" />
                 <h1 className="text-2xl font-bold">{batch.name}</h1>
                 <p className="text-sm text-gray-500 mt-0.5">
                     {batch.createdAt ? batch.createdAt.toDate().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""}

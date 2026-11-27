@@ -48,7 +48,7 @@ function PillBar({ activeKey, className, pillClassName, squishy, children }: {
                         { left: `${unionLeft}px`, width: `${unionRight - unionLeft}px`, offset: 0.45, easing: "cubic-bezier(0.5,0,0.15,1)" },
                         { left: `${newBox.x}px`, width: `${newBox.w}px`, offset: 1 },
                     ],
-                    { duration: 420, fill: "none" }
+                    { duration: 260, fill: "none" }
                 );
             }
         }
@@ -145,7 +145,7 @@ function MobileNavItem({ icon, label, onClick, active, ping }: {
                     { transform: "scale(1.28)", offset: 0.5 },
                     { transform: "scale(1)" },
                 ],
-                { duration: 380, easing: "cubic-bezier(0.34,1.56,0.64,1)" }
+                { duration: 240, easing: "cubic-bezier(0.34,1.56,0.64,1)" }
             );
         }
         wasActive.current = active;
@@ -155,7 +155,7 @@ function MobileNavItem({ icon, label, onClick, active, ping }: {
         <button
             onClick={onClick}
             data-active={active ? "true" : "false"}
-            className={`relative flex flex-col items-center gap-0.5 flex-1 min-w-0 px-1 py-2 rounded-full text-[11px] font-medium transition-[color,transform] duration-300 active:scale-90 hover:cursor-pointer ${
+            className={`relative flex flex-col items-center gap-0.5 flex-1 min-w-0 px-1 py-2 rounded-full text-[11px] font-medium transition-[color,transform] duration-150 active:scale-90 hover:cursor-pointer ${
                 active
                     ? "text-blue-500 dark:text-blue-400"
                     : "text-gray-700 dark:text-gray-200"
@@ -207,7 +207,7 @@ export default function Nav() {
     if (IS_PHONE) {
         return (
             <nav
-                className={`fixed left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+0.25rem)] z-50 flex justify-center px-4 pointer-events-none transition-transform duration-300 ease-out ${
+                className={`fixed left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+0.25rem)] z-50 flex justify-center px-4 pointer-events-none transition-transform duration-200 ease-out ${
                     barHidden ? "translate-y-24" : "translate-y-0"
                 }`}
             >

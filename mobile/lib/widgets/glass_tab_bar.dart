@@ -21,7 +21,7 @@ class GlassTabItem {
 
 const _barHeight = 64.0;
 const _inset = 5.0;
-const _spring = SpringDescription(mass: 1, stiffness: 520, damping: 32);
+const _spring = SpringDescription(mass: 1, stiffness: 900, damping: 42);
 
 class GlassTabBar extends StatefulWidget {
   const GlassTabBar({super.key, required this.items, required this.currentIndex, required this.onSelect});
@@ -175,7 +175,7 @@ class _TabButton extends StatefulWidget {
 
 class _TabButtonState extends State<_TabButton> with TickerProviderStateMixin {
   // Springy overshoot the moment this tab becomes active, like the web MobileNavItem
-  late final AnimationController _pop = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
+  late final AnimationController _pop = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
   late final AnimationController _press = AnimationController(vsync: this, duration: const Duration(milliseconds: 120));
 
   @override

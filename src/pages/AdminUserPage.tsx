@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faChevronLeft, faChevronRight, faCopy, faEnvelope, faUsers } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faChevronRight, faCopy, faEnvelope, faUsers } from "@fortawesome/free-solid-svg-icons";
 import { db } from "../lib/firebase";
 import { MainContext } from "../context/MainContext";
 import { GLOBAL_ROLE_ID } from "../lib/firebaseService";
@@ -15,6 +15,7 @@ import Loading from "./Loading";
 import Button from "../components/Button";
 import ProfileImg from "../components/ProfileImg";
 import { AccessBadge } from "./AdminPage";
+import BackButton from "../components/BackButton";
 
 /** /admin/users/:uid — one user's details, with their access and global leaderboard switches. */
 export default function AdminUserPage() {
@@ -58,14 +59,7 @@ export default function AdminUserPage() {
     if (loading || !user || !isAdmin || target === undefined || !uid) return <Loading />;
 
     const back = (
-        <button
-            type="button"
-            onClick={() => navigate("/admin?tab=users")}
-            className="self-start flex items-center gap-1.5 pl-2.5 pr-4 py-1.5 rounded-full text-sm font-semibold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors hover:cursor-pointer group"
-        >
-            <FontAwesomeIcon icon={faChevronLeft} className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-            Users
-        </button>
+        <BackButton label="Users" onClick={() => navigate("/admin?tab=users")} />
     );
 
     if (target === null) {
