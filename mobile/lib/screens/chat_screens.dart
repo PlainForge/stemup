@@ -66,10 +66,12 @@ class _RoleChatScreenState extends State<RoleChatScreen> {
     if (!app.isAdmin && !role.members.contains(uid)) {
       return _ChatFrame(backPath: '/roles', title: role.name, notice: "You're not in this role.");
     }
+    // Admins can be in any role's chat, so they aren't counted as its people
+    final people = role.members.where((m) => !app.admins.contains(m)).length;
     return _ChatFrame(
       backPath: back,
       title: role.name,
-      subtitle: 'Group chat · ${role.members.length} ${role.members.length == 1 ? 'person' : 'people'}',
+      subtitle: 'Group chat · $people ${people == 1 ? 'person' : 'people'}',
       leading: RoleIconBadge.of(role, size: 40, solid: true),
       child: ChatView(
         collection: _messages,
@@ -283,12 +285,25 @@ class ChatView extends StatefulWidget {
 /// Messages from the same person this close together share one header.
 const _groupGap = Duration(minutes: 5);
 
+/// A message shown the moment it's sent, before the server has it. [id] is the
+/// real message's id once the server answers; it stops showing when that arrives.
+class _Pending {
+  _Pending(this.key, this.text);
+
+  final String key;
+  final String text;
+  String? id;
+}
+
+const _pendingPrefix = 'pending-';
+
 class _ChatViewState extends State<ChatView> {
   late final StreamSubscription<List<ChatMessage>> _sub;
   List<ChatMessage>? _messages;
   bool _error = false;
   final _draft = TextEditingController();
-  bool _sending = false;
+  final List<_Pending> _pending = [];
+  int _pendingCount = 0;
 
   /// Sent too many messages too fast: no sending until then, with a countdown.
   DateTime? _timeoutUntil;
@@ -312,7 +327,12 @@ class _ChatViewState extends State<ChatView> {
     _sub = Db.messagesStream(widget.collection).listen(
       (m) {
         if (!mounted) return;
-        setState(() => _messages = m);
+        setState(() {
+          _messages = m;
+          // Sent messages the server has now delivered
+          final ids = {for (final x in m) x.id};
+          _pending.removeWhere((p) => p.id != null && ids.contains(p.id));
+        });
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) widget.onMessages?.call(m);
         });
@@ -339,20 +359,34 @@ class _ChatViewState extends State<ChatView> {
 
   Future<void> _send() async {
     final text = _draft.text.trim();
-    if (text.isEmpty || _sending || _timedOut) return;
-    setState(() => _sending = true);
+    if (text.isEmpty || _timedOut) return;
+    // Show it straight away; the server's copy replaces it when it arrives
+    final p = _Pending('${_pendingCount++}', text);
+    setState(() => _pending.add(p));
+    _draft.clear();
+    HapticFeedback.lightImpact();
     try {
-      await Db.sendMessage(widget.collection, text);
-      _draft.clear();
-      HapticFeedback.lightImpact();
-    } on ChatTimeout catch (e) {
-      // Their draft stays, ready to send once the timeout ends
-      HapticFeedback.heavyImpact();
-      if (mounted) _startTimeout(e.until);
-    } catch (_) {
-      if (mounted) showToast(context, "Couldn't send your message. Please try again.", error: true);
-    } finally {
-      if (mounted) setState(() => _sending = false);
+      final id = await Db.sendMessage(widget.collection, text);
+      if (!mounted) return;
+      setState(() {
+        final delivered = _messages?.any((m) => m.id == id) ?? false;
+        if (id == null || delivered) {
+          _pending.remove(p);
+        } else {
+          p.id = id;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      // Not sent: take it back out, and put it back in the box if that's empty
+      setState(() => _pending.remove(p));
+      if (_draft.text.trim().isEmpty) _draft.text = text;
+      if (e is ChatTimeout) {
+        HapticFeedback.heavyImpact();
+        _startTimeout(e.until);
+      } else {
+        showToast(context, "Couldn't send your message. Please try again.", error: true);
+      }
     }
   }
 
@@ -406,8 +440,9 @@ class _ChatViewState extends State<ChatView> {
     final newDay = prev == null || !_sameDay(prev.at, m.at);
     final grouped = !newDay && prev.uid == m.uid && m.at.difference(prev.at) < _groupGap;
     final mine = m.uid == me;
+    final sending = m.id.startsWith(_pendingPrefix);
     final width = MediaQuery.sizeOf(context).width;
-    final time = DateFormat('h:mm a', 'en_US').format(m.at);
+    final time = sending ? 'Sending...' : DateFormat('h:mm a', 'en_US').format(m.at);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -454,22 +489,26 @@ class _ChatViewState extends State<ChatView> {
                         ),
                       ),
                     GestureDetector(
-                      onLongPress: () => _options(m, mine || widget.canModerate),
-                      child: Container(
-                        constraints: BoxConstraints(maxWidth: width * .74),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                        decoration: BoxDecoration(
-                          color: mine ? Palette.blue600 : Palette.resolve(context, Palette.gray100),
-                          borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(18),
-                            topRight: const Radius.circular(18),
-                            bottomLeft: Radius.circular(mine ? 18 : 6),
-                            bottomRight: Radius.circular(mine ? 6 : 18),
+                      onLongPress: sending ? null : () => _options(m, mine || widget.canModerate),
+                      child: AnimatedOpacity(
+                        opacity: sending ? .6 : 1,
+                        duration: const Duration(milliseconds: 150),
+                        child: Container(
+                          constraints: BoxConstraints(maxWidth: width * .74),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                          decoration: BoxDecoration(
+                            color: mine ? Palette.blue600 : Palette.resolve(context, Palette.gray100),
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(18),
+                              topRight: const Radius.circular(18),
+                              bottomLeft: Radius.circular(mine ? 18 : 6),
+                              bottomRight: Radius.circular(mine ? 6 : 18),
+                            ),
                           ),
-                        ),
-                        child: Text(
-                          m.text,
-                          style: TextStyle(fontSize: 16, height: 1.3, color: mine ? const Color(0xFFFFFFFF) : Palette.label(context)),
+                          child: Text(
+                            m.text,
+                            style: TextStyle(fontSize: 16, height: 1.3, color: mine ? const Color(0xFFFFFFFF) : Palette.label(context)),
+                          ),
                         ),
                       ),
                     ),
@@ -485,11 +524,21 @@ class _ChatViewState extends State<ChatView> {
 
   @override
   Widget build(BuildContext context) {
-    final me = context.watch<AppState>().user?.uid ?? '';
-    final list = _messages;
+    final app = context.watch<AppState>();
+    final me = app.user?.uid ?? '';
+    final messages = _messages;
+    // The server's messages, then this person's still on their way
+    final list = messages == null
+        ? null
+        : [
+            ...messages,
+            for (final p in _pending)
+              if (p.id == null || !messages.any((m) => m.id == p.id))
+                ChatMessage(id: '$_pendingPrefix${p.key}', uid: me, name: app.userData?.name ?? '', text: p.text),
+          ];
     final pad = MediaQuery.paddingOf(context);
     final timedOut = _timedOut;
-    final canSend = _draft.text.trim().isNotEmpty && !_sending && !timedOut;
+    final canSend = _draft.text.trim().isNotEmpty && !timedOut;
     // Rebuilt whenever the page resizes for the keyboard. The keyboard is read from the raw
     // view: the page scaffold has already taken it out of MediaQuery
     return LayoutBuilder(

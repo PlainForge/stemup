@@ -23,6 +23,8 @@ import { gmailAppPassword, gmailCredentials, gmailUser } from "./secrets";
 /** Kept in sync with NOTIFICATION_TYPES in src/myDataTypes.ts and NotifyType in mobile/lib/models/models.dart. */
 export type NotifyType =
   | "newTask" | "taskEdited" | "taskReviewed" | "extension" | "joinRole" | "accessRequest" | "invite"
+  // Instructors and admins: a member submitted a task for review
+  | "taskSubmitted"
   // Messages: iOS push only, never email
   | "roleChat" | "taskThread";
 
@@ -88,12 +90,21 @@ async function sendEmail(to: string, msg: Message) {
 export async function notify(uid: string, type: NotifyType, msg: Message, roleId?: unknown, { pushOnly = false } = {}) {
   if (!uid) return;
   const snap = await getFirestore().doc(`users/${uid}`).get();
-  if (!snap.exists) return;
+  if (!snap.exists) {
+    logger.warn(`No ${type} notification for ${uid}: they have no profile`);
+    return;
+  }
   const prefs = (snap.get("notifications") ?? {}) as {
     push?: boolean; email?: boolean; types?: Record<string, boolean>; roles?: Record<string, boolean>;
   };
-  if (prefs.types?.[type] === false) return;
-  if (typeof roleId === "string" && roleId && prefs.roles?.[roleId] === false) return;
+  if (prefs.types?.[type] === false) {
+    logger.info(`No ${type} notification for ${uid}: they turned this kind off in Settings`);
+    return;
+  }
+  if (typeof roleId === "string" && roleId && prefs.roles?.[roleId] === false) {
+    logger.info(`No ${type} notification for ${uid}: they turned off notifications for role ${roleId}`);
+    return;
+  }
 
   const email = snap.get("email") as string | undefined;
   const jobs: Promise<unknown>[] = [];

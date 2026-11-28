@@ -54,10 +54,12 @@ export const sendMessage = onCall(async (request) => {
   if (clean.length > MAX_MESSAGE) throw new HttpsError("invalid-argument", `Messages can be ${MAX_MESSAGE} characters at most.`);
 
   const db = getFirestore();
-  const [adminSnap, instructorSnap, userSnap] = await Promise.all([
+  // Everything it needs to read, all at once (a task's role has to wait for the task)
+  const [adminSnap, instructorSnap, userSnap, parentSnap] = await Promise.all([
     db.doc("admins/all-perms").get(),
     db.doc("admins/instructors").get(),
     db.doc(`users/${uid}`).get(),
+    db.doc(`${kind === "role" ? "roles" : "tasks"}/${id}`).get(),
   ]);
   const isAdmin = ((adminSnap.get("ids") ?? []) as string[]).includes(uid);
   const isInstructor = ((instructorSnap.get("ids") ?? []) as string[]).includes(uid);
@@ -65,13 +67,13 @@ export const sendMessage = onCall(async (request) => {
   // Who may write where (the same people who can read it, per firestore.rules)
   let target: FirebaseFirestore.CollectionReference;
   if (kind === "role") {
-    const role = (await db.doc(`roles/${id}`).get()).data();
+    const role = parentSnap.data();
     if (!role) throw new HttpsError("not-found", "This role no longer exists.");
     if (!isAdmin && !((role.members ?? []) as string[]).includes(uid)) throw new HttpsError("permission-denied", "You're not in this role.");
     if (role.chatEnabled !== true) throw new HttpsError("failed-precondition", "The group chat is turned off.");
     target = db.collection(`roles/${id}/messages`);
   } else {
-    const task = (await db.doc(`tasks/${id}`).get()).data();
+    const task = parentSnap.data();
     if (!task) throw new HttpsError("not-found", "This task no longer exists.");
     const role = (await db.doc(`roles/${task.roleId}`).get()).data();
     const runsRole = isAdmin || (isInstructor && ((role?.instructors ?? []) as string[]).includes(uid));
@@ -122,9 +124,13 @@ export const notifyOnRoleMessage = onDocumentCreated("roles/{roleId}/messages/{m
   if (!msg) return;
   const roleId = event.params.roleId;
   const role = (await getFirestore().doc(`roles/${roleId}`).get()).data();
-  if (!role || role.chatEnabled !== true) return;
+  if (!role || role.chatEnabled !== true) {
+    logger.info(`No group chat notifications for role ${roleId}: ${role ? "the chat is turned off" : "the role is gone"}`);
+    return;
+  }
 
   const others = ((role.members ?? []) as string[]).filter((uid) => uid !== msg.uid);
+  logger.info(`Group chat message in role ${roleId}: notifying ${others.length} member(s)`);
   const results = await Promise.allSettled(others.map((uid) =>
     notify(uid, "roleChat", { title: role.name || "Group chat", body: preview(msg), path: `/chat/${roleId}` }, roleId, { pushOnly: true })
   ));

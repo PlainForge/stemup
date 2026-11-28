@@ -4,6 +4,7 @@ import { logger } from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import * as nodemailer from "nodemailer";
+import { notify } from "./notifications";
 
 initializeApp();
 
@@ -36,6 +37,16 @@ export const notifyAdminsOnTaskSubmission = onDocumentCreated(
     if (recipientIds.length === 0) return;
 
     const recipientDocs = await Promise.all(recipientIds.map((id) => db.doc(`users/${id}`).get()));
+    const roleName = roleSnap?.exists ? (roleSnap.data()?.name as string) : "Unknown role";
+
+    // iOS push to each of them, following their notification settings (the email below is separate)
+    await Promise.allSettled(recipientIds.map((id) =>
+      notify(id, "taskSubmitted", {
+        title: "Task to review",
+        body: `${submission.assignedName || "A member"} submitted ${submission.title || "a task"} in ${roleName}.`,
+        path: submission.roleId ? `/roles/${submission.roleId}` : "/",
+      }, submission.roleId, { pushOnly: true })
+    ));
 
     const adminEmails = recipientDocs
       // Leave out anyone who turned off notifications for this role
@@ -47,8 +58,6 @@ export const notifyAdminsOnTaskSubmission = onDocumentCreated(
       logger.warn("No admin or instructor emails found; skipping task submission notification");
       return;
     }
-
-    const roleName = roleSnap?.exists ? (roleSnap.data()?.name as string) : "Unknown role";
 
     const esc = (v: unknown) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 

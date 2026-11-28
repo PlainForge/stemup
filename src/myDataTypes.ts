@@ -52,6 +52,7 @@ export const NOTIFICATION_TYPES = [
     { key: "joinRole", label: "Role join requests", hint: "A request to join a role is accepted or declined" },
     { key: "accessRequest", label: "Instructor and role requests", hint: "Instructor access, new roles and role resets" },
     { key: "invite", label: "Role invitations", hint: "Someone invites you to join a role" },
+    { key: "taskSubmitted", label: "Tasks to review", hint: "A member submits a task in a role you run (iOS only)" },
     { key: "roleChat", label: "Group chat messages", hint: "New messages in a role's group chat (iOS only, never by email)" },
     { key: "taskThread", label: "Task questions", hint: "A new message on one of your tasks (iOS only, never by email)" },
 ] as const;

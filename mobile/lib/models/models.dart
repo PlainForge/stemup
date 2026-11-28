@@ -29,7 +29,7 @@ extension AccessLevelLabel on AccessLevel {
 /// Kinds of notification, each with its own switch in Settings. Names match
 /// NotifyType in functions/src/notifications.ts.
 /// [roleChat] and [taskThread] come as push notifications only, never email.
-enum NotifyType { newTask, taskEdited, taskReviewed, extension, joinRole, accessRequest, invite, roleChat, taskThread }
+enum NotifyType { newTask, taskEdited, taskReviewed, extension, joinRole, accessRequest, invite, taskSubmitted, roleChat, taskThread }
 
 extension NotifyTypeText on NotifyType {
   String get label => switch (this) {
@@ -40,6 +40,7 @@ extension NotifyTypeText on NotifyType {
     NotifyType.joinRole => 'Role join requests',
     NotifyType.accessRequest => 'Instructor and role requests',
     NotifyType.invite => 'Role invitations',
+    NotifyType.taskSubmitted => 'Tasks to review',
     NotifyType.roleChat => 'Group chat messages',
     NotifyType.taskThread => 'Task questions',
   };
@@ -52,6 +53,7 @@ extension NotifyTypeText on NotifyType {
     NotifyType.joinRole => 'A request to join a role is accepted or declined',
     NotifyType.accessRequest => 'Instructor access, new roles and role resets',
     NotifyType.invite => 'Someone invites you to join a role',
+    NotifyType.taskSubmitted => 'A member submits a task in a role you run',
     NotifyType.roleChat => "New messages in a role's group chat (never by email)",
     NotifyType.taskThread => 'A new message on one of your tasks (never by email)',
   };

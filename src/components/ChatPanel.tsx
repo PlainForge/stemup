@@ -13,6 +13,13 @@ import ProfileImg from "./ProfileImg";
 /** Messages from the same person this close together share one header */
 const GROUP_MS = 5 * 60 * 1000;
 
+/**
+ * A message shown the moment it's sent, before the server has it. [id] is the
+ * real message's id once the server answers; it stops showing when that arrives.
+ */
+type Pending = { key: string; text: string; id?: string };
+const PENDING = "pending-";
+
 const dayLabel = (d: Date) => {
     const today = new Date();
     const yesterday = new Date();
@@ -41,7 +48,7 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
     const [messages, setMessages] = useState<ChatMessage[] | null>(null);
     const [error, setError] = useState(false);
     const [draft, setDraft] = useState("");
-    const [sending, setSending] = useState(false);
+    const [pending, setPending] = useState<Pending[]>([]);
     const [sendError, setSendError] = useState("");
     // Sent too many messages too fast: no sending until this time (ms), with a countdown
     const [timeoutUntil, setTimeoutUntil] = useState(0);
@@ -53,7 +60,13 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
     useEffect(() => {
         setMessages(null);
         setError(false);
-        return listenMessages(path, setMessages, err => {
+        setPending([]);
+        return listenMessages(path, list => {
+            setMessages(list);
+            // Sent messages the server has now delivered
+            const ids = new Set(list.map(m => m.id));
+            setPending(p => p.some(x => x.id && ids.has(x.id)) ? p.filter(x => !x.id || !ids.has(x.id)) : p);
+        }, err => {
             console.error("Error loading messages:", err);
             setError(true);
             setMessages([]);
@@ -74,7 +87,7 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
     useLayoutEffect(() => {
         const el = listRef.current;
         if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
-    }, [messages]);
+    }, [messages, pending]);
 
     const onScroll = () => {
         const el = listRef.current;
@@ -84,14 +97,20 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
     const send = async (e?: FormEvent) => {
         e?.preventDefault();
         const text = draft.trim();
-        if (!text || sending || !me || timedOut) return;
-        setSending(true);
+        if (!text || !me || timedOut) return;
+        // Show it straight away; the server's copy replaces it when it arrives
+        const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        setPending(p => [...p, { key, text }]);
+        setDraft("");
         setSendError("");
         stickToBottom.current = true;
         try {
-            await sendMessage(path, text);
-            setDraft("");
+            const id = await sendMessage(path, text);
+            setPending(p => id ? p.map(x => x.key === key ? { ...x, id } : x) : p.filter(x => x.key !== key));
         } catch (err) {
+            // Not sent: take it back out, and put it back in the box if that's empty
+            setPending(p => p.filter(x => x.key !== key));
+            setDraft(d => d.trim() ? d : text);
             if (err instanceof ChatTimeoutError) {
                 // Their draft stays, ready to send once the timeout ends
                 setNow(Date.now());
@@ -100,10 +119,16 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
                 console.error("Error sending message:", err);
                 setSendError("Couldn't send your message. Please try again.");
             }
-        } finally {
-            setSending(false);
         }
     };
+
+    // The server's messages, then this person's still on their way
+    const shown: ChatMessage[] | null = messages && [
+        ...messages,
+        ...pending
+            .filter(p => !p.id || !messages.some(m => m.id === p.id))
+            .map(p => ({ id: PENDING + p.key, uid: me, name: context?.userData?.name ?? "", text: p.text })),
+    ];
 
     const remove = async (m: ChatMessage) => {
         const ok = await confirmDialog(m.uid === me ? "Delete this message for everyone?" : `Delete ${m.name || "this person"}'s message for everyone?`, { title: "Delete Message", confirmLabel: "Delete", danger: true });
@@ -114,18 +139,19 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
     return (
         <div className={`flex flex-col min-h-0 bg-white border border-gray-100 rounded-2xl overflow-hidden ${className}`}>
             <div ref={listRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-4 flex flex-col">
-                {messages === null ? (
+                {shown === null ? (
                     <p className="m-auto text-sm text-gray-400">Loading messages...</p>
-                ) : messages.length === 0 ? (
+                ) : shown.length === 0 ? (
                     <p className="m-auto max-w-xs text-center text-sm text-gray-400">{error ? "Couldn't load messages." : emptyText}</p>
-                ) : messages.map((m, i) => {
-                    const prev = messages[i - 1];
+                ) : shown.map((m, i) => {
+                    const prev = shown[i - 1];
                     const at = m.createdAt?.toDate() ?? new Date();
                     const prevAt = prev?.createdAt?.toDate();
                     const newDay = !prevAt || prevAt.toDateString() !== at.toDateString();
                     const grouped = !newDay && prev?.uid === m.uid && !!prevAt && at.getTime() - prevAt.getTime() < GROUP_MS;
                     const mine = m.uid === me;
-                    const canDelete = mine || canModerate;
+                    const sending = m.id.startsWith(PENDING);
+                    const canDelete = !sending && (mine || canModerate);
                     return (
                         <div key={m.id} className="flex flex-col">
                             {newDay && (
@@ -141,14 +167,14 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
                                     {!grouped && (
                                         <p className={`mb-1 px-1 text-xs text-gray-400 ${mine ? "text-right" : ""}`}>
                                             {!mine && <span className="font-semibold text-gray-600">{m.name || "Unknown User"} · </span>}
-                                            {timeLabel(at)}
+                                            {sending ? "Sending..." : timeLabel(at)}
                                         </p>
                                     )}
                                     <p
                                         title={at.toLocaleString("en-US")}
-                                        className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                                        className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words transition-opacity ${
                                             mine ? "bg-blue-600 text-white rounded-br-md" : "bg-gray-100 text-gray-800 rounded-bl-md"
-                                        }`}
+                                        } ${sending ? "opacity-60" : ""}`}
                                     >
                                         {m.text}
                                     </p>
@@ -198,7 +224,7 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
                     />
                     <button
                         type="submit"
-                        disabled={!draft.trim() || sending || timedOut}
+                        disabled={!draft.trim() || timedOut}
                         aria-label="Send"
                         className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white transition-colors hover:bg-blue-700 hover:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                     >

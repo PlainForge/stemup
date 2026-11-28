@@ -441,18 +441,21 @@ class Db {
   /// Sends a message through the sendMessage Cloud Function, which masks
   /// profanity with asterisks and times out anyone sending more than 5 messages
   /// in 10 seconds (for 30 seconds). Throws [ChatTimeout] while they're timed out.
-  static Future<void> sendMessage(CollectionReference<Map<String, dynamic>> c, String text) async {
+  static Future<String?> sendMessage(CollectionReference<Map<String, dynamic>> c, String text) async {
     var clean = text.trim();
-    if (clean.isEmpty) return;
+    if (clean.isEmpty) return null;
     if (clean.length > maxMessageLength) clean = clean.substring(0, maxMessageLength);
     // roles/{id}/messages or tasks/{id}/messages
     final parent = c.parent!;
     try {
-      await FirebaseFunctions.instance.httpsCallable('sendMessage').call<dynamic>({
+      final res = await FirebaseFunctions.instance.httpsCallable('sendMessage').call<dynamic>({
         'kind': parent.parent.id == 'roles' ? 'role' : 'task',
         'id': parent.id,
         'text': clean,
       });
+      // The new message's id
+      final data = res.data;
+      return data is Map && data['id'] is String ? data['id'] as String : null;
     } on FirebaseFunctionsException catch (e) {
       if (e.code == 'resource-exhausted') {
         final until = e.details is Map ? (e.details as Map)['until'] : null;

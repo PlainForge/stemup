@@ -51,14 +51,16 @@ export class ChatTimeoutError extends Error {
 
 /**
  * Sends a message to the chat or thread at [path] (roles/{id}/messages or
- * tasks/{id}/messages). Throws a ChatTimeoutError while they're timed out.
+ * tasks/{id}/messages) and returns the new message's id. Throws a
+ * ChatTimeoutError while they're timed out.
  */
-export async function sendMessage(path: string, text: string) {
+export async function sendMessage(path: string, text: string): Promise<string | undefined> {
     const clean = text.trim().slice(0, MAX_MESSAGE);
     if (!clean) return;
     const [collectionName, id] = path.split("/");
     try {
-        await httpsCallable(functions, "sendMessage")({ kind: collectionName === "roles" ? "role" : "task", id, text: clean });
+        const res = await httpsCallable<unknown, { id?: string }>(functions, "sendMessage")({ kind: collectionName === "roles" ? "role" : "task", id, text: clean });
+        return res.data?.id;
     } catch (err) {
         const e = err as { code?: string; details?: { until?: number } };
         if (e.code === "functions/resource-exhausted") throw new ChatTimeoutError(e.details?.until ?? Date.now() + 30_000);
