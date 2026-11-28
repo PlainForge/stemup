@@ -228,6 +228,18 @@ export const roleService = {
         await updateDoc(doc(db, "users", uid), { hideOnProfile: show ? arrayRemove(roleId) : arrayUnion(roleId) });
     },
 
+    /** Deletes every message in a role's group chat (its owner or an admin). Returns how many were removed. */
+    async clearRoleChat(roleId: string): Promise<number> {
+        const snap = await getDocs(collection(db, "roles", roleId, "messages"));
+        // A batch holds at most 500 writes
+        for (let i = 0; i < snap.docs.length; i += 450) {
+            const batch = writeBatch(db);
+            snap.docs.slice(i, i + 450).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+        }
+        return snap.size;
+    },
+
     /** Turns a role's group chat or task questions on or off (its owner or an admin). */
     async setRoleMessaging(roleId: string, feature: MessagingFeature, enabled: boolean) {
         await updateDoc(doc(db, "roles", roleId), { [feature === "chat" ? "chatEnabled" : "taskThreadsEnabled"]: enabled });

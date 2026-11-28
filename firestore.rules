@@ -128,27 +128,17 @@ service cloud.firestore {
       // Creating and deleting roles is admin-only (above)
 
       // The role's group chat, for everyone in it, once its owner or an admin turns it on
-      // (chatEnabled). The notifyOnRoleMessage Cloud Function sends iOS push notifications.
+      // (chatEnabled). Messages are written only by the sendMessage Cloud Function, which
+      // masks profanity and times out people sending too fast; notifyOnRoleMessage sends
+      // iOS push notifications.
       match /messages/{messageId} {
         function roleData() { return get(/databases/$(database)/documents/roles/$(roleId)).data; }
         allow read: if signedIn() && me() in roleData().get('members', []);
-        allow create: if signedIn() && me() in roleData().get('members', [])
-          && roleData().get('chatEnabled', false) == true
-          && validMessage();
         // Your own messages, or any message in a role you run
         allow delete: if signedIn() && (resource.data.uid == me() || runsRole(roleId));
       }
     }
 
-    // A new chat or thread message: from the signed-in user, sent now, 2000 characters at most
-    function validMessage() {
-      let m = request.resource.data;
-      return m.keys().hasOnly(['uid', 'name', 'photoURL', 'text', 'createdAt'])
-        && m.uid == me()
-        && m.name is string
-        && m.text is string && m.text.size() > 0 && m.text.size() <= 2000
-        && m.createdAt == request.time;
-    }
 
     match /rewards/{roleId} {
       allow read: if signedIn();
@@ -168,7 +158,8 @@ service cloud.firestore {
 
       // The task's thread: only the person doing it and whoever gave it (or, on older
       // tasks that don't record who gave them, the role's instructors), once the role's
-      // owner or an admin turns threads on (taskThreadsEnabled)
+      // owner or an admin turns threads on (taskThreadsEnabled). Messages are written only
+      // by the sendMessage Cloud Function.
       match /messages/{messageId} {
         function task() { return get(/databases/$(database)/documents/tasks/$(taskId)).data; }
         function inThread() {
@@ -177,12 +168,7 @@ service cloud.firestore {
             || (t.get('assignedBy', '') != '' && me() == t.get('assignedBy', ''))
             || (t.get('assignedBy', '') == '' && runsRole(t.roleId));
         }
-        function threadsOn() {
-          return get(/databases/$(database)/documents/roles/$(task().roleId)).data.get('taskThreadsEnabled', false) == true;
-        }
         allow read: if signedIn() && exists(/databases/$(database)/documents/tasks/$(taskId)) && inThread();
-        allow create: if signedIn() && exists(/databases/$(database)/documents/tasks/$(taskId))
-          && inThread() && threadsOn() && validMessage();
         allow delete: if signedIn() && resource.data.uid == me();
       }
     }
@@ -246,6 +232,7 @@ service cloud.firestore {
         && request.resource.data.get('type', 'bug') in ['bug', 'feature'];
     }
 
+    // chatLimits (message timeouts) is written by the sendMessage Cloud Function only.
     // Inactive Users archives (alumni/{batch}/members/{uid}) are admin-only (above).
     // emailThrottle is written by Cloud Functions only.
   }

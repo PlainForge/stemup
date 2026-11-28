@@ -290,6 +290,22 @@ class _ChatViewState extends State<ChatView> {
   final _draft = TextEditingController();
   bool _sending = false;
 
+  /// Sent too many messages too fast: no sending until then, with a countdown.
+  DateTime? _timeoutUntil;
+  Timer? _tick;
+
+  bool get _timedOut => _timeoutUntil != null && _timeoutUntil!.isAfter(DateTime.now());
+
+  void _startTimeout(DateTime until) {
+    _tick?.cancel();
+    setState(() => _timeoutUntil = until);
+    _tick = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return t.cancel();
+      if (!_timedOut) t.cancel();
+      setState(() {});
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -316,19 +332,23 @@ class _ChatViewState extends State<ChatView> {
   @override
   void dispose() {
     _sub.cancel();
+    _tick?.cancel();
     _draft.dispose();
     super.dispose();
   }
 
   Future<void> _send() async {
-    final me = context.read<AppState>().userData;
     final text = _draft.text.trim();
-    if (me == null || text.isEmpty || _sending) return;
+    if (text.isEmpty || _sending || _timedOut) return;
     setState(() => _sending = true);
     try {
-      await Db.sendMessage(widget.collection, me, text);
+      await Db.sendMessage(widget.collection, text);
       _draft.clear();
       HapticFeedback.lightImpact();
+    } on ChatTimeout catch (e) {
+      // Their draft stays, ready to send once the timeout ends
+      HapticFeedback.heavyImpact();
+      if (mounted) _startTimeout(e.until);
     } catch (_) {
       if (mounted) showToast(context, "Couldn't send your message. Please try again.", error: true);
     } finally {
@@ -468,7 +488,8 @@ class _ChatViewState extends State<ChatView> {
     final me = context.watch<AppState>().user?.uid ?? '';
     final list = _messages;
     final pad = MediaQuery.paddingOf(context);
-    final canSend = _draft.text.trim().isNotEmpty && !_sending;
+    final timedOut = _timedOut;
+    final canSend = _draft.text.trim().isNotEmpty && !_sending && !timedOut;
     // Rebuilt whenever the page resizes for the keyboard. The keyboard is read from the raw
     // view: the page scaffold has already taken it out of MediaQuery
     return LayoutBuilder(
@@ -494,6 +515,40 @@ class _ChatViewState extends State<ChatView> {
                       itemBuilder: (context, i) => _bubble(context, list, list.length - 1 - i, me),
                     ),
             ),
+            if (widget.canPost && timedOut)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: Palette.resolve(
+                  context,
+                  const CupertinoDynamicColor.withBrightness(color: Palette.amber50, darkColor: Color(0xFF3A2A0A)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.hourglass,
+                      size: 16,
+                      color: Palette.resolve(
+                        context,
+                        const CupertinoDynamicColor.withBrightness(color: Palette.amber700, darkColor: Color(0xFFFCD34D)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Slow down! You sent too many messages at once. You can send again in '
+                        '${(_timeoutUntil!.difference(DateTime.now()).inMilliseconds / 1000).ceil().clamp(1, 30)}s.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Palette.resolve(
+                            context,
+                            const CupertinoDynamicColor.withBrightness(color: Palette.amber700, darkColor: Color(0xFFFCD34D)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (widget.canPost)
               Container(
                 // Snug on the keyboard while typing; above the home indicator otherwise

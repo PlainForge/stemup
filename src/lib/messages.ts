@@ -3,12 +3,15 @@
 // gave it. Both are off until the role's owner or an admin turns them on in the
 // role's Config (chatEnabled, taskThreadsEnabled). There are no private messages.
 //
-// New messages reach the iOS app as push notifications (the notifyOnRoleMessage
-// and notifyOnTaskMessage Cloud Functions), never by email. "Seen" markers live
-// in this browser only, like the NEW badge on tasks.
-import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
-import { db } from "./firebase";
-import type { ChatMessage, Task, UserData } from "../myDataTypes";
+// Messages are sent through the sendMessage Cloud Function, which masks
+// profanity with asterisks and puts anyone sending more than 5 messages in 10
+// seconds in a 30-second timeout. New messages reach the iOS app as push
+// notifications (notifyOnRoleMessage, notifyOnTaskMessage), never by email.
+// "Seen" markers live in this browser only, like the NEW badge on tasks.
+import { collection, deleteDoc, doc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "./firebase";
+import type { ChatMessage, Task } from "../myDataTypes";
 
 /** How much of a chat or thread is loaded: the latest messages */
 const LOAD = 200;
@@ -37,16 +40,30 @@ export function listenLatestMessage(path: string, onChange: (message: ChatMessag
     }, () => onChange(null));
 }
 
-export async function sendMessage(path: string, from: Pick<UserData, "uid" | "name" | "photoURL">, text: string) {
+/** Sending too fast: no more messages until [until] (ms since 1970). */
+export class ChatTimeoutError extends Error {
+    until: number;
+    constructor(until: number) {
+        super("You're sending messages too fast.");
+        this.until = until;
+    }
+}
+
+/**
+ * Sends a message to the chat or thread at [path] (roles/{id}/messages or
+ * tasks/{id}/messages). Throws a ChatTimeoutError while they're timed out.
+ */
+export async function sendMessage(path: string, text: string) {
     const clean = text.trim().slice(0, MAX_MESSAGE);
     if (!clean) return;
-    await addDoc(collection(db, path), {
-        uid: from.uid,
-        name: from.name || "Unknown User",
-        ...(from.photoURL ? { photoURL: from.photoURL } : {}),
-        text: clean,
-        createdAt: serverTimestamp(),
-    });
+    const [collectionName, id] = path.split("/");
+    try {
+        await httpsCallable(functions, "sendMessage")({ kind: collectionName === "roles" ? "role" : "task", id, text: clean });
+    } catch (err) {
+        const e = err as { code?: string; details?: { until?: number } };
+        if (e.code === "functions/resource-exhausted") throw new ChatTimeoutError(e.details?.until ?? Date.now() + 30_000);
+        throw err;
+    }
 }
 
 export async function deleteMessage(path: string, id: string) {

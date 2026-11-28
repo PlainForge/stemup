@@ -659,6 +659,13 @@ extension MessagingFeatureText on MessagingFeature {
   String get label => this == MessagingFeature.chat ? 'Group chat' : 'Task questions';
 }
 
+/// Sending too fast: no more messages until [until] (thrown by Db.sendMessage).
+class ChatTimeout implements Exception {
+  const ChatTimeout(this.until);
+
+  final DateTime until;
+}
+
 /// A message in a role's group chat (roles/{id}/messages) or a task's thread (tasks/{id}/messages).
 class ChatMessage {
   final String id;

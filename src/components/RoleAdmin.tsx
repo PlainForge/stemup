@@ -95,6 +95,9 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
     const [busyRequest, setBusyRequest] = useState<string | null>(null);
     // Which messaging switch or request is being saved (Config > Messages)
     const [messagingBusy, setMessagingBusy] = useState<MessagingFeature | null>(null);
+    // Clearing the group chat (Config > Messages), and what it removed
+    const [clearingChat, setClearingChat] = useState(false);
+    const [chatCleared, setChatCleared] = useState("");
     const [instructorProfiles, setInstructorProfiles] = useState<{ uid: string; name: string; photoURL: string }[]>([]);
     // Open invitations to this role, and everyone who could be invited
     const [invites, setInvites] = useState<RoleInvite[]>([]);
@@ -696,6 +699,26 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
             await alertDialog(canChange ? "Couldn't change that. Please try again." : "Couldn't send the request. Please try again.", "Something went wrong");
         } finally {
             setMessagingBusy(null);
+        }
+    };
+
+    // Owner and admin only: wipes the group chat for everyone
+    const clearChat = async () => {
+        const ok = await confirmDialog(
+            `Delete every message in ${role.name}'s group chat? This removes them for everyone in the role and can't be undone.`,
+            { title: "Clear Group Chat", confirmLabel: "Clear Chat", danger: true },
+        );
+        if (!ok) return;
+        setClearingChat(true);
+        try {
+            const n = await roleService.clearRoleChat(role.id);
+            setChatCleared(n === 0 ? "The group chat was already empty." : `Cleared ${n} message${n === 1 ? "" : "s"}.`);
+            setTimeout(() => setChatCleared(""), 4000);
+        } catch (err) {
+            console.error("Error clearing the group chat:", err);
+            await alertDialog("Couldn't clear the group chat. Please try again.", "Something went wrong");
+        } finally {
+            setClearingChat(false);
         }
     };
 
@@ -1530,6 +1553,18 @@ export default function RoleAdminPage({ role, membersWithData, requested } : pro
                                         </div>
                                     );
                                 })}
+                                {canChange && (
+                                    <div className="bg-white border border-red-100 rounded-2xl p-5 flex flex-col gap-3">
+                                        <h3 className="text-sm font-semibold uppercase tracking-widest text-red-500">Clear group chat</h3>
+                                        <p className="text-sm text-gray-500">
+                                            Deletes every message in {role.name}'s group chat for everyone in the role. This can't be undone. The chat stays {messaging.chat ? "on" : "off"}, and task questions aren't affected.
+                                        </p>
+                                        <Button onClick={clearChat} color="red" size="sm" disabled={clearingChat}>
+                                            {clearingChat ? "Clearing..." : "Clear Group Chat"}
+                                        </Button>
+                                        {chatCleared && <p className="text-sm text-green-600 dark:text-green-400">{chatCleared}</p>}
+                                    </div>
+                                )}
                             </div>
                         )}
 

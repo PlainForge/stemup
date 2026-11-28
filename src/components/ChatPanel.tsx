@@ -3,10 +3,10 @@
 // else's on the left with their photo and name.
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPaperPlane, faTrashCan } from "@fortawesome/free-solid-svg-icons";
+import { faHourglassHalf, faPaperPlane, faTrashCan } from "@fortawesome/free-solid-svg-icons";
 import { MainContext } from "../context/MainContext";
 import { confirmDialog } from "../lib/confirm";
-import { deleteMessage, listenMessages, MAX_MESSAGE, sendMessage } from "../lib/messages";
+import { ChatTimeoutError, deleteMessage, listenMessages, MAX_MESSAGE, sendMessage } from "../lib/messages";
 import type { ChatMessage } from "../myDataTypes";
 import ProfileImg from "./ProfileImg";
 
@@ -38,11 +38,15 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
 }) {
     const context = useContext(MainContext);
     const me = context?.user?.uid ?? "";
-    const meData = context?.userData ?? null;
     const [messages, setMessages] = useState<ChatMessage[] | null>(null);
     const [error, setError] = useState(false);
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
+    const [sendError, setSendError] = useState("");
+    // Sent too many messages too fast: no sending until this time (ms), with a countdown
+    const [timeoutUntil, setTimeoutUntil] = useState(0);
+    const [now, setNow] = useState(() => Date.now());
+    const timedOut = timeoutUntil > now;
     const listRef = useRef<HTMLDivElement>(null);
     const stickToBottom = useRef(true);
 
@@ -55,6 +59,16 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
             setMessages([]);
         });
     }, [path]);
+
+    // Tick the countdown each second while timed out
+    useEffect(() => {
+        if (timeoutUntil <= Date.now()) return;
+        const tick = setInterval(() => {
+            setNow(Date.now());
+            if (Date.now() >= timeoutUntil) clearInterval(tick);
+        }, 1000);
+        return () => clearInterval(tick);
+    }, [timeoutUntil]);
 
     // Keep the newest message in view, unless they've scrolled up to read older ones
     useLayoutEffect(() => {
@@ -70,15 +84,22 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
     const send = async (e?: FormEvent) => {
         e?.preventDefault();
         const text = draft.trim();
-        if (!text || sending || !me) return;
+        if (!text || sending || !me || timedOut) return;
         setSending(true);
+        setSendError("");
         stickToBottom.current = true;
         try {
-            await sendMessage(path, { uid: me, name: meData?.name ?? "", photoURL: meData?.photoURL ?? "" }, text);
+            await sendMessage(path, text);
             setDraft("");
         } catch (err) {
-            console.error("Error sending message:", err);
-            setError(true);
+            if (err instanceof ChatTimeoutError) {
+                // Their draft stays, ready to send once the timeout ends
+                setNow(Date.now());
+                setTimeoutUntil(err.until);
+            } else {
+                console.error("Error sending message:", err);
+                setSendError("Couldn't send your message. Please try again.");
+            }
         } finally {
             setSending(false);
         }
@@ -149,6 +170,15 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
                 })}
             </div>
 
+            {canPost && timedOut && (
+                <p role="status" className="flex items-center gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300">
+                    <FontAwesomeIcon icon={faHourglassHalf} className="text-xs" />
+                    Slow down! You sent too many messages at once. You can send again in {Math.max(1, Math.ceil((timeoutUntil - now) / 1000))}s.
+                </p>
+            )}
+            {canPost && sendError && !timedOut && (
+                <p role="alert" className="border-t border-gray-100 px-4 py-2 text-sm text-red-600 dark:text-red-400">{sendError}</p>
+            )}
             {canPost ? (
                 <form onSubmit={send} className="flex items-end gap-2 border-t border-gray-100 p-2.5">
                     <textarea
@@ -168,7 +198,7 @@ export default function ChatPanel({ path, canPost, closedText, canModerate = fal
                     />
                     <button
                         type="submit"
-                        disabled={!draft.trim() || sending}
+                        disabled={!draft.trim() || sending || timedOut}
                         aria-label="Send"
                         className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white transition-colors hover:bg-blue-700 hover:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                     >

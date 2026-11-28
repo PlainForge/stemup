@@ -438,20 +438,47 @@ class Db {
   static Stream<ChatMessage?> latestMessageStream(CollectionReference<Map<String, dynamic>> c) =>
       c.orderBy('createdAt', descending: true).limit(1).snapshots().map((s) => s.docs.isEmpty ? null : ChatMessage.fromDoc(s.docs.first));
 
-  static Future<void> sendMessage(CollectionReference<Map<String, dynamic>> c, UserData from, String text) async {
+  /// Sends a message through the sendMessage Cloud Function, which masks
+  /// profanity with asterisks and times out anyone sending more than 5 messages
+  /// in 10 seconds (for 30 seconds). Throws [ChatTimeout] while they're timed out.
+  static Future<void> sendMessage(CollectionReference<Map<String, dynamic>> c, String text) async {
     var clean = text.trim();
     if (clean.isEmpty) return;
     if (clean.length > maxMessageLength) clean = clean.substring(0, maxMessageLength);
-    await c.add({
-      'uid': from.uid,
-      'name': from.name,
-      if (from.photoURL.isNotEmpty) 'photoURL': from.photoURL,
-      'text': clean,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    // roles/{id}/messages or tasks/{id}/messages
+    final parent = c.parent!;
+    try {
+      await FirebaseFunctions.instance.httpsCallable('sendMessage').call<dynamic>({
+        'kind': parent.parent.id == 'roles' ? 'role' : 'task',
+        'id': parent.id,
+        'text': clean,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'resource-exhausted') {
+        final until = e.details is Map ? (e.details as Map)['until'] : null;
+        throw ChatTimeout(
+          until is num ? DateTime.fromMillisecondsSinceEpoch(until.toInt()) : DateTime.now().add(const Duration(seconds: 30)),
+        );
+      }
+      rethrow;
+    }
   }
 
   static Future<void> deleteMessage(CollectionReference<Map<String, dynamic>> c, String id) => c.doc(id).delete();
+
+  /// Deletes every message in a role's group chat (its owner or an admin). Returns how many were removed.
+  static Future<int> clearRoleChat(String roleId) async {
+    final docs = (await roleChat(roleId).get()).docs;
+    // A batch holds at most 500 writes
+    for (var i = 0; i < docs.length; i += 450) {
+      final batch = _db.batch();
+      for (final d in docs.skip(i).take(450)) {
+        batch.delete(d.reference);
+      }
+      await batch.commit();
+    }
+    return docs.length;
+  }
 
   static Stream<Task?> taskStream(String id) => _task(id).snapshots().map((s) => s.exists ? Task.fromDoc(s) : null);
 

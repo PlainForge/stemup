@@ -14,7 +14,8 @@ import { RegExpMatcher, englishDataset, englishRecommendedTransformers } from "o
 /** Used in place of a name that was blocked. */
 export const FALLBACK_NAME = "StemUp Member";
 
-const matcher = new RegExpMatcher({
+/** Also used to mask profanity in chat and thread messages (messages.ts). */
+export const matcher = new RegExpMatcher({
   ...englishDataset.build(),
   ...englishRecommendedTransformers,
 });

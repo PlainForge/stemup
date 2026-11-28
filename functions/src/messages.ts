@@ -4,11 +4,110 @@
 //
 // New messages are sent as iOS push notifications only, never by email, to people
 // who have push on and haven't switched off this kind or this role.
+//
+// Every message goes through sendMessage below (the Firestore rules don't let the
+// apps write messages themselves), so the same two rules hold on every platform:
+//   - profanity is kept but masked with asterisks ("what the ****")
+//   - more than 5 messages in 10 seconds puts the sender in a 30-second timeout,
+//     across all their chats and threads (tracked in chatLimits/{uid})
 
 import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { TextCensor, asteriskCensorStrategy } from "obscenity";
+import { matcher } from "./nameFilter";
 import { notify } from "./notifications";
+
+/** Longest message (kept in sync with MAX_MESSAGE in src/lib/messages.ts). */
+const MAX_MESSAGE = 2000;
+/** More than MAX_BURST messages within BURST_WINDOW_MS starts a TIMEOUT_MS timeout. */
+const MAX_BURST = 5;
+const BURST_WINDOW_MS = 10_000;
+const TIMEOUT_MS = 30_000;
+
+const censor = new TextCensor().setStrategy(asteriskCensorStrategy());
+
+/** The text with any profanity replaced by asterisks, letter for letter. */
+export function maskProfanity(text: string): string {
+  const matches = matcher.getAllMatches(text);
+  return matches.length === 0 ? text : censor.applyTo(text, matches);
+}
+
+const timeoutError = (until: number) =>
+  new HttpsError("resource-exhausted", "You're sending messages too fast. Please wait a moment.", { until });
+
+/**
+ * Sends a message to a role's group chat ({ kind: "role", id: roleId }) or a
+ * task's thread ({ kind: "task", id: taskId }), after the same checks the rules
+ * used to make, masking profanity and applying the timeout.
+ */
+export const sendMessage = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Please sign in again.");
+  const { kind, id, text } = (request.data ?? {}) as { kind?: unknown; id?: unknown; text?: unknown };
+  if ((kind !== "role" && kind !== "task") || typeof id !== "string" || !id || id.includes("/")) {
+    throw new HttpsError("invalid-argument", "That chat doesn't exist.");
+  }
+  const clean = typeof text === "string" ? text.trim() : "";
+  if (!clean) throw new HttpsError("invalid-argument", "Type a message first.");
+  if (clean.length > MAX_MESSAGE) throw new HttpsError("invalid-argument", `Messages can be ${MAX_MESSAGE} characters at most.`);
+
+  const db = getFirestore();
+  const [adminSnap, instructorSnap, userSnap] = await Promise.all([
+    db.doc("admins/all-perms").get(),
+    db.doc("admins/instructors").get(),
+    db.doc(`users/${uid}`).get(),
+  ]);
+  const isAdmin = ((adminSnap.get("ids") ?? []) as string[]).includes(uid);
+  const isInstructor = ((instructorSnap.get("ids") ?? []) as string[]).includes(uid);
+
+  // Who may write where (the same people who can read it, per firestore.rules)
+  let target: FirebaseFirestore.CollectionReference;
+  if (kind === "role") {
+    const role = (await db.doc(`roles/${id}`).get()).data();
+    if (!role) throw new HttpsError("not-found", "This role no longer exists.");
+    if (!isAdmin && !((role.members ?? []) as string[]).includes(uid)) throw new HttpsError("permission-denied", "You're not in this role.");
+    if (role.chatEnabled !== true) throw new HttpsError("failed-precondition", "The group chat is turned off.");
+    target = db.collection(`roles/${id}/messages`);
+  } else {
+    const task = (await db.doc(`tasks/${id}`).get()).data();
+    if (!task) throw new HttpsError("not-found", "This task no longer exists.");
+    const role = (await db.doc(`roles/${task.roleId}`).get()).data();
+    const runsRole = isAdmin || (isInstructor && ((role?.instructors ?? []) as string[]).includes(uid));
+    const inThread = uid === task.assignedTo || (task.assignedBy ? task.assignedBy === uid : runsRole);
+    if (!inThread) throw new HttpsError("permission-denied", "Only the person doing this task and whoever gave it can write here.");
+    if (role?.taskThreadsEnabled !== true) throw new HttpsError("failed-precondition", "Task questions are turned off in this role.");
+    target = db.collection(`tasks/${id}/messages`);
+  }
+
+  // Timeout: more than MAX_BURST messages in BURST_WINDOW_MS, across every chat and thread
+  const limitRef = db.doc(`chatLimits/${uid}`);
+  const timedOutUntil = await db.runTransaction(async (tx) => {
+    const data = (await tx.get(limitRef)).data() ?? {};
+    const now = Date.now();
+    if (typeof data.until === "number" && data.until > now) return data.until as number;
+    const recent = ((data.sent ?? []) as number[]).filter((t) => now - t < BURST_WINDOW_MS);
+    if (recent.length >= MAX_BURST) {
+      const until = now + TIMEOUT_MS;
+      tx.set(limitRef, { sent: [], until });
+      return until;
+    }
+    tx.set(limitRef, { sent: [...recent, now], until: 0 });
+    return 0;
+  });
+  if (timedOutUntil) throw timeoutError(timedOutUntil);
+
+  const user = userSnap.data() ?? {};
+  const ref = await target.add({
+    uid,
+    name: (user.name as string | undefined) || "Unknown User",
+    ...(user.photoURL ? { photoURL: user.photoURL } : {}),
+    text: maskProfanity(clean),
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { id: ref.id };
+});
 
 /** The message as a notification line, e.g. "Sam: Is this due Friday?" */
 function preview(data: FirebaseFirestore.DocumentData): string {

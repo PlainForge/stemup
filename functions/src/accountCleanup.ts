@@ -10,16 +10,19 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
-/** Removes a user's profile, memberships, tasks, requests and photo. Safe to run more than once. */
+/** Removes a user's profile, memberships, tasks, requests, messages and photo. Safe to run more than once. */
 export async function purgeUserData(uid: string) {
   const db = getFirestore();
-  const [memberOf, pendingIn, tasks, submitted, requests, invites] = await Promise.all([
+  const [memberOf, pendingIn, tasks, submitted, requests, invites, messages] = await Promise.all([
     db.collection("roles").where("members", "array-contains", uid).get(),
     db.collection("roles").where("pendingRequests", "array-contains", uid).get(),
     db.collection("tasks").where("assignedTo", "==", uid).get(),
     db.collection("tasksSubmitted").where("assignedTo", "==", uid).get(),
     db.collection("requests").where("uid", "==", uid).get(),
     db.collection("invites").where("uid", "==", uid).get(),
+    // Everything they wrote in group chats and task threads (needs the collection group
+    // index on messages.uid in firestore.indexes.json)
+    db.collectionGroup("messages").where("uid", "==", uid).get(),
   ]);
 
   const roleRefs = new Map([...memberOf.docs, ...pendingIn.docs].map((d) => [d.id, d.ref]));
@@ -32,7 +35,8 @@ export async function purgeUserData(uid: string) {
       }),
     ),
     // Requests are deleted without a status, so nobody is notified about them
-    ...[...tasks.docs, ...submitted.docs, ...requests.docs, ...invites.docs].map((d) => d.ref.delete()),
+    ...[...tasks.docs, ...submitted.docs, ...requests.docs, ...invites.docs, ...messages.docs].map((d) => d.ref.delete()),
+    db.doc(`chatLimits/${uid}`).delete(),
     db.doc("admins/instructors").update({ ids: FieldValue.arrayRemove(uid) }).catch(() => {}),
     getStorage().bucket().file(`profilePictures/${uid}`).delete().catch(() => {}),
   ];

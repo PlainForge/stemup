@@ -83,4 +83,4 @@ export { notifyOnTaskChange, notifyOnJoinDecision, notifyOnRequestDecision, noti
 export { respondToInvite, countTaskGiven } from "./invites";
 export { notifyAdminsOnFeedback } from "./feedback";
 export { leaveInstructor } from "./leaveInstructor";
-export { notifyOnRoleMessage, trimRoleChat, notifyOnTaskMessage, deleteTaskMessages, deleteRoleMessages, clearThreadOnReassign } from "./messages";
+export { sendMessage, notifyOnRoleMessage, trimRoleChat, notifyOnTaskMessage, deleteTaskMessages, deleteRoleMessages, clearThreadOnReassign } from "./messages";

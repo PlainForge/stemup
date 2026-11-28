@@ -1535,6 +1535,29 @@ class _ConfigTabState extends State<_ConfigTab> {
 
   /// Which messaging switch or request is being saved.
   MessagingFeature? _messagingBusy;
+  bool _clearingChat = false;
+
+  // Owner and admin only: wipes the group chat for everyone
+  Future<void> _clearChat() async {
+    final role = widget.role;
+    final ok = await confirmDialog(
+      context,
+      title: 'Clear Group Chat',
+      message: "Delete every message in ${role.name}'s group chat? This removes them for everyone in the role and can't be undone.",
+      confirmLabel: 'Clear Chat',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    setState(() => _clearingChat = true);
+    try {
+      final n = await Db.clearRoleChat(role.id);
+      if (mounted) showToast(context, n == 0 ? 'The group chat was already empty.' : 'Cleared $n message${n == 1 ? '' : 's'}.');
+    } catch (_) {
+      if (mounted) showToast(context, "Couldn't clear the group chat. Please try again.", error: true);
+    } finally {
+      if (mounted) setState(() => _clearingChat = false);
+    }
+  }
 
   // The owner and admins switch group chat and task questions; the role's other instructors ask them
   Future<void> _changeMessaging(MessagingFeature f, bool on) async {
@@ -1881,6 +1904,29 @@ class _ConfigTabState extends State<_ConfigTab> {
         for (final f in MessagingFeature.values) ...[
           if (f != MessagingFeature.values.first) const SizedBox(height: 12),
           _messagingCard(context, f, canChange, me),
+        ],
+        if (canChange) ...[
+          const SizedBox(height: 12),
+          _Section(
+            title: 'Clear group chat',
+            danger: true,
+            children: [
+              Muted(
+                "Deletes every message in ${widget.role.name}'s group chat for everyone in the role. This can't be undone. "
+                "The chat stays ${widget.role.chatEnabled ? 'on' : 'off'}, and task questions aren't affected.",
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(
+                  label: 'Clear Group Chat',
+                  size: AppButtonSize.md,
+                  style: AppButtonStyle.red,
+                  loading: _clearingChat,
+                  onPressed: _clearChat,
+                ),
+              ),
+            ],
+          ),
         ],
       ],
     ),

@@ -152,7 +152,7 @@ class _GlassTabBarState extends State<GlassTabBar> with TickerProviderStateMixin
                                 child: Stack(
                                   clipBehavior: Clip.none,
                                   children: [
-                                    Icon(item.icon, size: 21, color: Palette.resolve(context, Palette.navActive)),
+                                    _TabIcon(item.icon, size: 21, color: Palette.resolve(context, Palette.navActive)),
                                     // Something on another tab still needs attention
                                     if (anyBadge) const Positioned(top: -3, right: -7, child: PingDot()),
                                   ],
@@ -325,7 +325,7 @@ class _TabButtonState extends State<_TabButton> with TickerProviderStateMixin {
                 children: [
                   Transform.scale(
                     scale: _popScale,
-                    child: Icon(widget.item.icon, size: 20, color: color),
+                    child: _TabIcon(widget.item.icon, size: 20, color: color),
                   ),
                   if (widget.item.badge) const Positioned(top: -2, right: -6, child: PingDot()),
                 ],
@@ -399,4 +399,33 @@ class _PingDotState extends State<PingDot> with SingleTickerProviderStateMixin {
       ),
     );
   }
+}
+
+/// A tab's icon, centered on its real width. Font Awesome glyphs are often wider
+/// than they are tall (users, gears...), and a plain [Icon] lays them out in a
+/// [size]-wide square, so they spill to the right and sit off-center.
+class _TabIcon extends StatelessWidget {
+  const _TabIcon(this.icon, {required this.size, required this.color});
+
+  final IconData icon;
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Text(
+      String.fromCharCode(icon.codePoint),
+      textAlign: TextAlign.center,
+      textScaler: TextScaler.noScaling,
+      style: TextStyle(
+        inherit: false,
+        fontFamily: icon.fontFamily,
+        package: icon.fontPackage,
+        fontFamilyFallback: icon.fontFamilyFallback,
+        fontSize: size,
+        height: 1,
+        color: color,
+      ),
+    ),
+  );
 }
