@@ -35,7 +35,6 @@ const secrets = [gmailUser, gmailAppPassword];
 const DEAD_TOKEN = new Set([
   "messaging/registration-token-not-registered",
   "messaging/invalid-registration-token",
-  "messaging/invalid-argument",
 ]);
 
 const esc = (v: unknown) =>
@@ -45,7 +44,10 @@ async function sendPush(uid: string, msg: Message) {
   const devices = (await getFirestore().collection(`users/${uid}/devices`).get()).docs
     .map((d) => ({ ref: d.ref, token: d.get("token") as string | undefined }))
     .filter((d): d is { ref: FirebaseFirestore.DocumentReference; token: string } => !!d.token);
-  if (devices.length === 0) return;
+  if (devices.length === 0) {
+    logger.warn(`Push for ${uid} skipped: no phone registered (users/${uid}/devices is empty)`);
+    return;
+  }
 
   const res = await getMessaging().sendEachForMulticast({
     tokens: devices.map((d) => d.token),
@@ -53,6 +55,10 @@ async function sendPush(uid: string, msg: Message) {
     data: { path: msg.path },
     apns: { payload: { aps: { sound: "default" } } },
   });
+  res.responses.forEach((r, i) => {
+    if (!r.success) logger.error(`Push to ${uid} failed (device ${i + 1} of ${devices.length}): ${r.error?.code} ${r.error?.message}`);
+  });
+  if (res.successCount > 0) logger.info(`Push "${msg.title}" sent to ${uid} on ${res.successCount} phone(s)`);
   await Promise.all(
     res.responses.map((r, i) => (!r.success && DEAD_TOKEN.has(r.error?.code ?? "") ? devices[i].ref.delete() : null))
   );
@@ -92,6 +98,7 @@ export async function notify(uid: string, type: NotifyType, msg: Message, roleId
   const email = snap.get("email") as string | undefined;
   const jobs: Promise<unknown>[] = [];
   if (prefs.push === true) jobs.push(sendPush(uid, msg));
+  else logger.info(`Push for ${uid} skipped: push notifications are off in their settings`);
   if (prefs.email === true && email && !pushOnly) jobs.push(sendEmail(email, msg));
 
   const results = await Promise.allSettled(jobs);
