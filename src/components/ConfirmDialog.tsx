@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import Button from "./Button";
+import HoldToReveal from "./HoldToReveal";
 import { registerConfirmHost, type ConfirmRequest } from "../lib/confirm";
 
 // Mount once (in App) — renders whichever dialog is currently requested
 export default function ConfirmHost() {
     const [req, setReq] = useState<ConfirmRequest | null>(null);
     const [value, setValue] = useState("");
+    // A password prompt shows what's typed only while its eye button is held
+    const [revealed, setRevealed] = useState(false);
 
     // Plain CSS entrance transition, same fix/pattern as the profile card and bug report panel
     const [entered, setEntered] = useState(false);
@@ -16,6 +19,7 @@ export default function ConfirmHost() {
 
     useEffect(() => {
         setValue("");
+        setRevealed(false);
         if (!req) {
             setEntered(false);
             return;
@@ -47,8 +51,9 @@ export default function ConfirmHost() {
                 <h2 className="text-lg font-bold">{req.title ?? (req.alertOnly ? "Notice" : "Are you sure?")}</h2>
                 <p className="text-sm text-gray-500 leading-relaxed">{req.message}</p>
                 {req.input && (
+                    <div className="relative">
                     <input
-                        type={req.input.type ?? "text"}
+                        type={req.input.type === "password" && revealed ? "text" : req.input.type ?? "text"}
                         placeholder={req.input.placeholder}
                         autoComplete={req.input.autoComplete}
                         autoFocus
@@ -58,8 +63,10 @@ export default function ConfirmHost() {
                             if (e.key === "Enter") close(true);
                             if (e.key === "Escape") close(false);
                         }}
-                        className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm text-left focus:outline-none focus:border-gray-400 transition-colors"
+                        className={`w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl text-sm text-left focus:outline-none focus:border-gray-400 transition-colors ${req.input.type === "password" ? "pr-10" : ""}`}
                     />
+                    {req.input.type === "password" && <HoldToReveal shown={revealed} setShown={setRevealed} />}
+                    </div>
                 )}
                 <div className="flex gap-2">
                     {!req.alertOnly && (

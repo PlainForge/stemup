@@ -34,6 +34,27 @@ export const notifyOnRoleMessage = onDocumentCreated("roles/{roleId}/messages/{m
 });
 
 /**
+ * Most messages a role's group chat keeps; past this, the oldest are deleted.
+ * A message is a few hundred bytes, so 2,000 is well under 1 MB per role, and
+ * the apps only ever load the latest 200, so a longer history costs no extra reads.
+ */
+const MAX_CHAT_MESSAGES = 2000;
+
+/** Keeps each group chat to its latest MAX_CHAT_MESSAGES messages. */
+export const trimRoleChat = onDocumentCreated("roles/{roleId}/messages/{messageId}", async (event) => {
+  const chat = getFirestore().collection(`roles/${event.params.roleId}/messages`);
+  // A count query costs one read per 1,000 messages, not one per message
+  const total = (await chat.count().get()).data().count;
+  const extra = total - MAX_CHAT_MESSAGES;
+  if (extra <= 0) return;
+  const oldest = await chat.orderBy("createdAt", "asc").limit(extra).get();
+  const writer = getFirestore().bulkWriter();
+  oldest.docs.forEach((d) => writer.delete(d.ref));
+  await writer.close();
+  logger.info(`Trimmed ${oldest.size} old message(s) from the group chat of role ${event.params.roleId}`);
+});
+
+/**
  * A new message on a task's thread: counts it on the task (for the unread dot on
  * its card) and tells the other side.
  */

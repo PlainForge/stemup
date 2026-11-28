@@ -1,3 +1,6 @@
+import { useState } from "react";
+import HoldToReveal from "./HoldToReveal";
+
 interface InputProps {
     size?: string;
     id?: string;
@@ -12,6 +15,8 @@ interface InputProps {
 }
 
 export default function Input({size, id, name, type, placeholder, value, setValue, required, maxLength, autocomplete}: InputProps) {
+    // Password fields show what's typed only while their eye button is held
+    const [revealed, setRevealed] = useState(false);
     if (size === undefined || size === "") size = "md";
     if (setValue === undefined) setValue = () => {};
     const sizeClass = {
@@ -20,27 +25,35 @@ export default function Input({size, id, name, type, placeholder, value, setValu
         lg: "w-72 lg:2-92",
         full: "w-full"
     }[size];
-    return (
-        <input 
-            type={type} 
+    const isPassword = type === "password";
+    const input = (
+        <input
+            type={isPassword && revealed ? "text" : type}
             id={id}
             name={name}
             placeholder={placeholder}
             value={value}
             onChange={(e) => {setValue(e.target.value)}}
             className={`
-                ${sizeClass}
-                px-2 py-2 rounded-xl 
+                ${isPassword ? "w-full pr-10" : sizeClass}
+                px-2 py-2 rounded-xl
                 inset-shadow-sm inset-shadow-indigo-300
                 dark:inset-shadow-black/40 dark:focus:inset-shadow-indigo-500/30
-                bg-white border-2 border-[rgba(0,0,0,0)] 
-                hover:border-[rgba(0,0,0,0.3)] 
-                focus:border-[rgba(0,0,0,0.3)] 
+                bg-white border-2 border-[rgba(0,0,0,0)]
+                hover:border-[rgba(0,0,0,0.3)]
+                focus:border-[rgba(0,0,0,0.3)]
                 focus:outline-none
                 transition-all duration-200`}
             required={required}
             maxLength={maxLength}
             autoComplete={autocomplete}
         />
-    )
+    );
+    if (!isPassword) return input;
+    return (
+        <div className={`relative ${sizeClass}`}>
+            {input}
+            <HoldToReveal shown={revealed} setShown={setRevealed} />
+        </div>
+    );
 }

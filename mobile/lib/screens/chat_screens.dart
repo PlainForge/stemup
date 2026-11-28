@@ -201,43 +201,49 @@ class _ChatFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final pad = MediaQuery.paddingOf(context);
     return CupertinoPageScaffold(
-      backgroundColor: Palette.background(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: EdgeInsets.fromLTRB(16, pad.top + 8, 16, 12),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Palette.separator(context))),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                BackPill(label: 'Back', onPressed: () => context.canPop() ? context.pop() : context.go(backPath)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    if (leading != null) ...[leading!, const SizedBox(width: 12)],
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [Heading(title, size: 18, maxLines: 2), if (subtitle != null) Muted(subtitle!, size: 13, maxLines: 2)],
+      // The page shrinks to sit on the keyboard, and only the strip behind the keyboard shows
+      // this color. iOS 26's keyboard has rounded corners, so match the message bar there: the
+      // bar then runs into the keyboard with no gap in another color at its corners.
+      backgroundColor: Palette.card(context),
+      child: ColoredBox(
+        color: Palette.background(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: EdgeInsets.fromLTRB(16, pad.top + 8, 16, 12),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: Palette.separator(context))),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  BackPill(label: 'Back', onPressed: () => context.canPop() ? context.pop() : context.go(backPath)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      if (leading != null) ...[leading!, const SizedBox(width: 12)],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [Heading(title, size: 18, maxLines: 2), if (subtitle != null) Muted(subtitle!, size: 13, maxLines: 2)],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child:
-                child ??
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(child: Muted(notice ?? '', center: true)),
-                ),
-          ),
-        ],
+            Expanded(
+              child:
+                  child ??
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Center(child: Muted(notice ?? '', center: true)),
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -463,87 +469,94 @@ class _ChatViewState extends State<ChatView> {
     final list = _messages;
     final pad = MediaQuery.paddingOf(context);
     final canSend = _draft.text.trim().isNotEmpty && !_sending;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: list == null
-              ? const Center(child: RingSpinner())
-              : list.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Center(child: Muted(_error ? "Couldn't load messages." : widget.emptyText, center: true)),
-                )
-              // Newest at the bottom, and the list starts there
-              : ListView.builder(
-                  reverse: true,
-                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                  itemCount: list.length,
-                  itemBuilder: (context, i) => _bubble(context, list, list.length - 1 - i, me),
-                ),
-        ),
-        if (widget.canPost)
-          Container(
-            padding: EdgeInsets.fromLTRB(12, 8, 12, 8 + pad.bottom),
-            decoration: BoxDecoration(
-              color: Palette.card(context),
-              border: Border(top: BorderSide(color: Palette.separator(context))),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: CupertinoTextField(
-                    controller: _draft,
-                    placeholder: widget.placeholder,
-                    minLines: 1,
-                    maxLines: 5,
-                    maxLength: maxMessageLength,
-                    textCapitalization: TextCapitalization.sentences,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                    style: TextStyle(fontSize: 16, color: Palette.label(context)),
-                    placeholderStyle: TextStyle(fontSize: 16, color: Palette.tertiary(context)),
-                    decoration: BoxDecoration(
-                      color: Palette.fill(context),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Palette.separator(context)),
+    // Rebuilt whenever the page resizes for the keyboard. The keyboard is read from the raw
+    // view: the page scaffold has already taken it out of MediaQuery
+    return LayoutBuilder(
+      builder: (context, _) {
+        final keyboardOpen = View.of(context).viewInsets.bottom > 0;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: list == null
+                  ? const Center(child: RingSpinner())
+                  : list.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Center(child: Muted(_error ? "Couldn't load messages." : widget.emptyText, center: true)),
+                    )
+                  // Newest at the bottom, and the list starts there
+                  : ListView.builder(
+                      reverse: true,
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      itemCount: list.length,
+                      itemBuilder: (context, i) => _bubble(context, list, list.length - 1 - i, me),
                     ),
-                  ),
+            ),
+            if (widget.canPost)
+              Container(
+                // Snug on the keyboard while typing; above the home indicator otherwise
+                padding: EdgeInsets.fromLTRB(12, 8, 12, keyboardOpen ? 4 : 8 + pad.bottom),
+                decoration: BoxDecoration(
+                  color: Palette.card(context),
+                  border: Border(top: BorderSide(color: Palette.separator(context))),
                 ),
-                const SizedBox(width: 8),
-                Semantics(
-                  label: 'Send',
-                  button: true,
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(40, 40),
-                    onPressed: canSend ? _send : null,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: canSend ? Palette.blue600 : Palette.resolve(context, Palette.gray300),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: CupertinoTextField(
+                        controller: _draft,
+                        placeholder: widget.placeholder,
+                        minLines: 1,
+                        maxLines: 5,
+                        maxLength: maxMessageLength,
+                        textCapitalization: TextCapitalization.sentences,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                        style: TextStyle(fontSize: 16, color: Palette.label(context)),
+                        placeholderStyle: TextStyle(fontSize: 16, color: Palette.tertiary(context)),
+                        decoration: BoxDecoration(
+                          color: Palette.fill(context),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Palette.separator(context)),
+                        ),
                       ),
-                      child: const Icon(CupertinoIcons.arrow_up, size: 20, color: Color(0xFFFFFFFF)),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Semantics(
+                      label: 'Send',
+                      button: true,
+                      child: CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(40, 40),
+                        onPressed: canSend ? _send : null,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: canSend ? Palette.blue600 : Palette.resolve(context, Palette.gray300),
+                          ),
+                          child: const Icon(CupertinoIcons.arrow_up, size: 20, color: Color(0xFFFFFFFF)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )
-        else if (widget.closedText != null)
-          Container(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + pad.bottom),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: Palette.separator(context))),
-            ),
-            child: Muted(widget.closedText!, center: true, size: 14),
-          ),
-      ],
+              )
+            else if (widget.closedText != null)
+              Container(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + pad.bottom),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: Palette.separator(context))),
+                ),
+                child: Muted(widget.closedText!, center: true, size: 14),
+              ),
+          ],
+        );
+      },
     );
   }
 }

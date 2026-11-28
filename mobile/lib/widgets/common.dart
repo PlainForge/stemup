@@ -267,8 +267,9 @@ class CountBadge extends StatelessWidget {
   );
 }
 
-/// `bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl` input.
-class AppTextField extends StatelessWidget {
+/// `bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl` input. A password
+/// field ([obscure]) shows what's typed only while its eye button is held.
+class AppTextField extends StatefulWidget {
   const AppTextField({
     super.key,
     this.controller,
@@ -299,20 +300,48 @@ class AppTextField extends StatelessWidget {
   final Widget? prefix;
 
   @override
+  State<AppTextField> createState() => _AppTextFieldState();
+}
+
+class _AppTextFieldState extends State<AppTextField> {
+  bool _revealed = false;
+
+  void _reveal(bool on) {
+    if (_revealed != on) setState(() => _revealed = on);
+  }
+
+  /// Hold to show the password; letting go (or sliding off) hides it again.
+  Widget _holdToReveal(BuildContext context) => Semantics(
+    button: true,
+    label: 'Hold to show password',
+    child: Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (_) => _reveal(true),
+      onPointerUp: (_) => _reveal(false),
+      onPointerCancel: (_) => _reveal(false),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Icon(_revealed ? CupertinoIcons.eye : CupertinoIcons.eye_slash, size: 20, color: Palette.tertiary(context)),
+      ),
+    ),
+  );
+
+  @override
   Widget build(BuildContext context) => CupertinoTextField(
-    controller: controller,
-    placeholder: placeholder,
-    obscureText: obscure,
-    keyboardType: keyboardType,
-    maxLength: maxLength,
-    maxLines: obscure ? 1 : maxLines,
-    minLines: maxLines != null && maxLines! > 1 ? maxLines : null,
-    onChanged: onChanged,
-    onSubmitted: onSubmitted,
-    autofocus: autofocus,
-    textInputAction: textInputAction,
-    autofillHints: autofillHints,
-    prefix: prefix,
+    controller: widget.controller,
+    placeholder: widget.placeholder,
+    obscureText: widget.obscure && !_revealed,
+    keyboardType: widget.keyboardType,
+    maxLength: widget.maxLength,
+    maxLines: widget.obscure ? 1 : widget.maxLines,
+    minLines: widget.maxLines != null && widget.maxLines! > 1 ? widget.maxLines : null,
+    onChanged: widget.onChanged,
+    onSubmitted: widget.onSubmitted,
+    autofocus: widget.autofocus,
+    textInputAction: widget.textInputAction,
+    autofillHints: widget.autofillHints,
+    prefix: widget.prefix,
+    suffix: widget.obscure ? _holdToReveal(context) : null,
     // Multi-line fields have no Done key, so tapping anywhere else closes the keyboard.
     onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
